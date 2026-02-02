@@ -7,12 +7,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Config } from '../../constants/Config';
+import { useUser } from '../../context/UserContext';
 
 export default function LoginScreen() {
+    const { setUser } = useUser();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [lastError, setLastError] = useState('');
+    const [isSuccess, setIsSuccess] = useState(false);
 
     const handleLogin = async () => {
         setLastError(''); // Clear previous errors
@@ -34,11 +37,15 @@ export default function LoginScreen() {
             const data = await response.json();
 
             if (response.ok) {
-                await AsyncStorage.setItem('user', JSON.stringify(data.user));
+                await setUser(data.user);
                 setIsLoading(false);
-                Alert.alert('Success', 'Login successful!', [
-                    { text: 'OK', onPress: () => router.replace('/(tabs)') }
-                ]);
+                setIsSuccess(true);
+                setLastError('');
+
+                // Redirect after a short delay so they can see the success message
+                setTimeout(() => {
+                    router.replace('/(tabs)');
+                }, 1500);
             } else {
                 setIsLoading(false);
                 const msg = data.message || 'Invalid credentials';
@@ -99,11 +106,11 @@ export default function LoginScreen() {
                             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                         </TouchableOpacity>
 
-                        {/* Error Message Display */}
-                        {lastError ? (
-                            <View style={styles.errorContainer}>
-                                <Ionicons name="alert-circle" size={20} color="#EF4444" />
-                                <Text style={styles.errorText}>{lastError}</Text>
+                        {/* Success Message Display */}
+                        {isSuccess ? (
+                            <View style={styles.successContainer}>
+                                <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                                <Text style={styles.successText}>Logged in successfully! Redirecting...</Text>
                             </View>
                         ) : null}
 
@@ -253,6 +260,22 @@ const styles = StyleSheet.create({
     },
     errorText: {
         color: '#EF4444',
+        marginLeft: 10,
+        fontSize: 14,
+        flex: 1,
+    },
+    successContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        padding: 10,
+        borderRadius: 10,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.3)',
+    },
+    successText: {
+        color: '#10B981',
         marginLeft: 10,
         fontSize: 14,
         flex: 1,

@@ -1,55 +1,184 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, } from 'react-native';
+import { View, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { GlassCard } from '../../components/GlassCard';
-import { ChevronLeft, Send, Image as ImageIcon, Smile, MoreVertical } from 'lucide-react-native';
+import { ChevronLeft, Send, Image as ImageIcon, Smile, MoreVertical, Heart, ThumbsUp, Laugh, Angry, Frown, Sparkles } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
+import { useUser } from '../../context/UserContext';
+import { Config } from '../../constants/Config';
 
-const MOCK_MESSAGES = [
-    { id: '1', text: 'Hey! Are we still on for tonight?', senderId: 'friend', time: '10:30 AM' },
-    { id: '2', text: 'Yes, definitely! What time?', senderId: 'me', time: '10:31 AM' },
-    { id: '3', text: 'How about 7:30?', senderId: 'friend', time: '10:32 AM' },
-    { id: '4', text: 'Sounds good to me. See you then!', senderId: 'me', time: '10:33 AM' },
-];
+const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥', '✨'];
 
 export default function ChatDetailScreen() {
-    const { id, user } = useLocalSearchParams<{ id: string, user: string }>();
-    const [messages, setMessages] = useState(MOCK_MESSAGES);
+    const { id, user: otherUsername, avatar_id } = useLocalSearchParams<{ id: string, user: string, avatar_id: string }>();
+    const { user: currentUser } = useUser();
+    const [messages, setMessages] = useState<any[]>([]);
     const [inputText, setInputText] = useState('');
+    const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
     const flatListRef = useRef<FlatList>(null);
 
-    const handleSend = () => {
+    useEffect(() => {
+        fetchMessages();
+        // Polling for new messages every 3 seconds
+        const interval = setInterval(fetchMessages, 3000);
+        return () => clearInterval(interval);
+    }, [id]);
+
+    const fetchMessages = async () => {
+        if (!currentUser) return;
+        try {
+            const response = await fetch(`${Config.API_URL}/get_messages.php?sender_id=${currentUser.id}&receiver_id=${id}`);
+            const data = await response.json();
+            if (response.ok) {
+                setMessages(data);
+            }
+        } catch (error) {
+            console.error('Error fetching messages:', error);
+            Alert.alert('Fetch Error', 'Failed to load messages. Please ensure your database is updated.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSend = async () => {
+        if (!currentUser) {
+            Alert.alert('Error', 'No user found');
+            return;
+        }
+
         if (inputText.trim()) {
-            const newMessage = {
-                id: Date.now().toString(),
-                text: inputText.trim(),
-                senderId: 'me',
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            };
-            setMessages([...messages, newMessage]);
-            setInputText('');
+            const messageToSend = inputText.trim();
+            setInputText(''); // Clear input immediately for better UX
+
+            try {
+                const response = await fetch(`${Config.API_URL}/send_message.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sender_id: currentUser.id,
+                        receiver_id: id,
+                        message: messageToSend
+                    }),
+                });
+
+                if (response.ok) {
+                    fetchMessages(); // Refresh messages after sending
+                } else {
+                    const data = await response.json();
+                    Alert.alert('Send Error', data.message || 'Failed to send message');
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                Alert.alert('Network Error', error instanceof Error ? error.message : 'Unknown error');
+            }
+        }
+    };
+
+    const handleReaction = async (messageId: number, emoji: string) => {
+        if (!currentUser) return;
+
+        try {
+            const response = await fetch(`${Config.API_URL}/toggle_reaction.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message_id: messageId,
+                    user_id: currentUser.id,
+                    emoji: emoji
+                }),
+            });
+
+            if (response.ok) {
+                fetchMessages();
+                setSelectedMessageId(null);
+            }
+        } catch (error) {
+            console.error('Error toggling reaction:', error);
         }
     };
 
     useEffect(() => {
         // Scroll to bottom when messages change
-        setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        if (messages.length > 0) {
+            setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+        }
     }, [messages]);
 
-    const renderMessage = ({ item }: { item: typeof MOCK_MESSAGES[0] }) => {
-        const isMe = item.senderId === 'me';
+    const renderMessage = ({ item, index }: { item: any, index: number }) => {
+        const isMe = String(item.sender_id) === String(currentUser?.id);
+        const isSelfChat = String(id) === String(currentUser?.id);
+        const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
+
+        // WhatsApp grouping logic: Show time only if:
+        // 1. It's the last message in the total list
+        // 2. The next message is from a different sender
+        // 3. The next message is more than 1 minute later
+        const isLastInGroup = !nextMessage ||
+            String(nextMessage.sender_id) !== String(item.sender_id) ||
+            new Date(nextMessage.created_at).getTime() - new Date(item.created_at).getTime() > 60000;
+
+        const time = new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
         return (
-            <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.friendMessage]}>
-                {!isMe && <Avatar source={getAvatarById(id)} size={32} style={styles.messageAvatar} />}
-                <View style={[styles.bubble, isMe ? styles.myBubble : styles.friendBubble]}>
-                    <ThemedText style={styles.messageText}>{item.text}</ThemedText>
-                    <ThemedText style={styles.messageTime}>{item.time}</ThemedText>
+            <View key={item.id} style={[styles.messageRow, isMe ? styles.myRow : styles.friendRow]}>
+                {!isMe && !isSelfChat && (
+                    <View style={styles.avatarPlaceholder}>
+                        {isLastInGroup && (
+                            <Avatar source={getAvatarById(item.sender_avatar_id || '1')} size={32} style={styles.messageAvatar} />
+                        )}
+                    </View>
+                )}
+                <View style={[styles.bubbleWrapper, isMe ? styles.myBubbleWrapper : styles.friendBubbleWrapper]}>
+                    <TouchableOpacity
+                        onLongPress={() => setSelectedMessageId(item.id)}
+                        delayLongPress={300}
+                        activeOpacity={0.8}
+                        style={[styles.bubble, isMe ? styles.myBubble : styles.friendBubble, !isLastInGroup && (isMe ? styles.myBubbleGroup : styles.friendBubbleGroup)]}
+                    >
+                        <ThemedText style={styles.messageText}>{item.message_text}</ThemedText>
+                    </TouchableOpacity>
+
+                    {isLastInGroup && (
+                        <ThemedText numberOfLines={1} style={[styles.messageTime, isMe ? styles.myMessageTime : styles.friendMessageTime]}>
+                            {time}
+                        </ThemedText>
+                    )}
+
+                    {item.reactions && item.reactions.length > 0 && (
+                        <View style={[styles.reactionTray, isMe ? styles.myReactionTray : styles.friendReactionTray]}>
+                            {Array.from(new Set(item.reactions.map((r: any) => r.emoji))).map((emoji: any) => (
+                                <View key={emoji} style={styles.reactionBadge}>
+                                    <ThemedText style={styles.reactionEmoji}>{emoji}</ThemedText>
+                                    <ThemedText style={styles.reactionCount}>
+                                        {item.reactions.filter((r: any) => r.emoji === emoji).length}
+                                    </ThemedText>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
+                    {selectedMessageId === item.id && (
+                        <GlassCard style={styles.emojiPicker}>
+                            <View style={styles.emojiRow}>
+                                {EMOJIS.map(emoji => (
+                                    <TouchableOpacity
+                                        key={emoji}
+                                        onPress={() => handleReaction(item.id, emoji)}
+                                        style={styles.emojiButton}
+                                    >
+                                        <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </GlassCard>
+                    )}
                 </View>
             </View>
         );
@@ -63,10 +192,18 @@ export default function ChatDetailScreen() {
                     <ChevronLeft size={24} color={Colors.text} />
                 </TouchableOpacity>
                 <View style={styles.headerInfo}>
-                    <Avatar source={getAvatarById(id)} online={true} size={40} />
+                    <Avatar
+                        source={getAvatarById(avatar_id || id)}
+                        online={String(id) !== String(currentUser?.id)}
+                        size={40}
+                    />
                     <View style={styles.nameContainer}>
-                        <ThemedText type="defaultSemiBold">{user}</ThemedText>
-                        <ThemedText type="caption" style={{ color: Colors.online }}>Online</ThemedText>
+                        <ThemedText type="defaultSemiBold">
+                            {String(id) === String(currentUser?.id) ? 'Note to self' : otherUsername}
+                        </ThemedText>
+                        <ThemedText type="caption" style={{ color: String(id) === String(currentUser?.id) ? Colors.secondary : Colors.online }}>
+                            {String(id) === String(currentUser?.id) ? 'Personal Space' : 'Online'}
+                        </ThemedText>
                     </View>
                 </View>
                 <TouchableOpacity style={styles.moreButton}>
@@ -78,7 +215,7 @@ export default function ChatDetailScreen() {
             <FlatList
                 ref={flatListRef}
                 data={messages}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => item.id.toString()}
                 renderItem={renderMessage}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
@@ -160,45 +297,139 @@ const styles = StyleSheet.create({
     listContent: {
         paddingHorizontal: 16,
         paddingVertical: 20,
-        gap: 16,
+        gap: 2, // Tight gap for WhatsApp feel
     },
-    messageContainer: {
+    messageRow: {
         flexDirection: 'row',
-        maxWidth: '80%',
+        maxWidth: '100%',
         alignItems: 'flex-end',
         gap: 8,
+        marginVertical: 1,
     },
-    myMessage: {
+    myRow: {
         alignSelf: 'flex-end',
     },
-    friendMessage: {
+    friendRow: {
         alignSelf: 'flex-start',
     },
+    avatarPlaceholder: {
+        width: 32,
+        height: 32,
+    },
     messageAvatar: {
-        marginBottom: 4,
+        // Avatar is shown via avatarPlaceholder
+    },
+    bubbleWrapper: {
+        maxWidth: '85%',
+        position: 'relative',
+    },
+    myBubbleWrapper: {
+        alignItems: 'flex-end',
+    },
+    friendBubbleWrapper: {
+        alignItems: 'flex-start',
     },
     bubble: {
-        paddingHorizontal: 16,
+        paddingHorizontal: 14,
         paddingVertical: 10,
-        borderRadius: 20,
+        borderRadius: 18,
     },
     myBubble: {
         backgroundColor: Colors.primary,
-        borderBottomRightRadius: 4,
+        borderTopRightRadius: 18,
+        borderBottomRightRadius: 18,
+        borderTopLeftRadius: 18,
+        borderBottomLeftRadius: 18,
+    },
+    myBubbleGroup: {
+        // Intermediate bubbles in a group
     },
     friendBubble: {
         backgroundColor: Colors.surface,
-        borderBottomLeftRadius: 4,
+        borderTopLeftRadius: 18,
+        borderBottomLeftRadius: 18,
+        borderTopRightRadius: 18,
+        borderBottomRightRadius: 18,
+    },
+    friendBubbleGroup: {
+        // Intermediate bubbles
+    },
+    reactionTray: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginTop: -8,
+        paddingHorizontal: 4,
+        zIndex: 10,
+    },
+    myReactionTray: {
+        justifyContent: 'flex-end',
+    },
+    friendReactionTray: {
+        justifyContent: 'flex-start',
+    },
+    reactionBadge: {
+        backgroundColor: Colors.surface,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: Colors.glassBorder,
+        marginHorizontal: 2,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1,
+    },
+    reactionEmoji: {
+        fontSize: 12,
+    },
+    reactionCount: {
+        fontSize: 10,
+        color: Colors.text,
+        marginLeft: 2,
+    },
+    emojiPicker: {
+        position: 'absolute',
+        top: -60,
+        right: 0,
+        zIndex: 1000,
+        padding: 8,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: Colors.glassBorder,
+    },
+    emojiRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    emojiButton: {
+        padding: 4,
+    },
+    emojiText: {
+        fontSize: 22,
     },
     messageText: {
         color: Colors.white,
         fontSize: 15,
+        lineHeight: 20,
     },
     messageTime: {
         fontSize: 10,
-        color: 'rgba(255, 255, 255, 0.6)',
-        alignSelf: 'flex-end',
+        color: Colors.textSecondary,
         marginTop: 4,
+        marginBottom: 8, // Gap after timestamp
+    },
+    myMessageTime: {
+        alignSelf: 'flex-end',
+        marginRight: 4,
+    },
+    friendMessageTime: {
+        alignSelf: 'flex-start',
+        marginLeft: 4,
     },
     inputArea: {
         flexDirection: 'row',

@@ -13,13 +13,17 @@ import {
     LogOut,
     ChevronRight,
     Shield,
-    CircleHelp
+    CircleHelp,
+    MoreVertical
 } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useUser } from '../../context/UserContext';
 
 const SECTIONS = [
+    // ... existing sections (omitted for brevity if possible, but replace_file_content needs exact match)
+
     {
         title: 'Account',
         items: [
@@ -44,26 +48,11 @@ const SECTIONS = [
 ];
 
 export default function SettingsScreen() {
-    const [user, setUser] = React.useState<any>(null);
-
-    React.useEffect(() => {
-        loadUser();
-    }, []);
-
-    const loadUser = async () => {
-        try {
-            const userData = await AsyncStorage.getItem('user');
-            if (userData) {
-                setUser(JSON.parse(userData));
-            }
-        } catch (error) {
-            console.error('Error loading user:', error);
-        }
-    };
+    const { user, setUser } = useUser();
 
     const handleLogout = async () => {
         try {
-            await AsyncStorage.removeItem('user');
+            await setUser(null);
             router.replace('/(auth)/login');
         } catch (error) {
             console.error('Error during logout:', error);
@@ -74,23 +63,30 @@ export default function SettingsScreen() {
         <SafeAreaView style={styles.container} edges={['top']}>
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.header}>
-                    <ThemedText type="title">Settings</ThemedText>
+                    <ThemedText type="title" style={styles.headerTitle}>Vegarm</ThemedText>
+                    <TouchableOpacity onPress={() => {/* More options */ }}>
+                        <MoreVertical size={22} color={Colors.textSecondary} />
+                    </TouchableOpacity>
                 </View>
 
                 {/* Profile Card */}
                 <GlassCard style={styles.profileCard}>
-                    <View style={styles.profileRow}>
-                        <Avatar source={getAvatarById('5')} size={60} online={true} />
+                    <TouchableOpacity
+                        style={styles.profileRow}
+                        onPress={() => router.push('/(tabs)/profile-edit')}
+                        activeOpacity={0.7}
+                    >
+                        <Avatar source={getAvatarById(user?.avatar_id || '1')} size={60} online={true} />
                         <View style={styles.profileInfo}>
                             <ThemedText type="defaultSemiBold" style={styles.profileName}>
                                 {user?.username || 'Guest'}
                             </ThemedText>
                             <ThemedText type="caption">{user?.email || 'Not logged in'}</ThemedText>
                         </View>
-                        <TouchableOpacity style={styles.editButton}>
+                        <View style={styles.editButton}>
                             <ThemedText style={{ color: Colors.primary }}>Edit</ThemedText>
-                        </TouchableOpacity>
-                    </View>
+                        </View>
+                    </TouchableOpacity>
                 </GlassCard>
 
                 {/* Settings Sections */}
@@ -103,6 +99,7 @@ export default function SettingsScreen() {
                                     <TouchableOpacity
                                         style={styles.settingItem}
                                         disabled={item.type === 'toggle'}
+                                        onPress={() => item.id === 'profile' && router.push('/(tabs)/profile-edit')}
                                     >
                                         <View style={styles.settingLeft}>
                                             <View style={styles.iconContainer}>
@@ -142,6 +139,13 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+
+    headerTitle: {
+        fontSize: 24, // WhatsApp uses ~20-23sp for Title
+        fontWeight: 'bold',
+        color: Colors.text,
+        letterSpacing: 0.5,
+    },
     container: {
         flex: 1,
         backgroundColor: Colors.background,
@@ -151,8 +155,13 @@ const styles = StyleSheet.create({
         paddingBottom: 100,
     },
     header: {
+
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
         paddingTop: 10,
-        paddingBottom: 20,
+        paddingBottom: 10,
     },
     profileCard: {
         padding: 16,

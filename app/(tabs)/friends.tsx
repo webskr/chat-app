@@ -6,47 +6,73 @@ import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { GlassCard } from '../../components/GlassCard';
 import { SearchInput } from '../../components/SearchInput';
-import { UserPlus } from 'lucide-react-native';
+import { MessageSquare, MoreVertical } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
-
-const MOCK_FRIENDS = [
-    { id: '1', name: 'Emma Watson', handle: '@emma_w', avatar: getAvatarById('3'), online: true },
-    { id: '2', name: 'Tom Holland', handle: '@spidey', avatar: getAvatarById('0'), online: false },
-    { id: '3', name: 'Robert Downey Jr.', handle: '@ironman', avatar: getAvatarById('1'), online: true },
-    { id: '4', name: 'Scarlett Johansson', handle: '@blackwidow', avatar: getAvatarById('4'), online: true },
-    { id: '5', name: 'Chris Hemsworth', handle: '@thor', avatar: getAvatarById('2'), online: false },
-    { id: '6', name: 'Mark Ruffalo', handle: '@hulk', avatar: getAvatarById('5'), online: true },
-];
+import { useUser } from '../../context/UserContext';
+import { Config } from '../../constants/Config';
+import { router, useFocusEffect } from 'expo-router';
 
 export default function FriendsScreen() {
+    const { user: currentUser } = useUser();
+    const [users, setUsers] = React.useState<any[]>([]);
+    const [isLoading, setIsLoading] = React.useState(true);
     const [searchQuery, setSearchQuery] = React.useState('');
 
-    const filteredFriends = React.useMemo(() => {
-        return MOCK_FRIENDS.filter(friend =>
-            friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            friend.handle.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [searchQuery]);
+    const fetchUsers = React.useCallback(async () => {
+        if (!currentUser) return;
+        try {
+            const response = await fetch(`${Config.API_URL}/get_users.php?user_id=${currentUser.id}`);
+            const data = await response.json();
+            if (response.ok) {
+                setUsers(data);
+            }
+        } catch (error) {
+            console.error('Error fetching users:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [currentUser]);
 
-    const renderItem = ({ item }: { item: typeof MOCK_FRIENDS[0] }) => (
-        <GlassCard style={styles.card}>
-            <View style={styles.row}>
-                <Avatar source={item.avatar} online={item.online} size={50} />
-                <View style={styles.info}>
-                    <ThemedText type="defaultSemiBold">{item.name}</ThemedText>
-                    <ThemedText type="caption">{item.handle}</ThemedText>
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchUsers();
+        }, [fetchUsers])
+    );
+
+    const filteredUsers = React.useMemo(() => {
+        return users.filter(user =>
+            user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            user.email.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [users, searchQuery]);
+
+    const renderItem = ({ item }: { item: any }) => (
+        <TouchableOpacity onPress={() => router.push({
+            pathname: '/chat/[id]',
+            params: { id: item.id, user: item.username, avatar_id: item.avatar_id }
+        })}>
+            <GlassCard style={styles.card}>
+                <View style={styles.row}>
+                    <Avatar source={getAvatarById(item.avatar_id)} online={true} size={50} />
+                    <View style={styles.info}>
+                        <ThemedText type="defaultSemiBold">{item.username}</ThemedText>
+                        <ThemedText type="caption">{item.email}</ThemedText>
+                    </View>
+                    <View style={styles.addButton}>
+                        <MessageSquare size={20} color={Colors.white} />
+                    </View>
                 </View>
-                <TouchableOpacity style={styles.addButton}>
-                    <UserPlus size={20} color={Colors.white} />
-                </TouchableOpacity>
-            </View>
-        </GlassCard>
+            </GlassCard>
+        </TouchableOpacity>
     );
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
-                <ThemedText type="title">Global Friends</ThemedText>
+                <ThemedText type="title" style={styles.headerTitle}>Vegarm</ThemedText>
+                <TouchableOpacity onPress={() => {/* More options */ }}>
+                    <MoreVertical size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
             </View>
             <View style={styles.searchContainer}>
                 <SearchInput
@@ -56,8 +82,8 @@ export default function FriendsScreen() {
                 />
             </View>
             <FlatList
-                data={filteredFriends}
-                keyExtractor={(item) => item.id}
+                data={filteredUsers}
+                keyExtractor={(item) => item.id.toString()}
                 renderItem={renderItem}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
@@ -72,9 +98,18 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.background,
     },
     header: {
-        paddingHorizontal: 20,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
         paddingTop: 10,
         paddingBottom: 10,
+    },
+    headerTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: Colors.text,
+        letterSpacing: 0.5,
     },
     searchContainer: {
         paddingHorizontal: 20,

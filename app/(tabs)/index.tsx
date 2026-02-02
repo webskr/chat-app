@@ -8,112 +8,113 @@ import { Badge } from '../../components/Badge';
 import { GlassCard } from '../../components/GlassCard';
 import { SearchInput } from '../../components/SearchInput';
 import { router } from 'expo-router';
+import { Bookmark, MoreVertical } from 'lucide-react-native';
 
 import { getAvatarById } from '../../constants/Avatars';
-
-// Mock Data
-const MOCK_CHATS = [
-    {
-        id: '1',
-        user: 'Alice Wonderland',
-        avatar: getAvatarById('3'), // female1
-        lastMessage: 'Hey! Are we still on for tonight?',
-        time: '10:30 AM',
-        unread: 2,
-        online: true,
-    },
-    {
-        id: '2',
-        user: 'Bob Builder',
-        avatar: getAvatarById('0'), // male1
-        lastMessage: 'Can you send me the designs?',
-        time: 'Yesterday',
-        unread: 0,
-        online: false,
-    },
-    {
-        id: '3',
-        user: 'Charlie Brown',
-        avatar: getAvatarById('1'), // male2
-        lastMessage: 'Good grief!',
-        time: 'Tue',
-        unread: 5,
-        online: true,
-    },
-    {
-        id: '4',
-        user: 'Diana Prince',
-        avatar: getAvatarById('4'), // female2
-        lastMessage: 'Meeting confirmed.',
-        time: 'Mon',
-        unread: 0,
-        online: false,
-    },
-    {
-        id: '5',
-        user: 'Evan Wright',
-        avatar: getAvatarById('2'), // male3
-        lastMessage: 'Thanks for the help!',
-        time: 'Last Week',
-        unread: 0,
-        online: true,
-    },
-];
+import { useUser } from '../../context/UserContext';
+import { Config } from '../../constants/Config';
+import { useFocusEffect } from 'expo-router';
 
 export default function ChatScreen() {
+    const { user } = useUser();
+    const [chats, setChats] = React.useState<any[]>([]);
+    const [isLoading, setIsLoading] = React.useState(true);
     const [searchQuery, setSearchQuery] = React.useState('');
 
-    const filteredChats = React.useMemo(() => {
-        return MOCK_CHATS.filter(chat =>
-            chat.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [searchQuery]);
+    const fetchConversations = React.useCallback(async () => {
+        if (!user) return;
+        try {
+            const response = await fetch(`${Config.API_URL}/get_conversations.php?user_id=${user.id}`);
+            const data = await response.json();
+            if (response.ok) {
+                setChats(data);
+            }
+        } catch (error) {
+            console.error('Error fetching conversations:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [user]);
 
-    const renderItem = ({ item }: { item: typeof MOCK_CHATS[0] }) => (
-        <TouchableOpacity onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id, user: item.user } })}>
-            <GlassCard style={styles.chatItem}>
-                <View style={styles.row}>
-                    <Avatar source={item.avatar} online={item.online} size={56} />
-                    <View style={styles.chatInfo}>
-                        <View style={styles.headerRow}>
-                            <ThemedText type="defaultSemiBold" style={styles.username}>
-                                {item.user}
-                            </ThemedText>
-                            <ThemedText type="caption" style={styles.time}>
-                                {item.time}
-                            </ThemedText>
-                        </View>
-                        <View style={styles.messageRow}>
-                            <ThemedText
-                                numberOfLines={1}
-                                style={[styles.lastMessage, { color: item.unread > 0 ? Colors.text : Colors.textSecondary }]}
-                            >
-                                {item.lastMessage}
-                            </ThemedText>
-                            {item.unread > 0 && <Badge count={item.unread} />}
-                        </View>
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchConversations();
+        }, [fetchConversations])
+    );
+
+    const filteredChats = React.useMemo(() => {
+        return chats.filter(chat =>
+            chat.other_username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (chat.last_message && chat.last_message.toLowerCase().includes(searchQuery.toLowerCase()))
+        );
+    }, [chats, searchQuery]);
+
+
+    const renderItem = ({ item }: { item: any }) => (
+        <TouchableOpacity
+            style={styles.chatItem}
+            activeOpacity={0.7}
+            onPress={() => router.push({
+                pathname: '/chat/[id]',
+                params: {
+                    id: item.other_user_id.toString(),
+                    user: String(item.other_user_id) === String(user?.id) ? 'Note to self' : item.other_username,
+                    avatar_id: item.other_avatar_id
+                }
+            })}
+        >
+            <View style={styles.chatRow}>
+                <Avatar source={getAvatarById(item.other_avatar_id)} online={false} size={50} />
+                <View style={styles.chatDetails}>
+                    <View style={styles.rowTop}>
+                        <ThemedText type="defaultSemiBold" style={styles.username} numberOfLines={1}>
+                            {String(item.other_user_id) === String(user?.id) ? 'Note to self' : item.other_username}
+                        </ThemedText>
+                        <ThemedText style={[styles.time, item.unread_count > 0 && styles.timeActive]}>
+                            {new Date(item.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </ThemedText>
+                    </View>
+                    <View style={styles.rowBottom}>
+                        <ThemedText
+                            numberOfLines={1}
+                            style={styles.lastMessage}
+                        >
+                            {/* Draft: prefix could be handled here if needed */}
+                            {item.last_message || 'No messages yet'}
+                        </ThemedText>
+
+                        {item.unread_count > 0 && (
+                            <View style={styles.badgeContainer}>
+                                <ThemedText style={styles.badgeText}>
+                                    {item.unread_count}
+                                </ThemedText>
+                            </View>
+                        )}
                     </View>
                 </View>
-            </GlassCard>
+            </View>
+            <View style={styles.divider} />
         </TouchableOpacity>
     );
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
-                <ThemedText type="title">Messages</ThemedText>
+                <ThemedText type="title" style={styles.headerTitle}>Vegarm</ThemedText>
+                <TouchableOpacity onPress={() => {/* More options */ }}>
+                    <MoreVertical size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
             </View>
             <View style={styles.searchContainer}>
                 <SearchInput
                     value={searchQuery}
                     onChangeText={setSearchQuery}
-                    placeholder="Search messages..."
+                    placeholder="Search..."
                 />
             </View>
             <FlatList
                 data={filteredChats}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => item.id.toString()}
                 renderItem={renderItem}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
@@ -128,50 +129,94 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.background,
     },
     header: {
-        paddingHorizontal: 20,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
         paddingTop: 10,
         paddingBottom: 10,
     },
+    headerTitle: {
+        fontSize: 24, // WhatsApp uses ~20-23sp for Title
+        fontWeight: 'bold',
+        color: Colors.text,
+        letterSpacing: 0.5,
+    },
     searchContainer: {
-        paddingHorizontal: 20,
-        paddingBottom: 10,
+        paddingHorizontal: 16,
+        paddingBottom: 8,
     },
     listContent: {
-        paddingHorizontal: 20,
-        paddingBottom: 100, // Space for bottom tab bar
-        gap: 12
+        paddingBottom: 100,
     },
     chatItem: {
-        marginBottom: 0,
+        backgroundColor: 'transparent',
     },
-    row: {
+    chatRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        paddingVertical: 10, // Compact height
+        paddingHorizontal: 16,
+        gap: 14, // Tighter gap between avatar and text
     },
-    chatInfo: {
+    chatDetails: {
         flex: 1,
-        gap: 4,
+        justifyContent: 'center',
+        gap: 2, // Minimal vertical gap
     },
-    headerRow: {
+    rowTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 2,
+    },
+    rowBottom: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
     username: {
         color: Colors.text,
+        fontSize: 16, // Standard readable size, slightly bold from defaultSemiBold
+        flex: 1,
+        marginRight: 8,
     },
     time: {
         color: Colors.textSecondary,
+        fontSize: 12,
+        fontWeight: '400',
     },
-    messageRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+    timeActive: {
+        color: Colors.primary, // Green time when unread
+        fontWeight: '600',
     },
     lastMessage: {
+        color: Colors.textSecondary,
+        fontSize: 14,
         flex: 1,
         marginRight: 8,
-        fontSize: 14,
+        lineHeight: 20,
+    },
+    badgeContainer: {
+        backgroundColor: Colors.primary,
+        borderRadius: 12, // Circle
+        height: 22,
+        minWidth: 22, // Ensure uniform circle for single digits
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 5,
+    },
+    badgeText: {
+        color: '#000', // Black text on Green badge for contrast (WhatsApp style) or white if background is dark green? 
+        // WhatsApp uses nice green with white text usually, or light green with dark text. 
+        // Given Colors.primary is #036727ff (Dark Green), White text is better.
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    divider: {
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: Colors.glassBorder,
+        marginLeft: 80, // 16(pad) + 50(avatar) + 14(gap)
+        opacity: 0.3,
     },
 });

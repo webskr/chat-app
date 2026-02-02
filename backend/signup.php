@@ -20,7 +20,8 @@ if (!empty($data->username) && !empty($data->email) && !empty($data->password)) 
     $password = $data->password;
 
     try {
-        $query = "INSERT INTO users (username, email, password) VALUES (:username, :email, :password)";
+        $avatar_id = (string)rand(0, 5);
+        $query = "INSERT INTO users (username, email, password, avatar_id) VALUES (:username, :email, :password, :avatar_id)";
         $stmt = $pdo->prepare($query);
 
         $password_hash = password_hash($password, PASSWORD_BCRYPT);
@@ -28,6 +29,7 @@ if (!empty($data->username) && !empty($data->email) && !empty($data->password)) 
         $stmt->bindParam(':username', $username);
         $stmt->bindParam(':email', $email);
         $stmt->bindParam(':password', $password_hash);
+        $stmt->bindParam(':avatar_id', $avatar_id);
 
         if ($stmt->execute()) {
             http_response_code(201);

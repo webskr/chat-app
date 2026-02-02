@@ -1,9 +1,9 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Users, UserPlus, Settings } from 'lucide-react-native';
+import { MessageSquareText, Group, Users, Settings } from 'lucide-react-native';
 import { Colors } from '../../constants/Colors';
 import { BlurView } from 'expo-blur';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 
 export default function TabLayout() {
     return (
@@ -13,7 +13,8 @@ export default function TabLayout() {
                 tabBarStyle: styles.tabBar,
                 tabBarActiveTintColor: Colors.primary,
                 tabBarInactiveTintColor: Colors.textSecondary,
-                tabBarShowLabel: false,
+                tabBarShowLabel: true,
+                tabBarLabelStyle: styles.tabLabel,
                 tabBarBackground: () => (
                     <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
                 ),
@@ -21,25 +22,42 @@ export default function TabLayout() {
             <Tabs.Screen
                 name="index" // Chat
                 options={{
-                    tabBarIcon: ({ color }) => <Home size={24} color={color} />,
+                    // title: 'Chats',
+                    tabBarIcon: ({ color, focused }) => (
+                        <View>
+                            <MessageSquareText size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+                            {/* Badge logic could go here if global state available, but usually handled in badge prop */}
+                        </View>
+                    ),
+                    tabBarBadge: 45, // Example badge count from reference, or dynamic
+                    tabBarBadgeStyle: styles.badge,
                 }}
             />
             <Tabs.Screen
-                name="friends" // Global Friends
+                name="requests" // Mapped to Updates
                 options={{
-                    tabBarIcon: ({ color }) => <Users size={24} color={color} />,
+                    // title: 'Updates',
+                    tabBarIcon: ({ color, focused }) => <Group size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,
                 }}
             />
             <Tabs.Screen
-                name="requests" // Requests
+                name="friends" // Mapped to Communities
                 options={{
-                    tabBarIcon: ({ color }) => <UserPlus size={24} color={color} />,
+                    // title: 'Communities',
+                    tabBarIcon: ({ color, focused }) => <Users size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,
                 }}
             />
             <Tabs.Screen
-                name="settings" // Settings
+                name="settings" // Mapped to Calls
                 options={{
-                    tabBarIcon: ({ color }) => <Settings size={24} color={color} />,
+                    // title: 'Calls',
+                    tabBarIcon: ({ color, focused }) => <Settings size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,
+                }}
+            />
+            <Tabs.Screen
+                name="profile-edit"
+                options={{
+                    href: null,
                 }}
             />
         </Tabs>
@@ -51,7 +69,20 @@ const styles = StyleSheet.create({
         position: 'absolute',
         borderTopWidth: 0,
         elevation: 0,
-        height: 60,
-        backgroundColor: 'transparent',
+        height: 60, // Taller for labels
+        backgroundColor: Colors.background, // Solid background preferred for bottom bar visibility
+        paddingBottom: 8,
+        paddingTop: 8,
+    },
+    tabLabel: {
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    badge: {
+        backgroundColor: Colors.primary,
+        color: '#000', // Black text on green badge
+        fontSize: 10,
+        fontWeight: 'bold',
     },
 });
+

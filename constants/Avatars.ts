@@ -7,8 +7,9 @@ export const AVATARS = {
     female3: require('../assets/avatar/Profile_Female_03.png'),
 };
 
-export const getAvatarById = (id: string) => {
+export const getAvatarById = (id: string | number) => {
     const avatars = Object.values(AVATARS);
-    const index = parseInt(id) || 0;
+    const index = typeof id === 'number' ? id : parseInt(id || '0');
+    if (isNaN(index)) return avatars[0];
     return avatars[index % avatars.length];
 };

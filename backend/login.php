@@ -19,7 +19,7 @@ if (!empty($data->email) && !empty($data->password)) {
     $password = $data->password;
 
     try {
-        $query = "SELECT id, username, email, password FROM users WHERE email = :email LIMIT 0,1";
+        $query = "SELECT id, username, email, password, avatar_id FROM users WHERE email = :email LIMIT 0,1";
         $stmt = $pdo->prepare($query);
 
         $stmt->bindParam(':email', $email);
@@ -32,6 +32,7 @@ if (!empty($data->email) && !empty($data->password)) {
             $username = $row['username'];
             $email = $row['email'];
             $password_hash = $row['password'];
+            $avatar_id = $row['avatar_id'];
 
             if (password_verify($password, $password_hash)) {
                 http_response_code(200);
@@ -41,7 +42,8 @@ if (!empty($data->email) && !empty($data->password)) {
                     "user" => array(
                         "id" => $id,
                         "username" => $username,
-                        "email" => $email
+                        "email" => $email,
+                        "avatar_id" => $avatar_id
                     )
                 ));
             } else {

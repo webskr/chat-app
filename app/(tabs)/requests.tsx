@@ -5,7 +5,7 @@ import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { GlassCard } from '../../components/GlassCard';
-import { Check, X } from 'lucide-react-native';
+import { Check, X, MoreVertical } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
 
 const MOCK_REQUESTS = [
@@ -40,7 +40,10 @@ export default function RequestsScreen() {
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
-                <ThemedText type="title">Requests</ThemedText>
+                <ThemedText type="title" style={styles.headerTitle}>Vegarm</ThemedText>
+                <TouchableOpacity onPress={() => {/* More options */ }}>
+                    <MoreVertical size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
             </View>
             <FlatList
                 data={MOCK_REQUESTS}
@@ -59,9 +62,18 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.background,
     },
     header: {
-        paddingHorizontal: 20,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
         paddingTop: 10,
-        paddingBottom: 20,
+        paddingBottom: 10,
+    },
+    headerTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: Colors.text,
+        letterSpacing: 0.5,
     },
     listContent: {
         paddingHorizontal: 20,

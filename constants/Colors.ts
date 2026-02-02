@@ -1,15 +1,33 @@
 export const Colors = {
-  background: '#0F172A', // Deep slate/charcoal
-  surface: '#1E293B',
+  // USER CONTROL: Change the 'primary' color below to change the app's main accent color
+  primary: '#036727ff', // WhatsApp Green
+
+  // Base Colors
+  background: '#0b1014', // Deep slate/charcoal - Main App Background
+  surface: '#1E293B',    // Card/Header Background
   surfaceLight: '#334155',
-  primary: '#6366F1', // Indigo
+
+  // Secondary Colors
   secondary: '#06B6D4', // Cyan
-  accent: '#F43F5E', // Rose
-  text: '#F8FAFC',
-  textSecondary: '#94A3B8',
+  accent: '#F43F5E',    // Rose
+
+  // Text Colors
+  text: '#F8FAFC',       // Primary Text
+  textSecondary: '#94A3B8', // Secondary Text (Time, Subtitles)
   white: '#FFFFFF',
+
+  // Utilities
   glass: 'rgba(255, 255, 255, 0.08)',
   glassBorder: 'rgba(255, 255, 255, 0.12)',
-  online: '#22C55E',
+
+  // Status
+  online: '#25D366', // Matching primary green
   offline: '#64748B',
+
+  // Navigation Specific
+  tabBarBackground: '#0F172A',
+  tabActivePill: 'rgba(37, 211, 102, 0.15)', // Light Green Pill Background
+  tabActiveText: '#25D366',  // Green Text for Active Tab
+  tabInactiveText: '#94A3B8', // Grey Text for Inactive Tab
 };
+
