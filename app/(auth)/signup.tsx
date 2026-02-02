@@ -33,8 +33,8 @@ export default function SignupScreen() {
 
         setIsLoading(true);
         try {
-            console.log(`Attempting signup to: ${Config.API_URL}/signup.php`);
-            const response = await fetch(`${Config.API_URL}/signup.php`, {
+            console.log(`Attempting signup to: ${Config.API_URL}/auth/signup.php`);
+            const response = await fetch(`${Config.API_URL}/auth/signup.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, email, password }),

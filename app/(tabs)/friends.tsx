@@ -23,7 +23,7 @@ export default function FriendsScreen() {
     const fetchUsers = React.useCallback(async () => {
         if (!currentUser) return;
         try {
-            const response = await fetch(`${Config.API_URL}/get_users.php?user_id=${currentUser.id}`);
+            const response = await fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`);
             const data = await response.json();
             if (response.ok) {
                 // Mocking relationship status for valid UI demonstration if backend doesn't send it yet

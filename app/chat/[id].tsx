@@ -36,7 +36,7 @@ export default function ChatDetailScreen() {
     const fetchRelationshipStatus = async () => {
         if (!currentUser) return;
         try {
-            const response = await fetch(`${Config.API_URL}/get_users.php?user_id=${currentUser.id}`);
+            const response = await fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`);
             const data = await response.json();
             if (response.ok) {
                 const otherUser = data.find((u: any) => String(u.id) === String(id));
@@ -52,7 +52,7 @@ export default function ChatDetailScreen() {
     const fetchMessages = async () => {
         if (!currentUser) return;
         try {
-            const response = await fetch(`${Config.API_URL}/get_messages.php?sender_id=${currentUser.id}&receiver_id=${id}`);
+            const response = await fetch(`${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}&receiver_id=${id}`);
             const data = await response.json();
             if (response.ok) {
                 setMessages(data);
@@ -76,7 +76,7 @@ export default function ChatDetailScreen() {
             setInputText(''); // Clear input immediately for better UX
 
             try {
-                const response = await fetch(`${Config.API_URL}/send_message.php`, {
+                const response = await fetch(`${Config.API_URL}/chat/send_message.php`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -119,7 +119,7 @@ export default function ChatDetailScreen() {
                 text: opt.label,
                 onPress: async () => {
                     try {
-                        const response = await fetch(`${Config.API_URL}/mute_chat.php`, {
+                        const response = await fetch(`${Config.API_URL}/chat/mute_chat.php`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -150,7 +150,7 @@ export default function ChatDetailScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            const response = await fetch(`${Config.API_URL}/delete_message.php`, {
+                            const response = await fetch(`${Config.API_URL}/chat/delete_message.php`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
@@ -190,7 +190,7 @@ export default function ChatDetailScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            const response = await fetch(`${Config.API_URL}/clear_msgs.php`, {
+                            const response = await fetch(`${Config.API_URL}/chat/clear_msgs.php`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
@@ -222,7 +222,7 @@ export default function ChatDetailScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            const response = await fetch(`${Config.API_URL}/handle_relationship.php`, {
+                            const response = await fetch(`${Config.API_URL}/users/handle_relationship.php`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
@@ -256,7 +256,7 @@ export default function ChatDetailScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            const response = await fetch(`${Config.API_URL}/handle_relationship.php`, {
+                            const response = await fetch(`${Config.API_URL}/users/handle_relationship.php`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
@@ -289,7 +289,7 @@ export default function ChatDetailScreen() {
                     text: 'Submit',
                     onPress: async (reason) => {
                         try {
-                            const response = await fetch(`${Config.API_URL}/report_user.php`, {
+                            const response = await fetch(`${Config.API_URL}/users/report_user.php`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
@@ -323,7 +323,7 @@ export default function ChatDetailScreen() {
         if (!currentUser) return;
 
         try {
-            const response = await fetch(`${Config.API_URL}/toggle_reaction.php`, {
+            const response = await fetch(`${Config.API_URL}/chat/toggle_reaction.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

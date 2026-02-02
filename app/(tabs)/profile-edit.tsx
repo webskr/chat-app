@@ -49,7 +49,7 @@ export default function ProfileEditScreen() {
 
         setIsLoading(true);
         try {
-            const response = await fetch(`${Config.API_URL}/update_profile.php`, {
+            const response = await fetch(`${Config.API_URL}/users/update_profile.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -93,7 +93,7 @@ export default function ProfileEditScreen() {
 
         setIsUpdatingPassword(true);
         try {
-            const response = await fetch(`${Config.API_URL}/update_password.php`, {
+            const response = await fetch(`${Config.API_URL}/auth/update_password.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -27,8 +27,8 @@ export default function LoginScreen() {
 
         setIsLoading(true);
         try {
-            console.log(`Attempting login to: ${Config.API_URL}/login.php`);
-            const response = await fetch(`${Config.API_URL}/login.php`, {
+            console.log(`Attempting login to: ${Config.API_URL}/auth/login.php`);
+            const response = await fetch(`${Config.API_URL}/auth/login.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),

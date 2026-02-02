@@ -24,7 +24,7 @@ export default function ChatScreen() {
     const fetchConversations = React.useCallback(async () => {
         if (!user) return;
         try {
-            const response = await fetch(`${Config.API_URL}/get_conversations.php?user_id=${user.id}`);
+            const response = await fetch(`${Config.API_URL}/chat/get_conversations.php?user_id=${user.id}`);
             const data = await response.json();
             if (response.ok) {
                 setChats(data);
