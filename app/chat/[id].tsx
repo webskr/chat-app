@@ -6,10 +6,11 @@ import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { GlassCard } from '../../components/GlassCard';
-import { ChevronLeft, Send, Image as ImageIcon, Smile, MoreVertical, Heart, ThumbsUp, Laugh, Angry, Frown, Sparkles } from 'lucide-react-native';
+import { ChevronLeft, Send, Image as ImageIcon, Smile, MoreVertical, Heart, ThumbsUp, Laugh, Angry, Frown, Sparkles, User, BellOff, Trash2, UserMinus, ShieldAlert, Flag } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
+import { OverflowMenu } from '../../components/OverflowMenu';
 
 const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥', '✨'];
 
@@ -20,14 +21,33 @@ export default function ChatDetailScreen() {
     const [inputText, setInputText] = useState('');
     const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [menuVisible, setMenuVisible] = useState(false);
+    const [relationshipStatus, setRelationshipStatus] = useState<string | null>(null);
     const flatListRef = useRef<FlatList>(null);
 
     useEffect(() => {
         fetchMessages();
+        fetchRelationshipStatus();
         // Polling for new messages every 3 seconds
         const interval = setInterval(fetchMessages, 3000);
         return () => clearInterval(interval);
     }, [id]);
+
+    const fetchRelationshipStatus = async () => {
+        if (!currentUser) return;
+        try {
+            const response = await fetch(`${Config.API_URL}/get_users.php?user_id=${currentUser.id}`);
+            const data = await response.json();
+            if (response.ok) {
+                const otherUser = data.find((u: any) => String(u.id) === String(id));
+                if (otherUser) {
+                    setRelationshipStatus(otherUser.relationship_status);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching relationship:', error);
+        }
+    };
 
     const fetchMessages = async () => {
         if (!currentUser) return;
@@ -78,6 +98,226 @@ export default function ChatDetailScreen() {
             }
         }
     };
+
+    const handleViewProfile = () => {
+        // Logically navigate to profile
+        Alert.alert('View Profile', `Opening ${otherUsername}'s profile...`);
+    };
+
+    const handleMute = () => {
+        const muteOptions = [
+            { label: '8 hours', value: '8h' },
+            { label: '1 week', value: '1w' },
+            { label: 'Always', value: 'always' },
+            { label: 'None', value: 'none' }
+        ];
+
+        Alert.alert(
+            'Mute Notifications',
+            'Mute this chat for:',
+            muteOptions.map(opt => ({
+                text: opt.label,
+                onPress: async () => {
+                    try {
+                        const response = await fetch(`${Config.API_URL}/mute_chat.php`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                user_id: currentUser?.id,
+                                target_id: id,
+                                duration: opt.value
+                            })
+                        });
+                        if (response.ok) {
+                            Alert.alert('Success', `Notifications ${opt.value === 'none' ? 'unmuted' : 'muted'}.`);
+                        }
+                    } catch (error) {
+                        console.error('Error muting:', error);
+                    }
+                }
+            })).concat([{ text: 'Cancel', style: 'cancel' } as any])
+        );
+    };
+
+    const handleDeleteMessage = (msgId: number) => {
+        Alert.alert(
+            'Delete Message',
+            'Are you sure you want to delete this message for everyone?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const response = await fetch(`${Config.API_URL}/delete_message.php`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    message_id: msgId,
+                                    user_id: currentUser?.id
+                                })
+                            });
+                            if (response.ok) {
+                                // Update local state immediately
+                                setMessages(prev => prev.map(m =>
+                                    m.id === msgId ? { ...m, is_deleted: 1, message_text: '🚫 This message was deleted' } : m
+                                ));
+                                Alert.alert('Success', 'Message deleted.');
+                                setSelectedMessageId(null);
+                            } else {
+                                const data = await response.json();
+                                Alert.alert('Error', data.message || 'Failed to delete.');
+                            }
+                        } catch (error) {
+                            console.error('Error deleting message:', error);
+                            Alert.alert('Error', 'Network error.');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleClearChat = () => {
+        Alert.alert(
+            'Clear Messages',
+            'Are you sure you want to clear your chat history?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Clear',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const response = await fetch(`${Config.API_URL}/clear_msgs.php`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    user_id: currentUser?.id,
+                                    target_id: id
+                                })
+                            });
+                            if (response.ok) {
+                                setMessages([]); // Clear local UI immediately
+                            }
+                        } catch (error) {
+                            console.error('Error clearing chat:', error);
+                            Alert.alert('Error', 'Failed to clear chat.');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleUnfriend = () => {
+        Alert.alert(
+            'Unfriend',
+            `Are you sure you want to remove ${otherUsername} from your friends? The chat will be locked.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Unfriend',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const response = await fetch(`${Config.API_URL}/handle_relationship.php`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    user_id: currentUser?.id,
+                                    target_id: id,
+                                    action: 'unfriend'
+                                })
+                            });
+                            if (response.ok) {
+                                setRelationshipStatus(null);
+                                Alert.alert('Success', `${otherUsername} is no longer your friend.`);
+                            }
+                        } catch (error) {
+                            console.error('Error unfriending:', error);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleBlockUser = async () => {
+        const isBlocked = relationshipStatus === 'blocked';
+        Alert.alert(
+            isBlocked ? 'Unblock User' : 'Block User',
+            isBlocked ? `Unblock ${otherUsername}?` : `Block ${otherUsername}? They won't be able to message you.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: isBlocked ? 'Unblock' : 'Block',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const response = await fetch(`${Config.API_URL}/handle_relationship.php`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    user_id: currentUser?.id,
+                                    target_id: id,
+                                    action: isBlocked ? 'unblock' : 'block'
+                                })
+                            });
+                            if (response.ok) {
+                                setRelationshipStatus(isBlocked ? null : 'blocked');
+                                Alert.alert('Success', `${otherUsername} has been ${isBlocked ? 'unblocked' : 'blocked'}.`);
+                                if (!isBlocked) router.back();
+                            }
+                        } catch (error) {
+                            console.error('Error blocking:', error);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleReportUser = () => {
+        Alert.prompt(
+            'Report User',
+            'Please provide a reason for reporting:',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Submit',
+                    onPress: async (reason) => {
+                        try {
+                            const response = await fetch(`${Config.API_URL}/report_user.php`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    reporter_id: currentUser?.id,
+                                    reported_id: id,
+                                    reason: reason
+                                })
+                            });
+                            if (response.ok) {
+                                Alert.alert('Success', 'Report submitted. Thank you.');
+                            }
+                        } catch (error) {
+                            console.error('Error reporting:', error);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const menuItems = [
+        { label: 'View Profile', icon: User, onPress: handleViewProfile },
+        { label: 'Mute Notifications', icon: BellOff, onPress: handleMute },
+        { label: 'Clear Messages', icon: Trash2, onPress: handleClearChat },
+        { label: 'Unfriend', icon: UserMinus, onPress: handleUnfriend, destructive: true, hidden: relationshipStatus !== 'accepted' },
+        { label: relationshipStatus === 'blocked' ? 'Unblock User' : 'Block User', icon: ShieldAlert, onPress: handleBlockUser, destructive: true },
+        { label: 'Report', icon: Flag, onPress: handleReportUser },
+    ];
 
     const handleReaction = async (messageId: number, emoji: string) => {
         if (!currentUser) return;
@@ -142,7 +382,7 @@ export default function ChatDetailScreen() {
                         activeOpacity={0.8}
                         style={[styles.bubble, isMe ? styles.myBubble : styles.friendBubble, !isLastInGroup && (isMe ? styles.myBubbleGroup : styles.friendBubbleGroup)]}
                     >
-                        <ThemedText style={styles.messageText}>{item.message_text}</ThemedText>
+                        <ThemedText style={[styles.messageText, item.is_deleted && { fontStyle: 'italic', opacity: 0.7 }]}>{item.message_text}</ThemedText>
                     </TouchableOpacity>
 
                     {isLastInGroup && (
@@ -176,6 +416,14 @@ export default function ChatDetailScreen() {
                                         <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
                                     </TouchableOpacity>
                                 ))}
+                                {isMe && !item.is_deleted && (
+                                    <TouchableOpacity
+                                        style={[styles.emojiButton, { marginLeft: 8, borderLeftWidth: 1, borderLeftColor: Colors.glassBorder, paddingLeft: 12 }]}
+                                        onPress={() => handleDeleteMessage(item.id)}
+                                    >
+                                        <Trash2 size={20} color={Colors.error || '#FF3B30'} />
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         </GlassCard>
                     )}
@@ -206,9 +454,15 @@ export default function ChatDetailScreen() {
                         </ThemedText>
                     </View>
                 </View>
-                <TouchableOpacity style={styles.moreButton}>
+                <TouchableOpacity style={styles.moreButton} onPress={() => setMenuVisible(true)}>
                     <MoreVertical size={24} color={Colors.text} />
                 </TouchableOpacity>
+
+                <OverflowMenu
+                    visible={menuVisible}
+                    onClose={() => setMenuVisible(false)}
+                    items={menuItems}
+                />
             </View>
 
             {/* Message List */}

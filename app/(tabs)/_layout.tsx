@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { MessageSquareText, Group, Users, Settings } from 'lucide-react-native';
+import { MessageSquareText, Group, Globe2, Settings } from 'lucide-react-native';
 import { Colors } from '../../constants/Colors';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, View, Text } from 'react-native';
@@ -13,7 +13,7 @@ export default function TabLayout() {
                 tabBarStyle: styles.tabBar,
                 tabBarActiveTintColor: Colors.primary,
                 tabBarInactiveTintColor: Colors.textSecondary,
-                tabBarShowLabel: true,
+                tabBarShowLabel: false,
                 tabBarLabelStyle: styles.tabLabel,
                 tabBarBackground: () => (
                     <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
@@ -34,19 +34,20 @@ export default function TabLayout() {
                 }}
             />
             <Tabs.Screen
+                name="friends" // Mapped to Communities
+                options={{
+                    // title: 'Communities',
+                    tabBarIcon: ({ color, focused }) => <Globe2 size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,
+                }}
+            />
+            <Tabs.Screen
                 name="requests" // Mapped to Updates
                 options={{
                     // title: 'Updates',
                     tabBarIcon: ({ color, focused }) => <Group size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,
                 }}
             />
-            <Tabs.Screen
-                name="friends" // Mapped to Communities
-                options={{
-                    // title: 'Communities',
-                    tabBarIcon: ({ color, focused }) => <Users size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,
-                }}
-            />
+
             <Tabs.Screen
                 name="settings" // Mapped to Calls
                 options={{
@@ -56,6 +57,12 @@ export default function TabLayout() {
             />
             <Tabs.Screen
                 name="profile-edit"
+                options={{
+                    href: null,
+                }}
+            />
+            <Tabs.Screen
+                name="appearance"
                 options={{
                     href: null,
                 }}

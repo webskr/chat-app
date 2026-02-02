@@ -29,5 +29,6 @@ export const Colors = {
   tabActivePill: 'rgba(37, 211, 102, 0.15)', // Light Green Pill Background
   tabActiveText: '#25D366',  // Green Text for Active Tab
   tabInactiveText: '#94A3B8', // Grey Text for Inactive Tab
+  error: '#EF4444',          // Red for destructive actions
 };
 

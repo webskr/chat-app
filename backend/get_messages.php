@@ -19,15 +19,29 @@ if (!empty($sender_id) && !empty($receiver_id)) {
         $user1_id = min((int)$sender_id, (int)$receiver_id);
         $user2_id = max((int)$sender_id, (int)$receiver_id);
 
-        $query = "SELECT m.*, u_sender.username as sender_name, u_sender.avatar_id as sender_avatar_id 
+        $query = "SELECT m.*, u_sender.username as sender_name, u_sender.avatar_id as sender_avatar_id, m.is_deleted 
                   FROM messages m
                   JOIN conversations c ON m.conversation_id = c.id
                   JOIN users u_sender ON m.sender_id = u_sender.id
-                  WHERE (c.user1_id = :u1 AND c.user2_id = :u2)
+                  WHERE (
+                      (c.user1_id = :u1 AND c.user2_id = :u2) OR 
+                      (c.user1_id = :u2 AND c.user2_id = :u1)
+                  )
+                  AND (
+                      CASE
+                          WHEN c.user1_id = c.user2_id THEN 
+                               (c.user1_cleared_at IS NULL OR m.created_at > c.user1_cleared_at)
+                          WHEN c.user1_id = :me THEN 
+                               (c.user1_cleared_at IS NULL OR m.created_at > c.user1_cleared_at)
+                          WHEN c.user2_id = :me THEN 
+                               (c.user2_cleared_at IS NULL OR m.created_at > c.user2_cleared_at)
+                          ELSE 1
+                      END
+                  )
                   ORDER BY m.created_at ASC";
         
         $stmt = $pdo->prepare($query);
-        $stmt->execute([':u1' => $user1_id, ':u2' => $user2_id]);
+        $stmt->execute([':u1' => $user1_id, ':u2' => $user2_id, ':me' => $sender_id]);
         
         $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

@@ -99,7 +99,10 @@ export default function SettingsScreen() {
                                     <TouchableOpacity
                                         style={styles.settingItem}
                                         disabled={item.type === 'toggle'}
-                                        onPress={() => item.id === 'profile' && router.push('/(tabs)/profile-edit')}
+                                        onPress={() => {
+                                            if (item.id === 'profile') router.push('/(tabs)/profile-edit');
+                                            if (item.id === 'appearance') router.push('/appearance');
+                                        }}
                                     >
                                         <View style={styles.settingLeft}>
                                             <View style={styles.iconContainer}>

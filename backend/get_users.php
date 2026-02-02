@@ -14,10 +14,11 @@ include_once 'db_connection.php';
 $user_id = isset($_GET['user_id']) ? $_GET['user_id'] : null;
 
 try {
-    $query = "SELECT id, username, email, avatar_id FROM users WHERE id != :uid";
+    $query = "SELECT u.id, u.username, u.email, u.avatar_id, 
+              (SELECT status FROM relationships WHERE user_id = :uid1 AND target_id = u.id) as relationship_status
+              FROM users u WHERE u.id != :uid2";
     $stmt = $pdo->prepare($query);
-    $stmt->bindParam(':uid', $user_id);
-    $stmt->execute();
+    $stmt->execute([':uid1' => $user_id, ':uid2' => $user_id]);
     
     $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
