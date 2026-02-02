@@ -1,0 +1,31 @@
+{
+    "comparisons": [
+        {
+            "id": 22,
+            "conversation_id": 15,
+            "msg_created": "2026-02-03 00:06:20",
+            "user1_id": 1,
+            "user2_id": 15,
+            "user1_cleared_at": null,
+            "user2_cleared_at": null
+        },
+        {
+            "id": 23,
+            "conversation_id": 13,
+            "msg_created": "2026-02-03 00:06:30",
+            "user1_id": 1,
+            "user2_id": 16,
+            "user1_cleared_at": null,
+            "user2_cleared_at": null
+        },
+        {
+            "id": 25,
+            "conversation_id": 13,
+            "msg_created": "2026-02-03 00:12:36",
+            "user1_id": 1,
+            "user2_id": 16,
+            "user1_cleared_at": null,
+            "user2_cleared_at": null
+        }
+    ]
+}

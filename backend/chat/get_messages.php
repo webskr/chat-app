@@ -4,69 +4,95 @@ header("Access-Control-Allow-Methods: GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Content-Type: application/json; charset=UTF-8");
 
-if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
 
 include_once '../includes/db_connection.php';
 
-$sender_id = isset($_GET['sender_id']) ? $_GET['sender_id'] : null;
-$receiver_id = isset($_GET['receiver_id']) ? $_GET['receiver_id'] : null;
+$me       = isset($_GET['sender_id']) ? (int)$_GET['sender_id'] : null;
+$other_id = isset($_GET['receiver_id']) ? (int)$_GET['receiver_id'] : null;
 
-if (!empty($sender_id) && !empty($receiver_id)) {
-    try {
-        $user1_id = min((int)$sender_id, (int)$receiver_id);
-        $user2_id = max((int)$sender_id, (int)$receiver_id);
-
-        $query = "SELECT m.*, u_sender.username as sender_name, u_sender.avatar_id as sender_avatar_id, m.is_deleted 
-                  FROM messages m
-                  JOIN conversations c ON m.conversation_id = c.id
-                  JOIN users u_sender ON m.sender_id = u_sender.id
-                  WHERE (
-                      (c.user1_id = :u1 AND c.user2_id = :u2) OR 
-                      (c.user1_id = :u2 AND c.user2_id = :u1)
-                  )
-                  AND (
-                      CASE
-                          WHEN c.user1_id = c.user2_id THEN 
-                               (c.user1_cleared_at IS NULL OR m.created_at > c.user1_cleared_at)
-                          WHEN c.user1_id = :me THEN 
-                               (c.user1_cleared_at IS NULL OR m.created_at > c.user1_cleared_at)
-                          WHEN c.user2_id = :me THEN 
-                               (c.user2_cleared_at IS NULL OR m.created_at > c.user2_cleared_at)
-                          ELSE 1
-                      END
-                  )
-                  ORDER BY m.created_at ASC";
-        
-        $stmt = $pdo->prepare($query);
-        $stmt->execute([':u1' => $user1_id, ':u2' => $user2_id, ':me' => $sender_id]);
-        
-        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Fetch reactions for these messages (resilient if table missing)
-        foreach ($messages as &$message) {
-            try {
-                $react_query = "SELECT r.emoji, r.user_id, u.username 
-                                FROM reactions r 
-                                JOIN users u ON r.user_id = u.id 
-                                WHERE r.message_id = :mid";
-                $react_stmt = $pdo->prepare($react_query);
-                $react_stmt->execute([':mid' => $message['id']]);
-                $message['reactions'] = $react_stmt->fetchAll(PDO::FETCH_ASSOC);
-            } catch (PDOException $e) {
-                $message['reactions'] = [];
-            }
-        }
-        
-        http_response_code(200);
-        echo json_encode($messages);
-    } catch (PDOException $e) {
-        http_response_code(500);
-        echo json_encode(array("message" => "Database error: " . $e->getMessage()));
-    }
-} else {
+if (!$me || !$other_id) {
     http_response_code(400);
-    echo json_encode(array("message" => "Incomplete parameters."));
+    echo json_encode(["message" => "Incomplete parameters"]);
+    exit;
+}
+
+try {
+    // 1️⃣ Find conversation
+    $convStmt = $pdo->prepare("
+        SELECT id, user1_id, user2_id, user1_cleared_at, user2_cleared_at
+        FROM conversations
+        WHERE (user1_id = :me AND user2_id = :other)
+           OR (user1_id = :other AND user2_id = :me)
+        LIMIT 1
+    ");
+
+    $convStmt->execute([
+        ':me'    => $me,
+        ':other'=> $other_id
+    ]);
+
+    $conv = $convStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$conv) {
+        echo json_encode([]);
+        exit;
+    }
+
+    // 2️⃣ Determine cleared_at for current user
+    if ($conv['user1_id'] == $me) {
+        $clearedAt = $conv['user1_cleared_at'];
+    } else {
+        $clearedAt = $conv['user2_cleared_at'];
+    }
+
+    // 3️⃣ Fetch messages (clean + predictable)
+    $msgSql = "
+        SELECT 
+            m.id,
+            m.message_text,
+            m.sender_id,
+            m.created_at,
+            m.is_deleted,
+            u.username AS sender_name,
+            u.avatar_id AS sender_avatar_id
+        FROM messages m
+        JOIN users u ON u.id = m.sender_id
+        WHERE m.conversation_id = :cid
+          AND (:clearedAt IS NULL OR m.created_at > :clearedAt)
+        ORDER BY m.created_at ASC
+    ";
+
+    $msgStmt = $pdo->prepare($msgSql);
+    $msgStmt->execute([
+        ':cid'       => $conv['id'],
+        ':clearedAt' => $clearedAt
+    ]);
+
+    $messages = $msgStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // 4️⃣ Fetch reactions
+    foreach ($messages as &$msg) {
+        $reactStmt = $pdo->prepare("
+            SELECT r.emoji, r.user_id, u.username
+            FROM reactions r
+            JOIN users u ON u.id = r.user_id
+            WHERE r.message_id = :mid
+        ");
+        $reactStmt->execute([':mid' => $msg['id']]);
+        $msg['reactions'] = $reactStmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    http_response_code(200);
+    echo json_encode($messages);
+
+} catch (PDOException $e) {
+    http_response_code(500);
+    echo json_encode([
+        "message" => "Database error",
+        "error" => $e->getMessage()
+    ]);
 }

@@ -4,63 +4,82 @@ header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Content-Type: application/json; charset=UTF-8");
 
-if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
 
 include_once '../includes/db_connection.php';
 
-$data = json_decode(file_get_contents("php://input"));
+$data = json_decode(file_get_contents("php://input"), true);
 
-if (!empty($data->user_id) && !empty($data->target_id)) {
-    try {
-        $user_id = $data->user_id;
-        $target_id = $data->target_id;
-
-        // Determine if user is user1 or user2 in the conversations table
-        // We assume the conversation exists if they are chatting
-        $find_query = "SELECT id, user1_id, user2_id FROM conversations 
-                       WHERE (user1_id = :u1 AND user2_id = :u2) 
-                          OR (user1_id = :u2 AND user2_id = :u1) LIMIT 1";
-        $stmt = $pdo->prepare($find_query);
-        $stmt->execute([':u1' => $user_id, ':u2' => $target_id]);
-        $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($conversation) {
-            $c_id = $conversation['id'];
-            $u1 = $conversation['user1_id'];
-            $u2 = $conversation['user2_id'];
-
-            if ($u1 == $u2) {
-                // Self chat: update both to be safe
-                $update_sql = "UPDATE conversations SET user1_cleared_at = NOW(), user2_cleared_at = NOW() WHERE id = :cid";
-            } elseif ($u1 == $user_id) {
-                $update_sql = "UPDATE conversations SET user1_cleared_at = NOW() WHERE id = :cid";
-            } else {
-                $update_sql = "UPDATE conversations SET user2_cleared_at = NOW() WHERE id = :cid";
-            }
-
-            $upd_stmt = $pdo->prepare($update_sql);
-            if ($upd_stmt->execute([':cid' => $c_id])) {
-                http_response_code(200);
-                echo json_encode(array("message" => "Chat cleared successfully."));
-            } else {
-                http_response_code(500);
-                echo json_encode(array("message" => "Unable to clear chat."));
-            }
-        } else {
-             // Conversation doesn't exist yet, nothing to clear
-             http_response_code(200);
-             echo json_encode(array("message" => "Chat cleared (no conversation found)."));
-        }
-
-    } catch (PDOException $e) {
-        http_response_code(500);
-        echo json_encode(array("message" => "Database error: " . $e->getMessage()));
-    }
-} else {
+if (
+    (empty($data['user_id']) && empty($data['sender_id'])) ||
+    (empty($data['target_id']) && empty($data['receiver_id']))
+) {
     http_response_code(400);
-    echo json_encode(array("message" => "Incomplete data."));
+    echo json_encode(["message" => "Incomplete data"]);
+    exit;
 }
-?>
+
+$user_id   = isset($data['user_id']) ? (int)$data['user_id'] : (int)$data['sender_id'];
+$target_id = isset($data['target_id']) ? (int)$data['target_id'] : (int)$data['receiver_id'];
+
+try {
+    $pdo->beginTransaction();
+
+    // 1️⃣ Find conversation
+    $find = $pdo->prepare("
+        SELECT id
+        FROM conversations
+        WHERE (user1_id = :u1 AND user2_id = :u2)
+           OR (user1_id = :u2 AND user2_id = :u1)
+        LIMIT 1
+    ");
+
+    $find->execute([':u1' => $user_id, ':u2' => $target_id]);
+    $conversation = $find->fetch(PDO::FETCH_ASSOC);
+
+    if (!$conversation) {
+        $pdo->rollBack();
+        http_response_code(404);
+        echo json_encode(["message" => "Conversation not found"]);
+        exit;
+    }
+
+    $cid = $conversation['id'];
+
+    // 2️⃣ Physically DELETE all messages for this conversation
+    $del_stmt = $pdo->prepare("DELETE FROM messages WHERE conversation_id = :cid");
+    $del_stmt->execute([':cid' => $cid]);
+    $msg_count = $del_stmt->rowCount();
+
+    // 3️⃣ Reset the conversation markers
+    $update_conv = $pdo->prepare("
+        UPDATE conversations 
+        SET last_message = NULL, 
+            user1_cleared_at = NOW(), 
+            user2_cleared_at = NOW() 
+        WHERE id = :cid
+    ");
+    $update_conv->execute([':cid' => $cid]);
+
+    $pdo->commit();
+
+    http_response_code(200);
+    echo json_encode([
+        "message" => "Chat and messages cleared successfully",
+        "conversation_id" => $cid,
+        "deleted_count" => $msg_count
+    ]);
+
+} catch (PDOException $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    http_response_code(500);
+    echo json_encode([
+        "message" => "Database error",
+        "error" => $e->getMessage()
+    ]);
+}

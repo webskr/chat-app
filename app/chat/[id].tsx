@@ -180,35 +180,61 @@ export default function ChatDetailScreen() {
     };
 
     const handleClearChat = () => {
-        Alert.alert(
-            'Clear Messages',
-            'Are you sure you want to clear your chat history?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Clear',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            const response = await fetch(`${Config.API_URL}/chat/clear_msgs.php`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    user_id: currentUser?.id,
-                                    target_id: id
-                                })
-                            });
-                            if (response.ok) {
-                                setMessages([]); // Clear local UI immediately
-                            }
-                        } catch (error) {
-                            console.error('Error clearing chat:', error);
-                            Alert.alert('Error', 'Failed to clear chat.');
-                        }
+        const performClear = async () => {
+            try {
+                const response = await fetch(`${Config.API_URL}/chat/clear_msgs.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: currentUser?.id,
+                        target_id: id,
+                        sender_id: currentUser?.id,
+                        receiver_id: id
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    setMessages([]);
+                    if (Platform.OS === 'web') {
+                        alert('Messages deleted successfully from database.');
+                    } else {
+                        Alert.alert('Success', 'Messages deleted from database.');
+                    }
+                } else {
+                    const errorMsg = data.message || 'Failed to clear messages';
+                    if (Platform.OS === 'web') {
+                        alert('Error: ' + errorMsg);
+                    } else {
+                        Alert.alert('Server Error', errorMsg);
                     }
                 }
-            ]
-        );
+            } catch (error) {
+                console.error('Error clearing chat:', error);
+                const networkMsg = 'Could not reach server. Check backend connection.';
+                if (Platform.OS === 'web') {
+                    alert('Network Error: ' + networkMsg);
+                } else {
+                    Alert.alert('Network Error', networkMsg);
+                }
+            }
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm('Are you sure you want to clear your chat history? This will delete all messages from DB.')) {
+                performClear();
+            }
+        } else {
+            Alert.alert(
+                'Clear Messages',
+                'Are you sure you want to clear your chat history?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Clear', style: 'destructive', onPress: performClear }
+                ]
+            );
+        }
     };
 
     const handleUnfriend = () => {

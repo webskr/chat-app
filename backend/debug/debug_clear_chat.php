@@ -1,8 +1,8 @@
 <?php
 include_once '../includes/db_connection.php';
 
-$user_id = 1; // Change this to a valid user ID for testing
-$target_id = 2; // Change this to a valid target ID
+$user_id = 1; // Existing user
+$target_id = 10; // Existing user
 
 echo "--- Debugging Conversation State ---\n";
 // 1. Get Conversation
