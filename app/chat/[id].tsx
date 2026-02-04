@@ -1,18 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Image as RNImage, Dimensions } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { GlassCard } from '../../components/GlassCard';
-import { ChevronLeft, Send, Image as ImageIcon, Smile, MoreVertical, Heart, ThumbsUp, Laugh, Angry, Frown, Sparkles, User, BellOff, Trash2, UserMinus, ShieldAlert, Flag } from 'lucide-react-native';
+import { ChevronLeft, Send, Image as ImageIcon, Smile, MoreVertical, Heart, ThumbsUp, Laugh, Angry, Frown, Sparkles, User, BellOff, Trash2, UserMinus, ShieldAlert, Flag, Timer, X, Paperclip } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
 import { OverflowMenu } from '../../components/OverflowMenu';
+import { ProfileModal } from '../../components/ProfileModal';
+import * as ImagePicker from 'expo-image-picker';
 
-const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥', '✨'];
+const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥', '✨', '👋', '🙏', '🎉', '💩', '🍔', '🍕'];
 
 export default function ChatDetailScreen() {
     const { id, user: otherUsername, avatar_id } = useLocalSearchParams<{ id: string, user: string, avatar_id: string }>();
@@ -24,14 +26,47 @@ export default function ChatDetailScreen() {
     const [menuVisible, setMenuVisible] = useState(false);
     const [relationshipStatus, setRelationshipStatus] = useState<string | null>(null);
     const flatListRef = useRef<FlatList>(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+
+    const [modalVisible, setModalVisible] = useState(false);
+    const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
 
     useEffect(() => {
         fetchMessages();
         fetchRelationshipStatus();
+        fetchTargetUserProfile(); // New fetch for full profile (bio etc)
         // Polling for new messages every 3 seconds
         const interval = setInterval(fetchMessages, 3000);
         return () => clearInterval(interval);
     }, [id]);
+
+    const fetchTargetUserProfile = async () => {
+        // Fetch specific user details including bio
+        // Since get_users.php returns all or filtered, we can reuse it filtering by ID or just use what we have?
+        // get_users.php?user_id=ME returns everyone ELSE.
+        // We probably need a way to get specific user info clearly.
+        // get_users.php returns u.id, u.bio etc.
+        // Let's filter client side from get_users? heavy.
+        // Better: create get_user_profile.php or just use get_users.php and filter.
+        // For now, let's try to find them in get_users list.
+        if (!currentUser) return;
+        try {
+            const response = await fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`);
+            const data = await response.json();
+            if (response.ok) {
+                const found = data.find((u: any) => String(u.id) === String(id));
+                if (found) {
+                    setTargetUserProfile(found);
+                } else if (String(id) === String(currentUser.id)) {
+                    // Self chat
+                    setTargetUserProfile({ ...currentUser, bio: 'Note to self' });
+                }
+            }
+        } catch (e) {
+            console.error("Profile fetch error", e);
+        }
+    };
 
     const fetchRelationshipStatus = async () => {
         if (!currentUser) return;
@@ -59,21 +94,21 @@ export default function ChatDetailScreen() {
             }
         } catch (error) {
             console.error('Error fetching messages:', error);
-            Alert.alert('Fetch Error', 'Failed to load messages. Please ensure your database is updated.');
+            // Alert.alert('Fetch Error', 'Failed to load messages. Please ensure your database is updated.');
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleSend = async () => {
+    const handleSend = async (text: string = inputText, imagePath: string | null = null) => {
         if (!currentUser) {
             Alert.alert('Error', 'No user found');
             return;
         }
 
-        if (inputText.trim()) {
-            const messageToSend = inputText.trim();
-            setInputText(''); // Clear input immediately for better UX
+        if (text.trim() || imagePath) {
+            const messageToSend = text.trim();
+            if (!imagePath) setInputText(''); // Clear input immediately if text only
 
             try {
                 const response = await fetch(`${Config.API_URL}/chat/send_message.php`, {
@@ -82,7 +117,8 @@ export default function ChatDetailScreen() {
                     body: JSON.stringify({
                         sender_id: currentUser.id,
                         receiver_id: id,
-                        message: messageToSend
+                        message: messageToSend,
+                        image_path: imagePath
                     }),
                 });
 
@@ -99,9 +135,121 @@ export default function ChatDetailScreen() {
         }
     };
 
+    const handlePickImage = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+            });
+
+            console.log('IMAGE PICKER RESULT:', result);
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                await uploadImage(result.assets[0]);
+            }
+        } catch (e) {
+            console.error('PICKER ERROR:', e);
+        }
+    };
+
+    const uploadImage = async (asset: any) => {
+        setIsUploading(true);
+        console.log('STARTING IMAGE UPLOAD');
+        console.log("Asset URI:", asset.uri);
+        console.log("Asset MimeType:", asset.mimeType);
+
+        const formData = new FormData();
+        const uri = asset.uri;
+        // filename prioritization: asset.fileName -> distinct name from URI -> default
+        const filename = asset.fileName || uri.split('/').pop() || 'upload.jpg';
+
+        // MimeType is CRITICAL for separate parts in specific android versions
+        // If asset.mimeType is null, try to deduce, otherwise default to image/jpeg
+        let type = asset.mimeType;
+        if (!type) {
+            const match = /\.(\w+)$/.exec(filename);
+            type = match ? `image/${match[1]}` : `image/jpeg`;
+        }
+
+        console.log("Form Data - Name:", filename, "Type:", type);
+
+        // Append as specific object for RN
+        if (Platform.OS === 'web') {
+            try {
+                const res = await fetch(uri);
+                const blob = await res.blob();
+                formData.append('image', blob, filename);
+            } catch (e) {
+                console.error("Web Blob conversion failed:", e);
+                setIsUploading(false);
+                return;
+            }
+        } else {
+            formData.append('image', {
+                uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+                name: filename,
+                type: type
+            } as any);
+        }
+
+        // Custom Filename Params
+        if (currentUser?.id) {
+            formData.append('sender_id', String(currentUser.id));
+        }
+        formData.append('receiver_id', String(id));
+
+        const uploadUrl = `${Config.API_URL}/chat/upload_image.php`;
+        console.log('UPLOAD URL:', uploadUrl);
+
+        try {
+            const response = await fetch(uploadUrl, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                },
+            });
+
+            console.log("Response status:", response.status);
+            const text = await response.text();
+            console.log('UPLOAD RESPONSE (RAW):', text);
+
+            let data;
+            try {
+                data = JSON.parse(text);
+                console.log('UPLOAD RESPONSE (JSON):', data);
+            } catch (e) {
+                console.error("JSON Parse error:", e);
+                Alert.alert('Upload Error', 'Server returned invalid response');
+                return;
+            }
+
+            if (response.ok && data.success !== false) {
+                console.log('IMAGE UPLOADED, SENDING MESSAGE...');
+                // Send message with image path
+                await handleSend(inputText, data.media_url);
+                console.log('IMAGE MESSAGE SENT');
+                setInputText('');
+            } else {
+                console.error('UPLOAD FAILED LOGICALLY:', data);
+                Alert.alert('Upload Failed', data.message || 'Could not upload image');
+            }
+        } catch (error) {
+            console.error('UPLOAD NETWORK ERROR:', error);
+            Alert.alert('Error', 'Failed to upload image. Check network.');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleEmojiSelect = (emoji: string) => {
+        setInputText(prev => prev + emoji);
+    };
+
     const handleViewProfile = () => {
-        // Logically navigate to profile
-        Alert.alert('View Profile', `Opening ${otherUsername}'s profile...`);
+        setModalVisible(true);
     };
 
     const handleMute = () => {
@@ -161,7 +309,7 @@ export default function ChatDetailScreen() {
                             if (response.ok) {
                                 // Update local state immediately
                                 setMessages(prev => prev.map(m =>
-                                    m.id === msgId ? { ...m, is_deleted: 1, message_text: '🚫 This message was deleted' } : m
+                                    m.id === msgId ? { ...m, is_deleted: 1, message_text: '🚫 This message was deleted', image_path: null } : m
                                 ));
                                 Alert.alert('Success', 'Message deleted.');
                                 setSelectedMessageId(null);
@@ -272,37 +420,62 @@ export default function ChatDetailScreen() {
 
     const handleBlockUser = async () => {
         const isBlocked = relationshipStatus === 'blocked';
-        Alert.alert(
-            isBlocked ? 'Unblock User' : 'Block User',
-            isBlocked ? `Unblock ${otherUsername}?` : `Block ${otherUsername}? They won't be able to message you.`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: isBlocked ? 'Unblock' : 'Block',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            const response = await fetch(`${Config.API_URL}/users/handle_relationship.php`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    user_id: currentUser?.id,
-                                    target_id: id,
-                                    action: isBlocked ? 'unblock' : 'block'
-                                })
-                            });
-                            if (response.ok) {
-                                setRelationshipStatus(isBlocked ? null : 'blocked');
-                                Alert.alert('Success', `${otherUsername} has been ${isBlocked ? 'unblocked' : 'blocked'}.`);
-                                if (!isBlocked) router.back();
-                            }
-                        } catch (error) {
-                            console.error('Error blocking:', error);
-                        }
+        const actionText = isBlocked ? 'Unblock' : 'Block';
+        const confirmMessage = isBlocked ? `Unblock ${otherUsername}?` : `Block ${otherUsername}? They won't be able to message you.`;
+
+        const performBlock = async () => {
+            try {
+                const response = await fetch(`${Config.API_URL}/users/handle_relationship.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: currentUser?.id,
+                        target_id: id,
+                        action: isBlocked ? 'unblock' : 'block'
+                    })
+                });
+
+                if (response.ok) {
+                    setRelationshipStatus(isBlocked ? null : 'blocked');
+                    const successMsg = `${otherUsername} has been ${isBlocked ? 'unblocked' : 'blocked'}.`;
+
+                    if (Platform.OS === 'android') {
+                        const { ToastAndroid } = require('react-native');
+                        ToastAndroid.show(successMsg, ToastAndroid.SHORT);
+                    } else if (Platform.OS === 'web') {
+                        window.alert(successMsg);
+                    } else {
+                        Alert.alert('Success', successMsg);
                     }
+
+                    if (!isBlocked) router.back();
+                } else {
+                    Alert.alert('Error', 'Action failed. Please try again.');
                 }
-            ]
-        );
+            } catch (error) {
+                console.error('Error blocking:', error);
+                Alert.alert('Error', 'Network error occurred.');
+            }
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(`${actionText} User: ${confirmMessage}`)) {
+                performBlock();
+            }
+        } else {
+            Alert.alert(
+                `${actionText} User`,
+                confirmMessage,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: actionText,
+                        style: 'destructive',
+                        onPress: performBlock
+                    }
+                ]
+            );
+        }
     };
 
     const handleReportUser = () => {
@@ -382,10 +555,6 @@ export default function ChatDetailScreen() {
         const isSelfChat = String(id) === String(currentUser?.id);
         const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
 
-        // WhatsApp grouping logic: Show time only if:
-        // 1. It's the last message in the total list
-        // 2. The next message is from a different sender
-        // 3. The next message is more than 1 minute later
         const isLastInGroup = !nextMessage ||
             String(nextMessage.sender_id) !== String(item.sender_id) ||
             new Date(nextMessage.created_at).getTime() - new Date(item.created_at).getTime() > 60000;
@@ -408,7 +577,17 @@ export default function ChatDetailScreen() {
                         activeOpacity={0.8}
                         style={[styles.bubble, isMe ? styles.myBubble : styles.friendBubble, !isLastInGroup && (isMe ? styles.myBubbleGroup : styles.friendBubbleGroup)]}
                     >
-                        <ThemedText style={[styles.messageText, item.is_deleted && { fontStyle: 'italic', opacity: 0.7 }]}>{item.message_text}</ThemedText>
+                        {item.media_url ? (
+                            <RNImage
+                                source={{ uri: `${Config.API_URL}/${item.media_url.replace(/^\//, '')}` }}
+                                style={[styles.messageImage, { width: 220, height: 280 }]}
+                                resizeMode="cover"
+                            />
+                        ) : null}
+
+                        {item.message_text ? (
+                            <ThemedText style={[styles.messageText, item.is_deleted && { fontStyle: 'italic', opacity: 0.7 }]}>{item.message_text}</ThemedText>
+                        ) : null}
                     </TouchableOpacity>
 
                     {isLastInGroup && (
@@ -465,7 +644,11 @@ export default function ChatDetailScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <ChevronLeft size={24} color={Colors.text} />
                 </TouchableOpacity>
-                <View style={styles.headerInfo}>
+                <TouchableOpacity
+                    style={styles.headerInfo}
+                    onPress={() => setModalVisible(true)}
+                    activeOpacity={0.7}
+                >
                     <Avatar
                         source={getAvatarById(avatar_id || id)}
                         online={String(id) !== String(currentUser?.id)}
@@ -479,7 +662,7 @@ export default function ChatDetailScreen() {
                             {String(id) === String(currentUser?.id) ? 'Personal Space' : 'Online'}
                         </ThemedText>
                     </View>
-                </View>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.moreButton} onPress={() => setMenuVisible(true)}>
                     <MoreVertical size={24} color={Colors.text} />
                 </TouchableOpacity>
@@ -491,12 +674,23 @@ export default function ChatDetailScreen() {
                 />
             </View>
 
-            {/* Message List */}
+            <ProfileModal
+                visible={modalVisible}
+                onClose={() => setModalVisible(false)}
+                user={targetUserProfile || { id, username: otherUsername, avatar_id: avatar_id || '1' }}
+                currentUser={currentUser}
+                relationship={String(id) === String(currentUser?.id) ? 'self' : (relationshipStatus as any) || 'none'}
+                onActionComplete={() => {
+                    fetchRelationshipStatus();
+                    // If blocked/unfriendly, maybe go back? For now just refresh status.
+                }}
+            />
+
             <FlatList
                 ref={flatListRef}
                 data={messages}
-                keyExtractor={(item) => item.id.toString()}
                 renderItem={renderMessage}
+                keyExtractor={(item) => item.id.toString()}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
             />
@@ -506,40 +700,60 @@ export default function ChatDetailScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
-                <View style={styles.inputArea}>
-                    <GlassCard
-                        style={styles.inputWrapper}
-                        contentContainerStyle={styles.inputContent}
-                        intensity={30}
-                    >
-                        <TouchableOpacity style={styles.iconButton}>
-                            <Smile size={22} color={Colors.textSecondary} />
-                        </TouchableOpacity>
+                <View style={[styles.inputContainer]}>
+                    {showEmojiPicker && (
+                        <GlassCard style={styles.inputEmojiPicker}>
+                            <View style={styles.inputEmojiRow}>
+                                {EMOJIS.map(emoji => (
+                                    <TouchableOpacity
+                                        key={emoji}
+                                        onPress={() => handleEmojiSelect(emoji)}
+                                        style={styles.inputEmojiButton}
+                                    >
+                                        <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
+                                    </TouchableOpacity>
+                                ))}
+                                <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
+                                    <X size={20} color={Colors.textSecondary} />
+                                </TouchableOpacity>
+                            </View>
+                        </GlassCard>
+                    )}
 
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Type a message..."
-                            placeholderTextColor={Colors.textSecondary}
-                            value={inputText}
-                            onChangeText={setInputText}
-                            multiline
-                            maxLength={500}
-                        />
-
-                        <View style={styles.rightIcons}>
-                            <TouchableOpacity style={styles.iconButton}>
-                                <ImageIcon size={22} color={Colors.textSecondary} />
+                    <View style={styles.inputArea}>
+                        <GlassCard
+                            style={styles.inputWrapper}
+                            contentContainerStyle={styles.inputContent}
+                            intensity={30}
+                        >
+                            <TouchableOpacity style={styles.iconButton} onPress={handlePickImage} disabled={isUploading}>
+                                <Paperclip size={22} color={Colors.textSecondary} />
                             </TouchableOpacity>
-                        </View>
-                    </GlassCard>
 
-                    <TouchableOpacity
-                        style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-                        onPress={handleSend}
-                        disabled={!inputText.trim()}
-                    >
-                        <Send size={20} color={Colors.white} />
-                    </TouchableOpacity>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Type something..."
+                                placeholderTextColor={Colors.textSecondary}
+                                value={inputText}
+                                onChangeText={setInputText}
+                                multiline
+                                maxLength={500}
+                                onFocus={() => setShowEmojiPicker(false)}
+                            />
+
+                            <TouchableOpacity
+                                style={styles.iconButton}
+                                onPress={() => handleSend(inputText)}
+                                disabled={!inputText.trim()}
+                            >
+                                <Send
+                                    size={22}
+                                    color={inputText.trim() ? Colors.primary : Colors.textSecondary}
+                                    fill={inputText.trim() ? Colors.primary : 'transparent'}
+                                />
+                            </TouchableOpacity>
+                        </GlassCard>
+                    </View>
                 </View>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -712,64 +926,56 @@ const styles = StyleSheet.create({
         marginLeft: 4,
     },
     inputArea: {
-        flexDirection: 'row',
-        alignItems: 'flex-end',
         paddingHorizontal: 16,
         paddingTop: 8,
-        paddingBottom: Platform.OS === 'ios' ? 24 : 16,
-        gap: 10,
-        backgroundColor: 'transparent',
+        paddingBottom: 8,
     },
     inputWrapper: {
-        flex: 1,
-        borderRadius: 24,
+        borderRadius: 25,
         overflow: 'hidden',
+        backgroundColor: Colors.surface, // Or Colors.white if you want strictly white
+        borderWidth: 1,
+        borderColor: Colors.glassBorder,
     },
     inputContent: {
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        minHeight: 48,
+        alignItems: 'flex-end',
+        paddingHorizontal: 8,
+        paddingVertical: 10,
+    },
+    iconButton: {
+        padding: 10,
     },
     input: {
         flex: 1,
         color: Colors.text,
         fontSize: 16,
-        paddingHorizontal: 10,
-        paddingTop: Platform.OS === 'ios' ? 8 : 4,
-        paddingBottom: Platform.OS === 'ios' ? 8 : 4,
-        maxHeight: 120,
+        maxHeight: 100,
+        paddingVertical: 0,
+        paddingHorizontal: 8,
+        textAlignVertical: 'center',
     },
-    rightIcons: {
+    // Removed old sendButton styles as it is now an icon
+    messageImage: {
+        borderRadius: 12,
+        marginBottom: 4,
+    },
+    inputContainer: {
+        width: '100%',
+    },
+    inputEmojiPicker: {
+        marginBottom: 10,
+        marginHorizontal: 16,
+        padding: 10,
+        borderRadius: 16,
+    },
+    inputEmojiRow: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
         alignItems: 'center',
     },
-    iconButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: 'center',
-        justifyContent: 'center',
-        // backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    sendButton: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: Colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 2,
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-    },
-    sendButtonDisabled: {
-        backgroundColor: Colors.surfaceLight,
-        opacity: 0.6,
-        shadowOpacity: 0,
-        elevation: 0,
+    inputEmojiButton: {
+        padding: 5,
     },
 });

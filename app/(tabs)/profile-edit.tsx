@@ -16,6 +16,8 @@ import { useUser } from '../../context/UserContext';
 export default function ProfileEditScreen() {
     const { user, updateUserProfile } = useUser();
     const [username, setUsername] = useState(user?.username || '');
+    const [displayName, setDisplayName] = useState(user?.display_name || '');
+    const [bio, setBio] = useState(user?.bio || '');
     const [avatarId, setAvatarId] = useState(user?.avatar_id || '1');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -28,13 +30,24 @@ export default function ProfileEditScreen() {
     useEffect(() => {
         if (user) {
             setUsername(user.username);
+            setDisplayName(user.display_name || '');
+            setBio(user.bio || '');
             setAvatarId(user.avatar_id || '1');
         }
     }, [user]);
 
-    const loadUser = () => {
-        // No longer needed, but keeping the name if referenced elsewhere
+    const getDaysRemaining = () => {
+        if (!user?.username_last_updated) return 0;
+        const lastUpdated = new Date(user.username_last_updated);
+        const now = new Date();
+        const diffTime = Math.abs(now.getTime() - lastUpdated.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return Math.max(0, 15 - diffDays);
     };
+
+    const daysRemaining = getDaysRemaining();
+    const canUpdateUsername = daysRemaining === 0 || username === user?.username;
+
 
     const handleUpdateProfile = async () => {
         if (!user) {
@@ -42,8 +55,13 @@ export default function ProfileEditScreen() {
             return;
         }
 
-        if (!username) {
+        if (!username.trim()) {
             Alert.alert('Error', 'Username cannot be empty');
+            return;
+        }
+
+        if (displayName && !displayName.trim()) {
+            Alert.alert('Error', 'Display Name cannot be empty if provided');
             return;
         }
 
@@ -55,6 +73,8 @@ export default function ProfileEditScreen() {
                 body: JSON.stringify({
                     id: user.id,
                     username: username,
+                    display_name: displayName,
+                    bio: bio,
                     avatar_id: avatarId
                 }),
             });
@@ -62,7 +82,13 @@ export default function ProfileEditScreen() {
             const data = await response.json();
 
             if (response.ok) {
-                await updateUserProfile({ username: username, avatar_id: avatarId });
+                await updateUserProfile({
+                    username: username,
+                    display_name: displayName,
+                    bio: bio,
+                    avatar_id: avatarId,
+                    username_last_updated: data.user?.username_last_updated || user.username_last_updated
+                });
                 Alert.alert('Success', 'Profile updated successfully!');
             } else {
                 Alert.alert('Error', data.message || 'Failed to update profile');
@@ -168,12 +194,45 @@ export default function ProfileEditScreen() {
                                 <Ionicons name="person-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
+                                    placeholder="Display Name"
+                                    placeholderTextColor={Colors.textSecondary}
+                                    value={displayName}
+                                    onChangeText={setDisplayName}
+                                />
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <Ionicons name="at-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                                <TextInput
+                                    style={[styles.input, !canUpdateUsername && { opacity: 0.5 }]}
                                     placeholder="Username"
                                     placeholderTextColor={Colors.textSecondary}
                                     value={username}
                                     onChangeText={setUsername}
+                                    editable={canUpdateUsername}
                                 />
                             </View>
+                            {!canUpdateUsername && (
+                                <ThemedText style={{ color: Colors.error, fontSize: 12, marginTop: -10, marginBottom: 15, marginLeft: 5 }}>
+                                    You can change your username again in {daysRemaining} days.
+                                </ThemedText>
+                            )}
+
+                            <View style={[styles.inputContainer, { alignItems: 'flex-start', paddingTop: 12, height: 100 }]}>
+                                <Ionicons name="newspaper-outline" size={20} color={Colors.textSecondary} style={[styles.inputIcon, { marginTop: 4 }]} />
+                                <TextInput
+                                    style={[styles.input, { height: '100%', textAlignVertical: 'top' }]}
+                                    placeholder="Short bio (optional, max 120 chars)"
+                                    placeholderTextColor={Colors.textSecondary}
+                                    value={bio}
+                                    onChangeText={(text) => setBio(text.slice(0, 120))}
+                                    multiline
+                                    maxLength={120}
+                                />
+                            </View>
+                            <ThemedText style={{ color: Colors.textSecondary, fontSize: 12, alignSelf: 'flex-end', marginTop: -10, marginBottom: 15, marginRight: 5 }}>
+                                {bio.length}/120
+                            </ThemedText>
 
                             <TouchableOpacity
                                 style={[styles.button, isLoading && styles.buttonDisabled]}

@@ -4,8 +4,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 interface User {
     id: string;
     username: string;
+    display_name?: string;
     email: string;
     avatar_id: string;
+    bio?: string;
+    username_last_updated?: string;
+    global_auto_delete_minutes?: number;
 }
 
 interface UserContextType {

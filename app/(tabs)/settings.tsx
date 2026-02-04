@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
@@ -14,28 +14,33 @@ import {
     ChevronRight,
     Shield,
     CircleHelp,
-    MoreVertical
+    MoreVertical,
+    UserX,
+    Sliders,
+    ChevronDown,
+    Check
 } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '../../context/UserContext';
+import { Config } from '../../constants/Config';
 
 const SECTIONS = [
-    // ... existing sections (omitted for brevity if possible, but replace_file_content needs exact match)
-
     {
         title: 'Account',
         items: [
             { id: 'profile', icon: User, label: 'Profile', type: 'link' },
             { id: 'privacy', icon: Lock, label: 'Privacy', type: 'link' },
             { id: 'security', icon: Shield, label: 'Security', type: 'link' },
+            { id: 'blocked', icon: UserX, label: 'Blocked Contacts', type: 'link' },
         ],
     },
     {
         title: 'Preferences',
         items: [
             { id: 'notifications', icon: Bell, label: 'Notifications', type: 'toggle', value: true },
+            { id: 'controls', icon: Sliders, label: 'Controls', type: 'link' },
             { id: 'appearance', icon: Palette, label: 'Appearance', type: 'link' },
         ],
     },
@@ -47,9 +52,17 @@ const SECTIONS = [
     },
 ];
 
+const AUTO_DELETE_OPTIONS = [
+    { label: 'Off', value: 0 },
+    { label: '10 Minutes', value: 10 },
+    { label: '24 Hours', value: 1440 },
+    { label: '7 Days', value: 10080 },
+    { label: '30 Days', value: 43200 },
+    { label: '90 Days', value: 129600 },
+];
+
 export default function SettingsScreen() {
     const { user, setUser } = useUser();
-
     const handleLogout = async () => {
         try {
             await setUser(null);
@@ -101,7 +114,9 @@ export default function SettingsScreen() {
                                         disabled={item.type === 'toggle'}
                                         onPress={() => {
                                             if (item.id === 'profile') router.push('/(tabs)/profile-edit');
+                                            if (item.id === 'controls') router.push('/settings/controls');
                                             if (item.id === 'appearance') router.push('/appearance');
+                                            if (item.id === 'blocked') router.push('/settings/blocked');
                                         }}
                                     >
                                         <View style={styles.settingLeft}>
@@ -110,17 +125,18 @@ export default function SettingsScreen() {
                                             </View>
                                             <ThemedText>{item.label}</ThemedText>
                                         </View>
-                                        {item.type === 'link' && (
+
+                                        {item.type === 'link' ? (
                                             <ChevronRight size={20} color={Colors.textSecondary} />
-                                        )}
-                                        {item.type === 'toggle' && (
+                                        ) : item.type === 'toggle' ? (
                                             <Switch
                                                 value={item.value}
                                                 trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
                                                 thumbColor={Colors.white}
                                             />
-                                        )}
+                                        ) : null}
                                     </TouchableOpacity>
+
                                     {itemIndex < section.items.length - 1 && (
                                         <View style={styles.divider} />
                                     )}
@@ -218,6 +234,22 @@ const styles = StyleSheet.create({
         height: 1,
         backgroundColor: Colors.glassBorder,
         marginLeft: 60,
+    },
+    dropdownContainer: {
+        backgroundColor: 'rgba(0,0,0,0.2)',
+        borderTopWidth: 1,
+        borderTopColor: Colors.glassBorder,
+    },
+    dropdownItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        paddingLeft: 60, // Indent to align with text
+    },
+    dropdownItemSelected: {
+        backgroundColor: 'rgba(16, 185, 129, 0.1)', // Example highlight
     },
     logoutButton: {
         flexDirection: 'row',

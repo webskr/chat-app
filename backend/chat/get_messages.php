@@ -23,7 +23,7 @@ if (!$me || !$other_id) {
 try {
     // 1️⃣ Find conversation
     $convStmt = $pdo->prepare("
-        SELECT id, user1_id, user2_id, user1_cleared_at, user2_cleared_at
+        SELECT id, user1_id, user2_id, user1_cleared_at, user2_cleared_at, auto_delete_minutes
         FROM conversations
         WHERE (user1_id = :me AND user2_id = :other)
            OR (user1_id = :other AND user2_id = :me)
@@ -42,6 +42,17 @@ try {
         exit;
     }
 
+    // 1.5️⃣ Auto-Delete Cleanup
+    if (!empty($conv['auto_delete_minutes']) && $conv['auto_delete_minutes'] > 0) {
+        $minutes = (int)$conv['auto_delete_minutes'];
+        $deleteSql = "DELETE FROM messages 
+                      WHERE conversation_id = :cid 
+                      AND created_at < (NOW() - INTERVAL :min MINUTE)";
+        $delStmt = $pdo->prepare($deleteSql);
+        $delStmt->execute([':cid' => $conv['id'], ':min' => $minutes]);
+        // Note: This physically deletes messages for both users.
+    }
+
     // 2️⃣ Determine cleared_at for current user
     if ($conv['user1_id'] == $me) {
         $clearedAt = $conv['user1_cleared_at'];
@@ -54,6 +65,7 @@ try {
         SELECT 
             m.id,
             m.message_text,
+            m.media_url,
             m.sender_id,
             m.created_at,
             m.is_deleted,

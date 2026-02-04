@@ -19,7 +19,7 @@ if (!empty($data->email) && !empty($data->password)) {
     $password = $data->password;
 
     try {
-        $query = "SELECT id, username, email, password, avatar_id FROM users WHERE email = :email LIMIT 0,1";
+        $query = "SELECT id, username, display_name, email, password, avatar_id, bio, username_last_updated, global_auto_delete_minutes FROM users WHERE email = :email LIMIT 0,1";
         $stmt = $pdo->prepare($query);
 
         $stmt->bindParam(':email', $email);
@@ -30,9 +30,12 @@ if (!empty($data->email) && !empty($data->password)) {
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             $id = $row['id'];
             $username = $row['username'];
+            $display_name = $row['display_name'];
             $email = $row['email'];
             $password_hash = $row['password'];
             $avatar_id = $row['avatar_id'];
+            $bio = $row['bio'];
+            $username_last_updated = $row['username_last_updated'];
 
             if (password_verify($password, $password_hash)) {
                 http_response_code(200);
@@ -42,8 +45,12 @@ if (!empty($data->email) && !empty($data->password)) {
                     "user" => array(
                         "id" => $id,
                         "username" => $username,
+                        "display_name" => $display_name,
                         "email" => $email,
-                        "avatar_id" => $avatar_id
+                        "avatar_id" => $avatar_id,
+                        "bio" => $bio,
+                        "username_last_updated" => $username_last_updated,
+                        "global_auto_delete_minutes" => $row['global_auto_delete_minutes']
                     )
                 ));
             } else {

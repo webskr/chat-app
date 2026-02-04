@@ -6,7 +6,7 @@ export const Config = {
     //   false -> To use your computer's IP (Recommended for Physical Devices & Emulators)
     //   true  -> To use 'localhost' (Only works for Web or iOS Simulator)
     // -------------------------------------------------------------------------
-    USE_LOCALHOST: true, // <--- TOGGLE THIS
+    USE_LOCALHOST: false, // <--- TOGGLE THIS
 
     // Your local Machine IP (Updated: 2026-02-01)
     // If this changes, run 'ipconfig' in terminal to find the new IPv4 Address.
