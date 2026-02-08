@@ -4,7 +4,7 @@ export const Colors = {
 
   // Base Colors
   background: '#0b1014', // Deep slate/charcoal - Main App Background
-  surface: '#1E293B',    // Card/Header Background
+  surface: '#152613ff',    // Card/Header Background
   surfaceLight: '#334155',
 
   // Secondary Colors

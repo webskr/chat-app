@@ -149,7 +149,7 @@ export default function ProfileEditScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <LinearGradient colors={[Colors.background, '#1E293B']} style={styles.gradient}>
+            <View style={[styles.container, { backgroundColor: Colors.background }]}>
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     style={{ flex: 1 }}
@@ -239,14 +239,12 @@ export default function ProfileEditScreen() {
                                 onPress={handleUpdateProfile}
                                 disabled={isLoading}
                             >
-                                <LinearGradient
-                                    colors={[Colors.primary, Colors.secondary]}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.buttonGradient}
-                                >
-                                    <Text style={styles.buttonText}>{isLoading ? 'Saving...' : 'Save Changes'}</Text>
-                                </LinearGradient>
+                                <View style={[styles.buttonGradient, { backgroundColor: Colors.primary }]}>
+                                    <Text style={styles.buttonText}>
+                                        {isLoading ? 'Saving...' : 'Save Changes'}
+                                    </Text>
+                                </View>
+
                             </TouchableOpacity>
                         </BlurView>
 
@@ -295,19 +293,17 @@ export default function ProfileEditScreen() {
                                 onPress={handleChangePassword}
                                 disabled={isUpdatingPassword}
                             >
-                                <LinearGradient
-                                    colors={['#475569', '#1E293B']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.buttonGradient}
-                                >
-                                    <Text style={styles.buttonText}>{isUpdatingPassword ? 'Updating...' : 'Update Password'}</Text>
-                                </LinearGradient>
+                                <View style={[styles.buttonGradient, { backgroundColor: Colors.primary }]}>
+                                    <Text style={styles.buttonText}>
+                                        {isUpdatingPassword ? 'Updating...' : 'Update Password'}
+                                    </Text>
+                                </View>
+
                             </TouchableOpacity>
                         </BlurView>
                     </ScrollView>
                 </KeyboardAvoidingView>
-            </LinearGradient>
+            </View>
         </SafeAreaView>
     );
 }

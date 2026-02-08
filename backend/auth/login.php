@@ -19,7 +19,7 @@ if (!empty($data->email) && !empty($data->password)) {
     $password = $data->password;
 
     try {
-        $query = "SELECT id, username, display_name, email, password, avatar_id, bio, username_last_updated, global_auto_delete_minutes FROM users WHERE email = :email LIMIT 0,1";
+        $query = "SELECT id, username, display_name, email, password, avatar_id, bio, username_last_updated, global_auto_delete_minutes, last_seen, privacy_last_seen, privacy_read_receipts, privacy_profile_visibility, show_in_world, neon_color FROM users WHERE email = :email LIMIT 0,1";
         $stmt = $pdo->prepare($query);
 
         $stmt->bindParam(':email', $email);
@@ -50,7 +50,13 @@ if (!empty($data->email) && !empty($data->password)) {
                         "avatar_id" => $avatar_id,
                         "bio" => $bio,
                         "username_last_updated" => $username_last_updated,
-                        "global_auto_delete_minutes" => $row['global_auto_delete_minutes']
+                        "global_auto_delete_minutes" => $row['global_auto_delete_minutes'],
+                        "last_seen" => $row['last_seen'],
+                        "privacy_last_seen" => $row['privacy_last_seen'],
+                        "privacy_read_receipts" => $row['privacy_read_receipts'],
+                        "privacy_profile_visibility" => $row['privacy_profile_visibility'],
+                        "show_in_world" => $row['show_in_world'],
+                        "neon_color" => $row['neon_color']
                     )
                 ));
             } else {

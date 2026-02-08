@@ -20,13 +20,20 @@ if (!empty($data->user_id) && !empty($data->target_id) && !empty($data->action))
         $action = $data->action; // 'friend', 'unfriend', 'block', 'unblock'
 
         if ($action == 'friend') {
-            $query = "INSERT INTO relationships (user_id, target_id, status) VALUES (:uid, :tid, 'accepted') 
-                      ON DUPLICATE KEY UPDATE status = 'accepted'";
+            // Send friend request
+            $query = "INSERT INTO relationships (user_id, target_id, status) VALUES (:uid, :tid, 'pending') 
+                      ON DUPLICATE KEY UPDATE status = 'pending'";
+        } elseif ($action == 'accept') {
+            // Accept friend request
+            // We need to update the status to accepted where target_id is the one accepting
+            $query = "UPDATE relationships SET status = 'accepted' WHERE user_id = :tid AND target_id = :uid";
         } elseif ($action == 'block') {
             $query = "INSERT INTO relationships (user_id, target_id, status) VALUES (:uid, :tid, 'blocked') 
                       ON DUPLICATE KEY UPDATE status = 'blocked'";
-        } elseif ($action == 'unfriend' || $action == 'unblock') {
-            $query = "DELETE FROM relationships WHERE user_id = :uid AND target_id = :tid";
+        } elseif ($action == 'unfriend' || $action == 'unblock' || $action == 'decline') {
+            // For decline, we delete the request
+            // For unfriend/unblock, we delete the relationship
+            $query = "DELETE FROM relationships WHERE (user_id = :uid AND target_id = :tid) OR (user_id = :tid AND target_id = :uid)";
         } else {
             http_response_code(400);
             echo json_encode(array("message" => "Invalid action."));

@@ -18,11 +18,11 @@ export const Avatar = ({ source, size = 48, online, style }: AvatarProps) => {
                 source={imageSource}
                 style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
             />
-            {online !== undefined && (
+            {!!online && (
                 <View style={[
                     styles.statusParams,
                     {
-                        backgroundColor: online ? Colors.online : Colors.offline,
+                        backgroundColor: Colors.online,
                         width: size * 0.3,
                         height: size * 0.3,
                         borderRadius: (size * 0.3) / 2

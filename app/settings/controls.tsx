@@ -103,6 +103,41 @@ export default function ControlsScreen() {
         }
     };
 
+    const updatePrivacySetting = async (key: string, value: any) => {
+        if (!user) return;
+
+        // Map boolean to 1/0 for numeric settings
+        const processedValue = typeof value === 'boolean' ? (value ? 1 : 0) : value;
+
+        // Optimistic update
+        const prevValue = (user as any)[key];
+        setUser({ ...user, [key]: processedValue } as any);
+
+        setIsUpdating(true);
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/update_global_chat_settings.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: user.id,
+                    [key]: processedValue
+                }),
+            });
+
+            if (!response.ok) {
+                // Revert on failure
+                setUser({ ...user, [key]: prevValue } as any);
+                Alert.alert('Error', 'Failed to update privacy setting.');
+            }
+        } catch (error) {
+            console.error(`Privacy update error (${key}):`, error);
+            setUser({ ...user, [key]: prevValue } as any);
+            Alert.alert('Error', 'Network error.');
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
     const currentOption = AUTO_DELETE_OPTIONS.find(o => o.value === (user?.global_auto_delete_minutes || 0)) || AUTO_DELETE_OPTIONS[0];
 
     return (
@@ -116,8 +151,82 @@ export default function ControlsScreen() {
 
             <ScrollView contentContainerStyle={styles.content}>
 
+                {/* Privacy Controls Section */}
+                <View style={styles.section}>
+                    <ThemedText style={styles.sectionTitle}>Privacy Controls</ThemedText>
+                    <ThemedText style={styles.description}>
+                        Manage who can see your activity and profile details.
+                    </ThemedText>
+
+                    <View style={styles.controlContainer}>
+                        {/* Last Seen Toggle */}
+                        <View style={styles.switchRow}>
+                            <View style={styles.settingTextContainer}>
+                                <ThemedText style={styles.settingLabel}>Last Seen</ThemedText>
+                                <ThemedText style={styles.settingCaption}>Show your last active time to others.</ThemedText>
+                            </View>
+                            <Switch
+                                value={user?.privacy_last_seen !== 0}
+                                onValueChange={(val) => updatePrivacySetting('privacy_last_seen', val)}
+                                trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
+                                thumbColor={Colors.white}
+                                disabled={isUpdating}
+                            />
+                        </View>
+                        <View style={styles.innerDivider} />
+
+                        {/* Read Receipts Toggle */}
+                        <View style={styles.switchRow}>
+                            <View style={styles.settingTextContainer}>
+                                <ThemedText style={styles.settingLabel}>Read Receipts</ThemedText>
+                                <ThemedText style={styles.settingCaption}>Allow others to see when you've read messages.</ThemedText>
+                            </View>
+                            <Switch
+                                value={user?.privacy_read_receipts !== 0}
+                                onValueChange={(val) => updatePrivacySetting('privacy_read_receipts', val)}
+                                trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
+                                thumbColor={Colors.white}
+                                disabled={isUpdating}
+                            />
+                        </View>
+                        <View style={styles.innerDivider} />
+
+                        {/* Profile Visibility Toggle */}
+                        <View style={styles.switchRow}>
+                            <View style={styles.settingTextContainer}>
+                                <ThemedText style={styles.settingLabel}>Private Profile</ThemedText>
+                                <ThemedText style={styles.settingCaption}>Hide your bio and avatar from non-friends.</ThemedText>
+                            </View>
+                            <Switch
+                                value={user?.privacy_profile_visibility === 'private'}
+                                onValueChange={(val) => updatePrivacySetting('privacy_profile_visibility', val ? 'private' : 'public')}
+                                trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
+                                thumbColor={Colors.white}
+                                disabled={isUpdating}
+                            />
+                        </View>
+                        <View style={styles.innerDivider} />
+
+                        {/* Show in World Toggle */}
+                        <View style={styles.switchRow}>
+                            <View style={styles.settingTextContainer}>
+                                <ThemedText style={styles.settingLabel}>Show in World</ThemedText>
+                                <ThemedText style={styles.settingCaption}>Allow others to discover your profile in the World list.</ThemedText>
+                            </View>
+                            <Switch
+                                value={user?.show_in_world !== 0}
+                                onValueChange={(val) => updatePrivacySetting('show_in_world', val)}
+                                trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
+                                thumbColor={Colors.white}
+                                disabled={isUpdating}
+                            />
+                        </View>
+                    </View>
+                </View>
+
                 {/* Auto Delete Section */}
                 <View style={styles.section}>
+                    <ThemedText style={styles.sectionTitle}>Chat Management</ThemedText>
                     <ThemedText style={styles.description}>
                         Choose a timer to apply to all your chats. Messages older than the selected time will be automatically deleted for both you and the recipient.
                     </ThemedText>
@@ -163,7 +272,7 @@ export default function ControlsScreen() {
 
                 {/* Name Scramble Section */}
                 <View style={styles.section}>
-                    <ThemedText style={styles.sectionTitle}>Privacy</ThemedText>
+                    <ThemedText style={styles.sectionTitle}>Extra Privacy</ThemedText>
                     <ThemedText style={styles.description}>
                         Scramble your name for users who are not in your friends list. Your friends will still see your real name.
                     </ThemedText>
@@ -249,6 +358,21 @@ const styles = StyleSheet.create({
     settingLabel: {
         fontSize: 16,
         color: Colors.text,
+        fontWeight: '500',
+    },
+    settingTextContainer: {
+        flex: 1,
+        marginRight: 10,
+    },
+    settingCaption: {
+        fontSize: 13,
+        color: Colors.textSecondary,
+        marginTop: 2,
+    },
+    innerDivider: {
+        height: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        marginLeft: 16,
     },
     rowRight: {
         flexDirection: 'row',

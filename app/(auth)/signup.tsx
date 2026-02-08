@@ -64,7 +64,7 @@ export default function SignupScreen() {
     };
 
     return (
-        <LinearGradient colors={[Colors.background, '#1E293B']} style={styles.container}>
+        <View style={[styles.container, { backgroundColor: Colors.background }]}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
@@ -142,14 +142,12 @@ export default function SignupScreen() {
                             onPress={handleSignup}
                             disabled={isLoading}
                         >
-                            <LinearGradient
-                                colors={[Colors.primary, Colors.secondary]}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={styles.buttonGradient}
-                            >
-                                <Text style={styles.buttonText}>{isLoading ? 'Creating Account...' : 'Sign Up'}</Text>
-                            </LinearGradient>
+                            <View style={[styles.buttonGradient, { backgroundColor: Colors.primary }]}>
+                                <Text style={styles.buttonText}>
+                                    {isLoading ? 'Creating Account...' : 'Sign Up'}
+                                </Text>
+                            </View>
+
                         </TouchableOpacity>
 
                         <View style={styles.footer}>
@@ -163,7 +161,7 @@ export default function SignupScreen() {
                     </BlurView>
                 </ScrollView>
             </KeyboardAvoidingView>
-        </LinearGradient>
+        </View>
     );
 }
 

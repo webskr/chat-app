@@ -5,7 +5,7 @@ import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { SearchInput } from '../../components/SearchInput';
-import { MessageSquare, MoreVertical, UserPlus, Clock } from 'lucide-react-native';
+import { MessageSquare, MoreVertical, UserPlus, Clock, Check, X } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
@@ -13,12 +13,11 @@ import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 
-export default function FriendsScreen() {
+export default function GlobalFriendsScreen() {
     const { user: currentUser } = useUser();
     const [users, setUsers] = React.useState<any[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [searchQuery, setSearchQuery] = React.useState('');
-    const [sentRequests, setSentRequests] = React.useState<Set<string>>(new Set());
 
     const fetchUsers = React.useCallback(async () => {
         if (!currentUser) return;
@@ -43,37 +42,70 @@ export default function FriendsScreen() {
     useFocusEffect(
         React.useCallback(() => {
             fetchUsers();
+
+            // Auto-refresh every 5 seconds for "real-time" experience
+            const interval = setInterval(() => {
+                fetchUsers();
+            }, 5000);
+
+            return () => clearInterval(interval);
         }, [fetchUsers])
     );
 
     const filteredUsers = React.useMemo(() => {
         return users.filter(user =>
+            user.relationship_status !== 'accepted' &&
             user.username.toLowerCase().includes(searchQuery.toLowerCase())
             // Removed email search for privacy
         );
     }, [users, searchQuery]);
 
-    const handleSendRequest = (userId: string) => {
-        // Logic to send request
-        // For now, update local state to show 'Pending' UI immediately
-        setSentRequests(prev => new Set(prev).add(userId));
-        Alert.alert('Request Sent', 'Friend request sent successfully.');
-        // TODO: Call API to create friend request
+    const handleAction = async (targetId: string, action: 'friend' | 'accept' | 'decline' | 'unsend') => {
+        if (!currentUser) return;
+        const backendAction = action === 'unsend' ? 'decline' : action;
+        try {
+            const response = await fetch(`${Config.API_URL}/users/handle_relationship.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: currentUser.id,
+                    target_id: targetId,
+                    action: backendAction
+                })
+            });
+            if (response.ok) {
+                if (action === 'friend') Alert.alert('Success', 'Friend request sent!');
+                else if (action === 'accept') Alert.alert('Success', 'Friend request accepted!');
+                else if (action === 'unsend') Alert.alert('Success', 'Friend request unsent!');
+                fetchUsers();
+            }
+        } catch (error) {
+            console.error('Error handling relationship:', error);
+        }
     };
 
     const renderItem = ({ item }: { item: any }) => {
-        const isPending = sentRequests.has(item.id) || item.relationship_status === 'pending';
+        const isReceived = item.relationship_status === 'request_received';
+        const isSent = item.relationship_status === 'pending';
         const isFriend = item.relationship_status === 'accepted';
+        const userBorderColor = item.border_color || '#10B981';
+        const userButtonColor = item.button_color || '#10B981';
 
         return (
             <View style={styles.cardContainer}>
-                <View style={styles.neonCard}>
+                <View style={[
+                    styles.neonCard,
+                    {
+                        borderColor: userBorderColor,
+                        backgroundColor: `${userBorderColor}20`,
+                        shadowColor: userBorderColor,
+                        opacity: .9,
+                    }
+                ]}>
                     <View style={styles.row}>
                         <Avatar source={getAvatarById(item.avatar_id)} online={item.is_online} size={48} />
                         <View style={styles.info}>
                             <ThemedText type="defaultSemiBold" style={styles.username}>{item.username}</ThemedText>
-                            {/* Removed Email for Privacy */}
-                            {/* Optional: Show mutuals or bio if available */}
                         </View>
 
                         {isFriend ? (
@@ -87,15 +119,33 @@ export default function FriendsScreen() {
                                 <MessageSquare size={18} color={Colors.white} />
                                 <ThemedText style={styles.btnText}>Chat</ThemedText>
                             </TouchableOpacity>
-                        ) : isPending ? (
-                            <View style={[styles.actionButton, styles.pendingButton]}>
-                                <Clock size={16} color={Colors.textSecondary} />
-                                <ThemedText style={[styles.btnText, styles.textPending]}>Pending</ThemedText>
+                        ) : isReceived ? (
+                            <View style={styles.multiActions}>
+                                <TouchableOpacity
+                                    style={[styles.smallActionBtn, styles.acceptBtn]}
+                                    onPress={() => handleAction(item.id, 'accept')}
+                                >
+                                    <Check size={16} color="#fff" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.smallActionBtn, styles.declineBtn]}
+                                    onPress={() => handleAction(item.id, 'decline')}
+                                >
+                                    <X size={16} color={Colors.textSecondary} />
+                                </TouchableOpacity>
                             </View>
+                        ) : isSent ? (
+                            <TouchableOpacity
+                                style={[styles.actionButton, styles.pendingButton]}
+                                onPress={() => handleAction(item.id, 'unsend')}
+                            >
+                                <Clock size={16} color={Colors.textSecondary} />
+                                <ThemedText style={[styles.btnText, styles.textPending]}>Unsend</ThemedText>
+                            </TouchableOpacity>
                         ) : (
                             <TouchableOpacity
-                                style={[styles.actionButton, styles.requestButton]}
-                                onPress={() => handleSendRequest(item.id)}
+                                style={[styles.actionButton, styles.requestButton, { backgroundColor: userButtonColor }]}
+                                onPress={() => handleAction(item.id, 'friend')}
                             >
                                 <UserPlus size={18} color={Colors.white} />
                                 <ThemedText style={styles.btnText}>Add</ThemedText>
@@ -220,5 +270,25 @@ const styles = StyleSheet.create({
     },
     textPending: {
         color: Colors.textSecondary,
+    },
+    multiActions: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    smallActionBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+    },
+    acceptBtn: {
+        backgroundColor: Colors.primary,
+        borderColor: Colors.primary,
+    },
+    declineBtn: {
+        backgroundColor: Colors.surface,
+        borderColor: Colors.glassBorder,
     },
 });

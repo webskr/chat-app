@@ -1,18 +1,31 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Image as RNImage, Dimensions } from 'react-native';
+import { View, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Image as RNImage, Dimensions, AlertButton, Modal } from 'react-native';
+import { io, Socket } from 'socket.io-client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { GlassCard } from '../../components/GlassCard';
-import { ChevronLeft, Send, Image as ImageIcon, Smile, MoreVertical, Heart, ThumbsUp, Laugh, Angry, Frown, Sparkles, User, BellOff, Trash2, UserMinus, ShieldAlert, Flag, Timer, X, Paperclip } from 'lucide-react-native';
+import { ChevronLeft, Send, Image as ImageIcon, Smile, MoreVertical, Heart, ThumbsUp, Laugh, Angry, Frown, Sparkles, User, BellOff, Trash2, UserMinus, ShieldAlert, Flag, Timer, X, Paperclip, Check, CheckCheck, Edit2 } from 'lucide-react-native';
+import { useFocusEffect } from 'expo-router';
+import { AppState } from 'react-native';
 import { getAvatarById } from '../../constants/Avatars';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
 import { OverflowMenu } from '../../components/OverflowMenu';
 import { ProfileModal } from '../../components/ProfileModal';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
+import { formatChatTime } from '../../utils/time';
+import { EmptyState } from '../../components/EmptyState';
+import { MessageSquare, Copy, Trash } from 'lucide-react-native';
+import { FullScreenImageModal } from '../../components/FullScreenImageModal';
+import { ImageEditorModal } from '../../components/ImageEditorModal';
+
+import { ChatLockService } from '../../utils/ChatLockService';
+import { Lock, Unlock } from 'lucide-react-native';
 
 const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥', '✨', '👋', '🙏', '🎉', '💩', '🍔', '🍕'];
 
@@ -25,21 +38,205 @@ export default function ChatDetailScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [menuVisible, setMenuVisible] = useState(false);
     const [relationshipStatus, setRelationshipStatus] = useState<string | null>(null);
-    const flatListRef = useRef<FlatList>(null);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [isSending, setIsSending] = useState(false);
+    const isAtBottomRef = useRef(true);
+    const flatListRef = useRef<FlatList>(null);
+    const scrollOffset = useRef(0);
+
+    const appState = useRef(AppState.currentState);
+
+    // Socket & Typing Refs
+    const socket = useRef<Socket | null>(null);
+    const [isTyping, setIsTyping] = useState(false);
+    const typingTimeout = useRef<NodeJS.Timeout | null>(null);
 
     const [modalVisible, setModalVisible] = useState(false);
     const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
+    const [msgMenuVisible, setMsgMenuVisible] = useState(false);
+    const [msgMenuAnchor, setMsgMenuAnchor] = useState({ x: 0, y: 0 });
+    const [msgMenuMessage, setMsgMenuMessage] = useState<any>(null);
+    const [failedMessages, setFailedMessages] = useState<any[]>([]);
+
+    const recentMessages = useRef<number[]>([]);
+
+    const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+    const [isFullScreenVisible, setIsFullScreenVisible] = useState(false);
+
+    // Chat Lock State
+    const [isLocked, setIsLocked] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [showLockSetup, setShowLockSetup] = useState(false);
+    const [showUnlockPrompt, setShowUnlockPrompt] = useState(false);
+    const [lockPin, setLockPin] = useState('');
+    const [unlockPin, setUnlockPin] = useState('');
+    const [isCheckingLock, setIsCheckingLock] = useState(true);
 
     useEffect(() => {
-        fetchMessages();
-        fetchRelationshipStatus();
-        fetchTargetUserProfile(); // New fetch for full profile (bio etc)
-        // Polling for new messages every 3 seconds
-        const interval = setInterval(fetchMessages, 3000);
-        return () => clearInterval(interval);
+        checkLockStatus();
     }, [id]);
+
+    const checkLockStatus = async () => {
+        if (!id) return;
+        setIsCheckingLock(true);
+        const locked = await ChatLockService.isChatLocked(String(id));
+        setIsLocked(locked);
+        // If locked, we need to authenticate. If not locked, we are authenticated by default.
+        setIsAuthenticated(!locked);
+        setIsCheckingLock(false);
+    };
+
+    const [editorImageUri, setEditorImageUri] = useState<string | null>(null);
+
+    const [isEditorVisible, setIsEditorVisible] = useState(false);
+
+    const [messageOptionsVisible, setMessageOptionsVisible] = useState(false);
+    const [selectedMessageForOptions, setSelectedMessageForOptions] = useState<any>(null);
+    const [editingMessage, setEditingMessage] = useState<any>(null);
+
+    const updateLastSeen = async () => {
+        if (!currentUser) return;
+        try {
+            await fetch(`${Config.API_URL}/users/update_last_seen.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: currentUser.id })
+            });
+        } catch (e) {
+            console.error("Last seen update error", e);
+        }
+    };
+
+    useFocusEffect(
+        React.useCallback(() => {
+            checkLockStatus();
+            fetchMessages();
+            fetchRelationshipStatus();
+            fetchTargetUserProfile();
+            updateLastSeen();
+            loadLastScrollPosition();
+
+            const handleAppStateChange = async (nextAppState: any) => {
+                if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+                    // App has come to the foreground!
+                    setIsLoading(true);
+                    await fetchMessages();
+                    await updateLastSeen();
+                    // Sync message states logic if needed, but fetchMessages handles latest
+                    setIsLoading(false);
+                }
+                appState.current = nextAppState;
+            };
+
+            const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+            const interval = setInterval(() => {
+                if (AppState.currentState === 'active') {
+                    fetchMessages();
+                    updateLastSeen();
+                }
+            }, 3000);
+
+            return () => {
+                subscription.remove();
+                clearInterval(interval);
+                saveLastScrollPosition();
+            };
+            return () => {
+                subscription.remove();
+                clearInterval(interval);
+                saveLastScrollPosition();
+            };
+        }, [id, currentUser])
+    );
+
+    // Socket Initialization
+    useEffect(() => {
+        if (!currentUser || !id) return;
+
+        // Initialize Socket
+        socket.current = io(Config.SOCKET_URL);
+
+        const roomId = `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+
+        socket.current.emit('join_room', roomId);
+
+        socket.current.on('typing_start', ({ user }: { user: string }) => {
+            if (String(user) === String(id)) {
+                setIsTyping(true);
+            }
+        });
+
+        socket.current.on('typing_stop', ({ user }: { user: string }) => {
+            if (String(user) === String(id)) {
+                setIsTyping(false);
+            }
+        });
+
+        socket.current.on('message_edited', ({ message_id, new_text }: { message_id: number, new_text: string }) => {
+            setMessages(prev => prev.map(m =>
+                m.id === message_id ? { ...m, message_text: new_text, is_edited: true, edited_at: new Date().toISOString() } : m
+            ));
+        });
+
+        return () => {
+            socket.current?.disconnect();
+        };
+    }, [id, currentUser]);
+
+    const handleTyping = (text: string) => {
+        setInputText(text);
+
+        if (!socket.current || !currentUser) return;
+
+        const roomId = `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+
+        // Emit start typing if not empty
+        if (text.length > 0) {
+            socket.current.emit('typing_start', { room: roomId, user: currentUser.id });
+
+            // Clear existing timeout
+            if (typingTimeout.current) clearTimeout(typingTimeout.current);
+
+            // Set new timeout to stop typing after 2 seconds of inactivity
+            typingTimeout.current = setTimeout(() => {
+                socket.current?.emit('typing_stop', { room: roomId, user: currentUser.id });
+            }, 2000);
+        } else {
+            // Immediately stop if text is empty
+            if (typingTimeout.current) clearTimeout(typingTimeout.current);
+            socket.current.emit('typing_stop', { room: roomId, user: currentUser.id });
+        }
+    };
+
+
+    const saveLastScrollPosition = async () => {
+        if (!id) return;
+        try {
+            await AsyncStorage.setItem(`last_scroll_${id}`, String(scrollOffset.current));
+            await AsyncStorage.setItem('last_chat_id', id);
+            await AsyncStorage.setItem('last_chat_other', otherUsername || '');
+            await AsyncStorage.setItem('last_chat_avatar', avatar_id || '');
+        } catch (e) {
+            console.error("Error saving scroll position", e);
+        }
+    };
+
+    const loadLastScrollPosition = async () => {
+        if (!id) return;
+        try {
+            const pos = await AsyncStorage.getItem(`last_scroll_${id}`);
+            if (pos && flatListRef.current) {
+                // We might need to wait for messages to load before scrolling
+                setTimeout(() => {
+                    flatListRef.current?.scrollToOffset({ offset: parseFloat(pos), animated: false });
+                }, 500);
+            }
+        } catch (e) {
+            console.error("Error loading scroll position", e);
+        }
+    };
 
     const fetchTargetUserProfile = async () => {
         // Fetch specific user details including bio
@@ -85,53 +282,138 @@ export default function ChatDetailScreen() {
     };
 
     const fetchMessages = async () => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            console.log("FETCH MESSAGES: currentUser is null");
+            setIsLoading(false);
+            return;
+        }
+
+        const url = `${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}&receiver_id=${id}`;
         try {
-            const response = await fetch(`${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}&receiver_id=${id}`);
+            const response = await fetch(url);
             const data = await response.json();
+
             if (response.ok) {
                 setMessages(data);
+
+                // Check if there are messages from the other user that need status update
+                // ONLY mark as seen if the app is active
+                if (AppState.currentState === 'active') {
+                    const hasUnseen = data.some((m: any) => String(m.sender_id) === String(id) && m.status !== 'seen');
+                    if (hasUnseen) {
+                        updateMessageStatus('seen');
+                    }
+                }
             }
         } catch (error) {
             console.error('Error fetching messages:', error);
-            // Alert.alert('Fetch Error', 'Failed to load messages. Please ensure your database is updated.');
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleSend = async (text: string = inputText, imagePath: string | null = null) => {
+    const updateMessageStatus = async (status: 'delivered' | 'seen') => {
+        if (!currentUser) return;
+        try {
+            await fetch(`${Config.API_URL}/chat/update_status.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: currentUser.id,      // Me (Receiver)
+                    sender_id: id,                // Them (Sender)
+                    status: status
+                })
+            });
+            // We don't strictly need to do anything on success, the next poll will update the UI
+        } catch (error) {
+            console.error('Error updating status:', error);
+        }
+    };
+
+    const handleSend = async (text: string = inputText, imagePath: string | null = null, isRetry = false) => {
         if (!currentUser) {
             Alert.alert('Error', 'No user found');
             return;
         }
 
-        if (text.trim() || imagePath) {
-            const messageToSend = text.trim();
-            if (!imagePath) setInputText(''); // Clear input immediately if text only
+        const messageText = text.trim();
+        if (!messageText && !imagePath) return;
 
-            try {
-                const response = await fetch(`${Config.API_URL}/chat/send_message.php`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sender_id: currentUser.id,
-                        receiver_id: id,
-                        message: messageToSend,
-                        image_path: imagePath
-                    }),
-                });
-
-                if (response.ok) {
-                    fetchMessages(); // Refresh messages after sending
-                } else {
-                    const data = await response.json();
-                    Alert.alert('Send Error', data.message || 'Failed to send message');
-                }
-            } catch (error) {
-                console.error('Error sending message:', error);
-                Alert.alert('Network Error', error instanceof Error ? error.message : 'Unknown error');
+        // Rate Limit Check
+        const now = Date.now();
+        recentMessages.current = recentMessages.current.filter(t => now - t < 60000);
+        if (recentMessages.current.length >= 20) {
+            if (Platform.OS === 'android') {
+                const { ToastAndroid } = require('react-native');
+                ToastAndroid.show('Slow down! Too many messages.', ToastAndroid.SHORT);
+            } else {
+                Alert.alert('Slow Down', 'You are sending messages too fast.');
             }
+            return;
+        }
+        recentMessages.current.push(now);
+
+        if (messageText.length > 5000) {
+            Alert.alert('Too Long', 'Message cannot exceed 5000 characters.');
+            return;
+        }
+
+        if (!imagePath) setInputText('');
+        setIsSending(true);
+
+        // Optimistic UID for local tracking
+        const tempId = Date.now();
+        const newMessage = {
+            id: tempId,
+            sender_id: currentUser.id,
+            receiver_id: id,
+            message_text: messageText,
+            media_url: imagePath,
+            status: 'sending',
+            created_at: new Date().toISOString(),
+            is_local: true
+        };
+
+        if (isRetry) {
+            setFailedMessages(prev => prev.filter(m => m.message_text !== messageText || m.media_url !== imagePath));
+        }
+
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+            const response = await fetch(`${Config.API_URL}/chat/send_message.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sender_id: currentUser.id,
+                    receiver_id: id,
+                    message: messageText,
+                    image_path: imagePath
+                }),
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                isAtBottomRef.current = true;
+                fetchMessages();
+            } else {
+                const data = await response.json();
+                if (response.status === 429) {
+                    Alert.alert('Rate Limit', 'Too many messages. Please wait.');
+                } else {
+                    setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed' }]);
+                }
+                if (!imagePath) setInputText(messageText);
+            }
+        } catch (error) {
+            console.error('Error sending message:', error);
+            setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed' }]);
+            if (!imagePath) setInputText(messageText);
+        } finally {
+            setIsSending(false);
         }
     };
 
@@ -139,20 +421,37 @@ export default function ChatDetailScreen() {
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [4, 3],
+                allowsEditing: false, // We use our own editor now
                 quality: 0.8,
             });
 
             console.log('IMAGE PICKER RESULT:', result);
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
-                await uploadImage(result.assets[0]);
+                // Open Editor instead of sending directly
+                setEditorImageUri(result.assets[0].uri);
+                setIsEditorVisible(true);
             }
         } catch (e) {
             console.error('PICKER ERROR:', e);
         }
     };
+
+    const handleEditorSend = async (uri: string) => {
+        setIsEditorVisible(false);
+        // Upload and send the edited image
+        // Create a fake asset object to reuse uploadImage logic
+        const asset = {
+            uri: uri,
+            type: 'image/jpeg',
+            fileName: uri.split('/').pop() || 'edited_image.jpg',
+            mimeType: 'image/jpeg'
+        };
+        await uploadImage(asset);
+        setEditorImageUri(null);
+    };
+
+    // Removed the old pickImage helper since we don't need the alert anymore
 
     const uploadImage = async (asset: any) => {
         setIsUploading(true);
@@ -245,52 +544,87 @@ export default function ChatDetailScreen() {
     };
 
     const handleEmojiSelect = (emoji: string) => {
-        setInputText(prev => prev + emoji);
+        handleTyping(inputText + emoji);
     };
 
-    const handleViewProfile = () => {
-        setModalVisible(true);
+    const handleEditMessage = (message: any) => {
+        setEditingMessage(message);
+        setInputText(message.message_text);
+        if (flatListRef.current) {
+            // Optional: scroll to message?
+        }
     };
 
-    const handleMute = () => {
-        const muteOptions = [
-            { label: '8 hours', value: '8h' },
-            { label: '1 week', value: '1w' },
-            { label: 'Always', value: 'always' },
-            { label: 'None', value: 'none' }
-        ];
+    const handleCancelEdit = () => {
+        setEditingMessage(null);
+        setInputText('');
+    };
 
-        Alert.alert(
-            'Mute Notifications',
-            'Mute this chat for:',
-            muteOptions.map(opt => ({
-                text: opt.label,
-                onPress: async () => {
-                    try {
-                        const response = await fetch(`${Config.API_URL}/chat/mute_chat.php`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                user_id: currentUser?.id,
-                                target_id: id,
-                                duration: opt.value
-                            })
-                        });
-                        if (response.ok) {
-                            Alert.alert('Success', `Notifications ${opt.value === 'none' ? 'unmuted' : 'muted'}.`);
-                        }
-                    } catch (error) {
-                        console.error('Error muting:', error);
-                    }
+    const handleSaveEdit = async () => {
+        if (!editingMessage || !inputText.trim()) return;
+
+        const originalText = editingMessage.message_text;
+        const newText = inputText.trim();
+
+        if (originalText === newText) {
+            handleCancelEdit();
+            return;
+        }
+
+        // Optimistic Update
+        setMessages(prev => prev.map(m =>
+            m.id === editingMessage.id ? { ...m, message_text: newText, is_edited: true, edited_at: new Date().toISOString() } : m
+        ));
+
+        handleCancelEdit();
+
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/edit_message.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message_id: editingMessage.id,
+                    user_id: currentUser?.id,
+                    new_text: newText
+                })
+            });
+
+            if (response.ok) {
+                // Socket emit
+                if (socket.current) {
+                    const roomId = `chat_${Math.min(Number(currentUser?.id), Number(id))}_${Math.max(Number(currentUser?.id), Number(id))}`;
+                    socket.current.emit('edit_message', {
+                        room: roomId,
+                        message_id: editingMessage.id,
+                        new_text: newText
+                    });
                 }
-            })).concat([{ text: 'Cancel', style: 'cancel' } as any])
-        );
+            } else {
+                Alert.alert('Error', 'Failed to save edit.');
+                // Revert?
+                setMessages(prev => prev.map(m =>
+                    m.id === editingMessage.id ? { ...m, message_text: originalText, is_edited: false } : m
+                ));
+            }
+        } catch (error) {
+            console.error('Error editing message:', error);
+            Alert.alert('Error', 'Network error.');
+            // Revert
+            setMessages(prev => prev.map(m =>
+                m.id === editingMessage.id ? { ...m, message_text: originalText, is_edited: false } : m
+            ));
+        }
     };
 
-    const handleDeleteMessage = (msgId: number) => {
+    const handleDeleteMessage = (msgId: number, deleteType: 'for_me' | 'everyone' = 'everyone') => {
+        const title = deleteType === 'everyone' ? 'Delete for Everyone' : 'Delete for Me';
+        const message = deleteType === 'everyone'
+            ? 'Are you sure? This will remove the message for all participants.'
+            : 'This message will be removed from your view only.';
+
         Alert.alert(
-            'Delete Message',
-            'Are you sure you want to delete this message for everyone?',
+            title,
+            message,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -303,15 +637,29 @@ export default function ChatDetailScreen() {
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     message_id: msgId,
-                                    user_id: currentUser?.id
+                                    user_id: currentUser?.id,
+                                    delete_type: deleteType
                                 })
                             });
+
                             if (response.ok) {
-                                // Update local state immediately
-                                setMessages(prev => prev.map(m =>
-                                    m.id === msgId ? { ...m, is_deleted: 1, message_text: '🚫 This message was deleted', image_path: null } : m
-                                ));
-                                Alert.alert('Success', 'Message deleted.');
+                                if (deleteType === 'everyone') {
+                                    // Update local state for "Everyone" (soft delete placeholder)
+                                    setMessages(prev => prev.map(m =>
+                                        m.id === msgId ? { ...m, is_deleted: 1, message_text: '🚫 This message was deleted', media_url: null } : m
+                                    ));
+                                } else {
+                                    // Remove from local state for "For Me" (hidden filtering is done on server, but we can optimistically remove)
+                                    setMessages(prev => prev.filter(m => m.id !== msgId));
+                                }
+
+                                const successMsg = deleteType === 'everyone' ? 'Message deleted for everyone.' : 'Message removed from your view.';
+                                if (Platform.OS === 'android') {
+                                    const { ToastAndroid } = require('react-native');
+                                    ToastAndroid.show(successMsg, ToastAndroid.SHORT);
+                                } else {
+                                    // Alert.alert('Success', successMsg);
+                                }
                                 setSelectedMessageId(null);
                             } else {
                                 const data = await response.json();
@@ -325,6 +673,20 @@ export default function ChatDetailScreen() {
                 }
             ]
         );
+    };
+
+    const handleMessageLongPress = (message: any) => {
+        if (message.is_deleted) return;
+        setSelectedMessageForOptions(message);
+        setMessageOptionsVisible(true);
+    };
+
+    const handleScroll = (event: any) => {
+        const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+        const paddingToBottom = 50; // Larger padding for better reliability
+        const isNearBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+        isAtBottomRef.current = isNearBottom;
+        scrollOffset.current = contentOffset.y;
     };
 
     const handleClearChat = () => {
@@ -486,7 +848,7 @@ export default function ChatDetailScreen() {
                 { text: 'Cancel', style: 'cancel' },
                 {
                     text: 'Submit',
-                    onPress: async (reason) => {
+                    onPress: async (reason?: string) => {
                         try {
                             const response = await fetch(`${Config.API_URL}/users/report_user.php`, {
                                 method: 'POST',
@@ -494,7 +856,7 @@ export default function ChatDetailScreen() {
                                 body: JSON.stringify({
                                     reporter_id: currentUser?.id,
                                     reported_id: id,
-                                    reason: reason
+                                    reason: reason || ''
                                 })
                             });
                             if (response.ok) {
@@ -509,8 +871,132 @@ export default function ChatDetailScreen() {
         );
     };
 
+    const getMessageMenuItems = (message: any) => {
+        if (!message) return [];
+        const isMe = String(message.sender_id) === String(currentUser?.id);
+        const options = [
+            {
+                label: 'Copy Text',
+                icon: Copy,
+                onPress: () => { Clipboard.setStringAsync(message.message_text || ''); }
+            },
+            {
+                label: 'Delete for Me',
+                icon: Trash,
+                destructive: true,
+                onPress: () => handleDeleteMessage(message.id, 'for_me')
+            }
+        ];
+        if (isMe) {
+            if (!message.media_url && !message.is_deleted) {
+                options.push({
+                    label: 'Edit',
+                    icon: Edit2,
+                    onPress: () => handleEditMessage(message)
+                });
+            }
+            options.push({
+                label: 'Delete for Everyone',
+                icon: Trash2,
+                destructive: true,
+                onPress: () => handleDeleteMessage(message.id, 'everyone')
+            });
+        }
+        return options;
+    };
+
+    const handleViewProfile = () => {
+        setModalVisible(true);
+    };
+
+    const handleMute = () => {
+        const muteOptions = [
+            { label: '8 hours', value: '8h' },
+            { label: '1 week', value: '1w' },
+            { label: 'Always', value: 'always' },
+            { label: 'None', value: 'none' }
+        ];
+
+        Alert.alert(
+            'Mute Notifications',
+            'Mute this chat for:',
+            muteOptions.map(opt => ({
+                text: opt.label,
+                onPress: async () => {
+                    try {
+                        const response = await fetch(`${Config.API_URL}/chat/mute_chat.php`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                user_id: currentUser?.id,
+                                target_id: id,
+                                duration: opt.value
+                            })
+                        });
+                        if (response.ok) {
+                            Alert.alert('Success', `Notifications ${opt.value === 'none' ? 'unmuted' : 'muted'}.`);
+                        }
+                    } catch (error) {
+                        console.error('Error muting:', error);
+                    }
+                }
+            })).concat([{ text: 'Cancel', style: 'cancel' } as any])
+        );
+    };
+
+    const handleLockSetup = () => {
+        setShowLockSetup(true);
+        setMenuVisible(false);
+    };
+
+    const handleUnlockSetup = () => {
+        setShowUnlockPrompt(true);
+        setMenuVisible(false);
+    };
+
+    const handleConfirmLock = async () => {
+        if (lockPin.length < 4) {
+            Alert.alert('Error', 'PIN must be at least 4 digits');
+            return;
+        }
+        await ChatLockService.lockChat(String(id), lockPin);
+        setIsLocked(true);
+        setIsAuthenticated(true); // Don't lock them out immediately after setting
+        setShowLockSetup(false);
+        setLockPin('');
+        Alert.alert('Success', 'Chat locked successfully.');
+    };
+
+    const handleConfirmUnlock = async () => {
+        const isValid = await ChatLockService.verifyPin(String(id), unlockPin);
+        if (isValid) {
+            await ChatLockService.unlockChat(String(id));
+            setIsLocked(false);
+            setIsAuthenticated(true);
+            setShowUnlockPrompt(false);
+            setUnlockPin('');
+            Alert.alert('Success', 'Chat unlocked.');
+        } else {
+            Alert.alert('Error', 'Incorrect PIN');
+            setUnlockPin('');
+        }
+    };
+
+    // For the initial unlock screen handling
+    const handleEntryUnlock = async () => {
+        const isValid = await ChatLockService.verifyPin(String(id), unlockPin);
+        if (isValid) {
+            setIsAuthenticated(true);
+            setUnlockPin('');
+        } else {
+            Alert.alert('Error', 'Incorrect PIN');
+            setUnlockPin('');
+        }
+    };
+
     const menuItems = [
         { label: 'View Profile', icon: User, onPress: handleViewProfile },
+        { label: isLocked ? 'Unlock Chat' : 'Lock Chat', icon: isLocked ? Unlock : Lock, onPress: isLocked ? handleUnlockSetup : handleLockSetup },
         { label: 'Mute Notifications', icon: BellOff, onPress: handleMute },
         { label: 'Clear Messages', icon: Trash2, onPress: handleClearChat },
         { label: 'Unfriend', icon: UserMinus, onPress: handleUnfriend, destructive: true, hidden: relationshipStatus !== 'accepted' },
@@ -542,13 +1028,8 @@ export default function ChatDetailScreen() {
     };
 
     useEffect(() => {
-        // Scroll to bottom when messages change
-        if (messages.length > 0) {
-            setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-        }
-    }, [messages]);
+        // Any other message related logic, but SCROLLING IS HANDLED BY onContentSizeChange now.
+    }, [messages.length]);
 
     const renderMessage = ({ item, index }: { item: any, index: number }) => {
         const isMe = String(item.sender_id) === String(currentUser?.id);
@@ -558,8 +1039,6 @@ export default function ChatDetailScreen() {
         const isLastInGroup = !nextMessage ||
             String(nextMessage.sender_id) !== String(item.sender_id) ||
             new Date(nextMessage.created_at).getTime() - new Date(item.created_at).getTime() > 60000;
-
-        const time = new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         return (
             <View key={item.id} style={[styles.messageRow, isMe ? styles.myRow : styles.friendRow]}>
@@ -572,17 +1051,44 @@ export default function ChatDetailScreen() {
                 )}
                 <View style={[styles.bubbleWrapper, isMe ? styles.myBubbleWrapper : styles.friendBubbleWrapper]}>
                     <TouchableOpacity
-                        onLongPress={() => setSelectedMessageId(item.id)}
+                        onLongPress={() => handleMessageLongPress(item)}
+                        {...({
+                            onContextMenu: (e: any) => {
+                                if (Platform.OS === 'web') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const { clientX, clientY } = e as any;
+                                    setMsgMenuAnchor({ x: clientX, y: clientY });
+                                    setMsgMenuMessage(item);
+                                    setMsgMenuVisible(true);
+                                }
+                            }
+                        } as any)}
                         delayLongPress={300}
                         activeOpacity={0.8}
-                        style={[styles.bubble, isMe ? styles.myBubble : styles.friendBubble, !isLastInGroup && (isMe ? styles.myBubbleGroup : styles.friendBubbleGroup)]}
+                        style={[
+                            styles.bubble,
+                            isMe ? styles.myBubble : styles.friendBubble,
+                            !isLastInGroup && (isMe ? styles.myBubbleGroup : styles.friendBubbleGroup),
+                            item.media_url ? styles.imageBubble : null
+                        ]}
                     >
                         {item.media_url ? (
-                            <RNImage
-                                source={{ uri: `${Config.API_URL}/${item.media_url.replace(/^\//, '')}` }}
-                                style={[styles.messageImage, { width: 220, height: 280 }]}
-                                resizeMode="cover"
-                            />
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setFullScreenImage(`${Config.API_URL}/${item.media_url.replace(/^\//, '')}`);
+                                    setIsFullScreenVisible(true);
+                                }}
+                                onLongPress={() => handleMessageLongPress(item)}
+                                delayLongPress={300}
+                                activeOpacity={0.9}
+                            >
+                                <RNImage
+                                    source={{ uri: `${Config.API_URL}/${item.media_url.replace(/^\//, '')}` }}
+                                    style={[styles.messageImage, { width: 220, height: 280 }]}
+                                    resizeMode="cover"
+                                />
+                            </TouchableOpacity>
                         ) : null}
 
                         {item.message_text ? (
@@ -591,9 +1097,29 @@ export default function ChatDetailScreen() {
                     </TouchableOpacity>
 
                     {isLastInGroup && (
-                        <ThemedText numberOfLines={1} style={[styles.messageTime, isMe ? styles.myMessageTime : styles.friendMessageTime]}>
-                            {time}
-                        </ThemedText>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 2 }}>
+                            <ThemedText numberOfLines={1} style={[styles.messageTime, isMe ? styles.myMessageTime : styles.friendMessageTime, { marginRight: isMe ? 4 : 0 }]}>
+                                {formatChatTime(item.created_at)}
+                                {item.is_edited && <ThemedText style={{ fontSize: 9, marginLeft: 4, fontStyle: 'italic', color: Colors.textSecondary }}>edited</ThemedText>}
+                            </ThemedText>
+                            {isMe && (
+                                <View style={{ marginLeft: 2 }}>
+                                    {item.status === 'seen' ? (
+                                        <CheckCheck size={16} color={Colors.primary || '#474747ff'} />
+                                    ) : item.status === 'delivered' ? (
+                                        <CheckCheck size={16} color={Colors.textSecondary || '#8E8E93'} />
+                                    ) : item.status === 'sending' ? (
+                                        <Timer size={14} color={Colors.textSecondary} />
+                                    ) : item.status === 'failed' ? (
+                                        <TouchableOpacity onPress={() => handleSend(item.message_text, item.media_url, true)}>
+                                            <ShieldAlert size={16} color={Colors.accent} />
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <Check size={16} color={Colors.textSecondary || '#8E8E93'} />
+                                    )}
+                                </View>
+                            )}
+                        </View>
                     )}
 
                     {item.reactions && item.reactions.length > 0 && (
@@ -639,6 +1165,7 @@ export default function ChatDetailScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -650,16 +1177,25 @@ export default function ChatDetailScreen() {
                     activeOpacity={0.7}
                 >
                     <Avatar
-                        source={getAvatarById(avatar_id || id)}
-                        online={String(id) !== String(currentUser?.id)}
+                        source={getAvatarById(targetUserProfile?.avatar_id || avatar_id || id)}
+                        online={!!targetUserProfile?.last_seen && (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000)}
                         size={40}
                     />
                     <View style={styles.nameContainer}>
                         <ThemedText type="defaultSemiBold">
                             {String(id) === String(currentUser?.id) ? 'Note to self' : otherUsername}
                         </ThemedText>
-                        <ThemedText type="caption" style={{ color: String(id) === String(currentUser?.id) ? Colors.secondary : Colors.online }}>
-                            {String(id) === String(currentUser?.id) ? 'Personal Space' : 'Online'}
+
+                        <ThemedText type="caption" style={{ color: String(id) === String(currentUser?.id) ? Colors.secondary : (isTyping ? Colors.primary : (targetUserProfile?.last_seen && (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000) ? Colors.online : Colors.textSecondary)) }}>
+                            {String(id) === String(currentUser?.id)
+                                ? 'Personal Space'
+                                : isTyping
+                                    ? 'Typing...'
+                                    : targetUserProfile?.last_seen
+                                        ? (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000
+                                            ? 'Online'
+                                            : `Last seen ${formatChatTime(targetUserProfile.last_seen)}`)
+                                        : 'Recently active'}
                         </ThemedText>
                     </View>
                 </TouchableOpacity>
@@ -686,77 +1222,296 @@ export default function ChatDetailScreen() {
                 }}
             />
 
-            <FlatList
-                ref={flatListRef}
-                data={messages}
-                renderItem={renderMessage}
-                keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-            />
-
-            {/* Input Area */}
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-            >
-                <View style={[styles.inputContainer]}>
-                    {showEmojiPicker && (
-                        <GlassCard style={styles.inputEmojiPicker}>
-                            <View style={styles.inputEmojiRow}>
-                                {EMOJIS.map(emoji => (
-                                    <TouchableOpacity
-                                        key={emoji}
-                                        onPress={() => handleEmojiSelect(emoji)}
-                                        style={styles.inputEmojiButton}
-                                    >
-                                        <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
-                                    </TouchableOpacity>
-                                ))}
-                                <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
-                                    <X size={20} color={Colors.textSecondary} />
-                                </TouchableOpacity>
-                            </View>
-                        </GlassCard>
-                    )}
-
-                    <View style={styles.inputArea}>
-                        <GlassCard
-                            style={styles.inputWrapper}
-                            contentContainerStyle={styles.inputContent}
-                            intensity={30}
-                        >
-                            <TouchableOpacity style={styles.iconButton} onPress={handlePickImage} disabled={isUploading}>
-                                <Paperclip size={22} color={Colors.textSecondary} />
-                            </TouchableOpacity>
-
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Type something..."
-                                placeholderTextColor={Colors.textSecondary}
-                                value={inputText}
-                                onChangeText={setInputText}
-                                multiline
-                                maxLength={500}
-                                onFocus={() => setShowEmojiPicker(false)}
-                            />
-
-                            <TouchableOpacity
-                                style={styles.iconButton}
-                                onPress={() => handleSend(inputText)}
-                                disabled={!inputText.trim()}
-                            >
-                                <Send
-                                    size={22}
-                                    color={inputText.trim() ? Colors.primary : Colors.textSecondary}
-                                    fill={inputText.trim() ? Colors.primary : 'transparent'}
+            {isCheckingLock ? (
+                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                    <Timer size={32} color={Colors.primary} />
+                </View>
+            ) : !isLocked || isAuthenticated ? (
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 100}
+                >
+                    <FlatList
+                        ref={flatListRef}
+                        data={[...messages, ...failedMessages]}
+                        keyExtractor={(item) => item.id.toString()}
+                        renderItem={renderMessage}
+                        style={{ flex: 1 }}
+                        contentContainerStyle={[styles.listContent, messages.length === 0 && { flex: 1 }, { paddingBottom: 20 }]}
+                        onScroll={handleScroll}
+                        scrollEventThrottle={16}
+                        onContentSizeChange={() => {
+                            if (isAtBottomRef.current) {
+                                flatListRef.current?.scrollToEnd({ animated: true });
+                            }
+                        }}
+                        ListEmptyComponent={
+                            !isLoading ? (
+                                <EmptyState
+                                    icon={MessageSquare}
+                                    title="No messages yet"
+                                    message={`Me: ${currentUser?.id || '?'}, Partner: ${id}. Waiting for messages... 👋`}
                                 />
+                            ) : null
+                        }
+                        showsVerticalScrollIndicator={false}
+                    />
+
+                    {/* Input Area */}
+                    <View style={[styles.inputContainer]}>
+                        {showEmojiPicker && (
+                            <GlassCard style={styles.inputEmojiPicker}>
+                                <View style={styles.inputEmojiRow}>
+                                    {EMOJIS.map(emoji => (
+                                        <TouchableOpacity
+                                            key={emoji}
+                                            onPress={() => handleEmojiSelect(emoji)}
+                                            style={styles.inputEmojiButton}
+                                        >
+                                            <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
+                                        </TouchableOpacity>
+                                    ))}
+                                    <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
+                                        <X size={20} color={Colors.textSecondary} />
+                                    </TouchableOpacity>
+                                </View>
+                            </GlassCard>
+                        )}
+
+                        <View style={styles.inputArea}>
+                            <GlassCard
+                                style={styles.inputWrapper}
+                                contentContainerStyle={styles.inputContent}
+                                intensity={30}
+                            >
+                                {editingMessage ? (
+                                    <TouchableOpacity style={styles.iconButton} onPress={handleCancelEdit}>
+                                        <X size={22} color={Colors.error || '#FF3B30'} />
+                                    </TouchableOpacity>
+                                ) : (
+                                    <TouchableOpacity style={styles.iconButton} onPress={handlePickImage} disabled={isUploading}>
+                                        <Paperclip size={22} color={Colors.textSecondary} />
+                                    </TouchableOpacity>
+                                )}
+
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder={editingMessage ? "Edit message..." : "Type something..."}
+                                    placeholderTextColor={Colors.textSecondary}
+                                    value={inputText}
+                                    onChangeText={handleTyping}
+                                    multiline
+                                    maxLength={5000}
+                                    onFocus={() => setShowEmojiPicker(false)}
+                                />
+
+                                <TouchableOpacity
+                                    style={styles.iconButton}
+                                    onPress={() => editingMessage ? handleSaveEdit() : handleSend(inputText)}
+                                    disabled={!inputText.trim() || isSending || isUploading}
+                                >
+                                    {editingMessage ? (
+                                        <Check
+                                            size={22}
+                                            color={(inputText.trim()) ? Colors.primary : Colors.textSecondary}
+                                        />
+                                    ) : (
+                                        <Send
+                                            size={22}
+                                            color={(inputText.trim() && !isSending && !isUploading) ? Colors.primary : Colors.textSecondary}
+                                            fill={(inputText.trim() && !isSending && !isUploading) ? Colors.primary : 'transparent'}
+                                        />
+                                    )}
+                                </TouchableOpacity>
+                            </GlassCard>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            ) : (
+                <View style={styles.lockScreenContainer}>
+                    <Lock size={64} color={Colors.primary} style={styles.lockIcon} />
+                    <ThemedText type="subtitle" style={styles.lockTitle}>Chat Locked</ThemedText>
+                    <ThemedText style={styles.lockSubtitle}>Enter PIN to view this chat</ThemedText>
+
+                    <TextInput
+                        style={styles.pinInput}
+                        placeholder="Enter PIN"
+                        placeholderTextColor={Colors.textSecondary}
+                        value={unlockPin}
+                        onChangeText={setUnlockPin}
+                        keyboardType="numeric"
+                        secureTextEntry
+                        maxLength={4}
+                        onSubmitEditing={handleEntryUnlock}
+                        autoFocus
+                    />
+                    <TouchableOpacity style={styles.unlockButton} onPress={handleEntryUnlock}>
+                        <ThemedText style={styles.unlockButtonText}>Unlock</ThemedText>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {/* Lock Setup Modal */}
+            <Modal
+                transparent={true}
+                visible={showLockSetup}
+                animationType="fade"
+                onRequestClose={() => setShowLockSetup(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: Colors.surface, borderColor: Colors.glassBorder }]}>
+                        <ThemedText type="defaultSemiBold" style={styles.modalTitle}>Set Chat PIN</ThemedText>
+                        <ThemedText style={{ color: Colors.textSecondary, marginBottom: 15, textAlign: 'center' }}>
+                            Create a secure PIN to lock this chat context.
+                        </ThemedText>
+
+                        <TextInput
+                            style={[styles.pinInput, { marginBottom: 20 }]}
+                            placeholder="Enter 4-digit PIN"
+                            placeholderTextColor={Colors.textSecondary}
+                            value={lockPin}
+                            onChangeText={setLockPin}
+                            keyboardType="numeric"
+                            secureTextEntry
+                            maxLength={4}
+                            autoFocus
+                        />
+
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <TouchableOpacity style={[styles.modalOption, styles.modalCancel, { flex: 1 }]} onPress={() => setShowLockSetup(false)}>
+                                <ThemedText style={styles.modalCancelText}>Cancel</ThemedText>
                             </TouchableOpacity>
-                        </GlassCard>
+                            <TouchableOpacity
+                                style={[styles.modalOption, { backgroundColor: Colors.primary, flex: 1, justifyContent: 'center' }]}
+                                onPress={handleConfirmLock}
+                            >
+                                <ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>Lock Chat</ThemedText>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+            </Modal>
+
+            {/* Unlock Prompt Modal (Generic use) */}
+            <Modal
+                transparent={true}
+                visible={showUnlockPrompt}
+                animationType="fade"
+                onRequestClose={() => setShowUnlockPrompt(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: Colors.surface, borderColor: Colors.glassBorder }]}>
+                        <ThemedText type="defaultSemiBold" style={styles.modalTitle}>Authentication Required</ThemedText>
+                        <ThemedText style={{ color: Colors.textSecondary, marginBottom: 15, textAlign: 'center' }}>
+                            Enter PIN to unlock settings.
+                        </ThemedText>
+                        <TextInput
+                            style={[styles.pinInput, { marginBottom: 20 }]}
+                            placeholder="Enter PIN"
+                            placeholderTextColor={Colors.textSecondary}
+                            value={unlockPin}
+                            onChangeText={setUnlockPin}
+                            keyboardType="numeric"
+                            secureTextEntry
+                            maxLength={4}
+                            autoFocus
+                        />
+
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <TouchableOpacity style={[styles.modalOption, styles.modalCancel, { flex: 1 }]} onPress={() => setShowUnlockPrompt(false)}>
+                                <ThemedText style={styles.modalCancelText}>Cancel</ThemedText>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalOption, { backgroundColor: Colors.primary, flex: 1, justifyContent: 'center' }]}
+                                onPress={handleConfirmUnlock}
+                            >
+                                <ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>Verify</ThemedText>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <OverflowMenu
+                visible={msgMenuVisible}
+                onClose={() => setMsgMenuVisible(false)}
+                items={getMessageMenuItems(msgMenuMessage)}
+                anchor={msgMenuAnchor}
+            />
+
+            <FullScreenImageModal
+                visible={isFullScreenVisible}
+                imageUri={fullScreenImage}
+                onClose={() => setIsFullScreenVisible(false)}
+            />
+
+            <ImageEditorModal
+                visible={isEditorVisible}
+                imageUri={editorImageUri}
+                onClose={() => setIsEditorVisible(false)}
+                onSend={handleEditorSend}
+            />
+
+            {/* Custom Message Options Modal */}
+            <Modal
+                transparent={true}
+                visible={messageOptionsVisible}
+                animationType="fade"
+                onRequestClose={() => setMessageOptionsVisible(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setMessageOptionsVisible(false)}
+                >
+                    <View style={[styles.modalContent, { backgroundColor: Colors.surface, borderColor: Colors.glassBorder }]}>
+                        <ThemedText type="defaultSemiBold" style={styles.modalTitle}>Message Options</ThemedText>
+
+                        {String(selectedMessageForOptions?.sender_id) === String(currentUser?.id) && !selectedMessageForOptions?.media_url && !selectedMessageForOptions?.is_deleted && (
+                            <TouchableOpacity style={styles.modalOption} onPress={() => {
+                                setMessageOptionsVisible(false);
+                                handleEditMessage(selectedMessageForOptions);
+                            }}>
+                                <Edit2 size={20} color={Colors.text} />
+                                <ThemedText style={styles.modalOptionText}>Edit Message</ThemedText>
+                            </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity style={styles.modalOption} onPress={() => {
+                            Clipboard.setStringAsync(selectedMessageForOptions?.message_text || '');
+                            setMessageOptionsVisible(false);
+                        }}>
+                            <Copy size={20} color={Colors.text} />
+                            <ThemedText style={styles.modalOptionText}>Copy Text</ThemedText>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.modalOption} onPress={() => {
+                            setMessageOptionsVisible(false);
+                            setTimeout(() => handleDeleteMessage(selectedMessageForOptions?.id, 'for_me'), 100);
+                        }}>
+                            <Trash size={20} color="#EF4444" />
+                            <ThemedText style={[styles.modalOptionText, { color: '#EF4444' }]}>Delete for Me</ThemedText>
+                        </TouchableOpacity>
+
+                        {String(selectedMessageForOptions?.sender_id) === String(currentUser?.id) && (
+                            <TouchableOpacity style={styles.modalOption} onPress={() => {
+                                setMessageOptionsVisible(false);
+                                setTimeout(() => handleDeleteMessage(selectedMessageForOptions?.id, 'everyone'), 100);
+                            }}>
+                                <Trash2 size={20} color="#EF4444" />
+                                <ThemedText style={[styles.modalOptionText, { color: '#EF4444' }]}>Delete for Everyone</ThemedText>
+                            </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity style={[styles.modalOption, styles.modalCancel]} onPress={() => setMessageOptionsVisible(false)}>
+                            <X size={20} color={Colors.textSecondary} />
+                            <ThemedText style={styles.modalCancelText}>Cancel</ThemedText>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+        </SafeAreaView >
     );
 }
 
@@ -827,6 +1582,16 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         paddingVertical: 10,
         borderRadius: 18,
+    },
+    imageBubble: {
+        padding: 0,
+        paddingHorizontal: 4,
+        paddingVertical: 4,
+        paddingBottom: 1,
+        borderTopRightRadius: 4,
+        borderBottomRightRadius: 8,
+        borderTopLeftRadius: 8,
+        borderBottomLeftRadius: 8,
     },
     myBubble: {
         backgroundColor: Colors.primary,
@@ -977,5 +1742,92 @@ const styles = StyleSheet.create({
     },
     inputEmojiButton: {
         padding: 5,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        width: '100%',
+        // maxWidth: 00,
+        borderRadius: 20,
+        padding: 20,
+        borderWidth: 1,
+        gap: 12,
+    },
+    modalTitle: {
+        fontSize: 18,
+        textAlign: 'center',
+        marginBottom: 10,
+    },
+    modalOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 15,
+        paddingVertical: 14,
+        paddingHorizontal: 15,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: 12,
+    },
+    modalOptionText: {
+        fontSize: 16,
+        color: Colors.text,
+        fontWeight: '500',
+    },
+    modalCancel: {
+        backgroundColor: 'transparent',
+        justifyContent: 'center',
+        marginTop: 5,
+        borderWidth: 1,
+        borderColor: Colors.glassBorder,
+    },
+    modalCancelText: {
+        fontSize: 16,
+        color: Colors.textSecondary,
+    },
+    lockScreenContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: Colors.background,
+    },
+    lockIcon: {
+        marginBottom: 20,
+    },
+    lockTitle: {
+        marginBottom: 10,
+    },
+    lockSubtitle: {
+        color: Colors.textSecondary,
+        marginBottom: 30,
+        textAlign: 'center',
+    },
+    pinInput: {
+        width: '100%',
+        backgroundColor: Colors.surface,
+        borderWidth: 1,
+        borderColor: Colors.glassBorder,
+        borderRadius: 12,
+        padding: 16,
+        fontSize: 20,
+        color: Colors.text,
+        textAlign: 'center',
+        marginBottom: 20,
+        letterSpacing: 4,
+    },
+    unlockButton: {
+        backgroundColor: Colors.primary,
+        paddingVertical: 14,
+        paddingHorizontal: 40,
+        borderRadius: 25,
+    },
+    unlockButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });

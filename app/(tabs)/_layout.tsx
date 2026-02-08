@@ -13,16 +13,16 @@ export default function TabLayout() {
                 tabBarStyle: styles.tabBar,
                 tabBarActiveTintColor: Colors.primary,
                 tabBarInactiveTintColor: Colors.textSecondary,
-                tabBarShowLabel: false,
+                tabBarShowLabel: true,
                 tabBarLabelStyle: styles.tabLabel,
                 tabBarBackground: () => (
                     <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
                 ),
             }}>
             <Tabs.Screen
-                name="index" // Chat
+                name="index" // Chat List (was chats)
                 options={{
-                    // title: 'Chats',
+                    title: 'Chats',
                     tabBarIcon: ({ color, focused }) => (
                         <View>
                             <MessageSquareText size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
@@ -34,16 +34,17 @@ export default function TabLayout() {
                 }}
             />
             <Tabs.Screen
-                name="friends" // Mapped to Communities
+                name="global_friends" // Global / Home (was index)
                 options={{
-                    // title: 'Communities',
+                    title: 'Global',
                     tabBarIcon: ({ color, focused }) => <Globe2 size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,
                 }}
             />
+
             <Tabs.Screen
                 name="requests" // Mapped to Updates
                 options={{
-                    // title: 'Updates',
+                    title: 'Requests',
                     tabBarIcon: ({ color, focused }) => <Group size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,
                 }}
             />
@@ -51,7 +52,7 @@ export default function TabLayout() {
             <Tabs.Screen
                 name="settings" // Mapped to Calls
                 options={{
-                    // title: 'Calls',
+                    title: 'Settings',
                     tabBarIcon: ({ color, focused }) => <Settings size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,
                 }}
             />
@@ -76,14 +77,14 @@ const styles = StyleSheet.create({
         position: 'absolute',
         borderTopWidth: 0,
         elevation: 0,
-        height: 60, // Taller for labels
+        height: 90, // Taller for labels
         backgroundColor: Colors.background, // Solid background preferred for bottom bar visibility
-        paddingBottom: 8,
-        paddingTop: 8,
+        paddingBottom: 10,
+        paddingTop: 10,
     },
     tabLabel: {
         fontSize: 12,
-        fontWeight: '500',
+        fontWeight: 'bold',
     },
     badge: {
         backgroundColor: Colors.primary,

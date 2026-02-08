@@ -63,6 +63,31 @@ const AUTO_DELETE_OPTIONS = [
 
 export default function SettingsScreen() {
     const { user, setUser } = useUser();
+    const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+
+    React.useEffect(() => {
+        loadSettings();
+    }, []);
+
+    const loadSettings = async () => {
+        try {
+            const val = await AsyncStorage.getItem('notifications_enabled');
+            if (val !== null) {
+                setNotificationsEnabled(val === 'true');
+            }
+        } catch (e) {
+            console.error("Error loading settings", e);
+        }
+    };
+
+    const toggleNotifications = async (value: boolean) => {
+        setNotificationsEnabled(value);
+        try {
+            await AsyncStorage.setItem('notifications_enabled', String(value));
+        } catch (e) {
+            console.error("Error saving settings", e);
+        }
+    };
     const handleLogout = async () => {
         try {
             await setUser(null);
@@ -128,9 +153,10 @@ export default function SettingsScreen() {
 
                                         {item.type === 'link' ? (
                                             <ChevronRight size={20} color={Colors.textSecondary} />
-                                        ) : item.type === 'toggle' ? (
+                                        ) : item.id === 'notifications' ? (
                                             <Switch
-                                                value={item.value}
+                                                value={notificationsEnabled}
+                                                onValueChange={toggleNotifications}
                                                 trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
                                                 thumbColor={Colors.white}
                                             />
@@ -151,7 +177,7 @@ export default function SettingsScreen() {
                     <ThemedText style={{ color: Colors.accent, fontWeight: '600' }}>Log Out</ThemedText>
                 </TouchableOpacity>
 
-                <ThemedText type="caption" style={styles.version}>Version 1.0.0</ThemedText>
+                <ThemedText type="caption" style={styles.version}>Version 1.0.0 - WEBSKR</ThemedText>
             </ScrollView>
         </SafeAreaView>
     );

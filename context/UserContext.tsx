@@ -10,6 +10,14 @@ interface User {
     bio?: string;
     username_last_updated?: string;
     global_auto_delete_minutes?: number;
+    last_seen?: string;
+    privacy_last_seen?: number;
+    privacy_read_receipts?: number;
+    privacy_profile_visibility?: 'public' | 'private';
+    show_in_world?: number;
+    neon_color?: string;
+    border_color?: string;
+    button_color?: string;
 }
 
 interface UserContextType {

@@ -62,7 +62,7 @@ export default function LoginScreen() {
     };
 
     return (
-        <LinearGradient colors={[Colors.background, '#1E293B']} style={styles.container}>
+        <View style={[styles.container, { backgroundColor: Colors.background }]}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
@@ -119,14 +119,12 @@ export default function LoginScreen() {
                             onPress={handleLogin}
                             disabled={isLoading}
                         >
-                            <LinearGradient
-                                colors={[Colors.primary, Colors.secondary]}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={styles.buttonGradient}
-                            >
-                                <Text style={styles.buttonText}>{isLoading ? 'Logging in...' : 'Login'}</Text>
-                            </LinearGradient>
+                            <View style={[styles.buttonGradient, { backgroundColor: Colors.primary }]}>
+                                <Text style={styles.buttonText}>
+                                    {isLoading ? 'Logging in...' : 'Login'}
+                                </Text>
+                            </View>
+
                         </TouchableOpacity>
 
                         <View style={styles.footer}>
@@ -140,7 +138,7 @@ export default function LoginScreen() {
                     </BlurView>
                 </ScrollView>
             </KeyboardAvoidingView>
-        </LinearGradient>
+        </View>
     );
 }
 

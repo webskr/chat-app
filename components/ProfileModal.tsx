@@ -4,7 +4,7 @@ import { Colors } from '../constants/Colors';
 import { ThemedText } from './ThemedText';
 import { Avatar } from './Avatar';
 import { GlassCard } from './GlassCard';
-import { X, MessageCircle, Ban, BadgeCheck, UserMinus, ShieldCheck } from 'lucide-react-native';
+import { X, MessageCircle, Ban, BadgeCheck, UserMinus, ShieldCheck, Clock } from 'lucide-react-native';
 import { getAvatarById } from '../constants/Avatars';
 import { BlurView } from 'expo-blur';
 import { Config } from '../constants/Config';
@@ -17,7 +17,7 @@ interface ProfileModalProps {
     onClose: () => void;
     user: any;
     currentUser: any;
-    relationship?: 'friend' | 'blocked' | 'request_received' | 'none' | 'self';
+    relationship?: 'friend' | 'blocked' | 'request_received' | 'pending' | 'none' | 'self';
     onActionComplete?: () => void;
 }
 
@@ -110,7 +110,15 @@ export function ProfileModal({ visible, onClose, user, currentUser, relationship
                         {relationship === 'request_received' && (
                             <>
                                 <ActionButton icon={BadgeCheck} label="Accept" onPress={() => handleAction('friend')} primary />
-                                <ActionButton icon={UserMinus} label="Decline" onPress={() => handleAction('unfriend')} />
+                                <ActionButton icon={UserMinus} label="Decline" onPress={() => handleAction('decline')} />
+                                <ActionButton icon={Ban} label="Block" onPress={() => handleAction('block')} destructive />
+                            </>
+                        )}
+
+                        {/* Sent Request Actions */}
+                        {relationship === 'pending' && (
+                            <>
+                                <ActionButton icon={Clock} label="Unsend" onPress={() => handleAction('decline')} primary />
                                 <ActionButton icon={Ban} label="Block" onPress={() => handleAction('block')} destructive />
                             </>
                         )}

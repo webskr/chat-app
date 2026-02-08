@@ -14,8 +14,24 @@ include_once '../includes/db_connection.php';
 $data = json_decode(file_get_contents("php://input"));
 
 if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->message) || !empty($data->image_path))) {
+    // 0. Validate Message Length
+    if (!empty($data->message) && mb_strlen($data->message) > 5000) {
+        http_response_code(400);
+        echo json_encode(array("message" => "Message is too long (max 5000 characters)."));
+        exit();
+    }
     try {
-        // ... (block check kept same, hidden for brevity in apply) ... 
+        // 0. Rate Limiting Check
+        $rate_limit_query = "SELECT COUNT(*) FROM messages 
+                             WHERE sender_id = :sid 
+                             AND created_at > (NOW() - INTERVAL 1 MINUTE)";
+        $rate_stmt = $pdo->prepare($rate_limit_query);
+        $rate_stmt->execute([':sid' => $data->sender_id]);
+        if ($rate_stmt->fetchColumn() >= 20) {
+            http_response_code(429);
+            echo json_encode(array("message" => "Too many messages. Please wait a moment."));
+            exit();
+        }
 
         // 0. Check for Blocked Status
         $block_check = "SELECT COUNT(*) FROM relationships 

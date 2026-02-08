@@ -1,0 +1,69 @@
+VEGARM CHAT APP - FEATURE LIST (MINOR TO MAJOR)
+==============================================
+
+CORE MESSAGING
+--------------
+- Real-time one-on-one chat
+- Text message support (up to 5000 characters)
+- Image sharing (Upload to server, display in chat)
+- Message Status: Sending (gray)
+- Message Status: Delivered (single check)
+- Message Status: Seen (double blue check)
+- Delete for Me (Local removal)
+- Delete for Everyone (Soft delete with placeholder)
+- Clear Conversation (Physical DB deletion)
+- Long Press options menu
+- Copy message text to clipboard
+- Auto-polling (3s sync)
+
+UI/UX & DESIGN
+--------------
+- Premium Glassmorphism UI (Translucent components)
+- Smart Auto-Scroll (only if already at bottom)
+- Persistence of scroll position per chat
+- Persistence of last opened chat
+- Visual sending animations
+- Failed message indicators
+- Retry logic for failed messages
+- Empty state screens for new chats
+- Themed avatars (Multiple choices)
+- Responsive layout (Mobile & Web)
+- Safe Area padding for notches
+- Multi-line dynamic text input
+- Haptic-ready interactions
+
+REACTIONS & INPUT
+-----------------
+- Emoji reactions on messages
+- Unified emoji picker
+- Attachment overlay menu
+- Fast-clear text input on send
+- Image upload progress states
+
+USER & SOCIAL
+-------------
+- Secure Login/Logout
+- Profile management (Avatar, Username, Bio)
+- Online status / Last seen tracking
+- Friend requests (Send, Accept, Reject)
+- Unfriend functionality
+- Block/Unblock users
+- Report user with reason
+- View profile within chat view
+
+SETTINGS & PRIVACY
+------------------
+- Global Auto-Delete (Off, 10m, 24h, 7d, 30d, 90d)
+- Mute Chat (8h, 1w, Always, None)
+- Notification toggle (Master switch)
+- Storage of settings in AsyncStorage
+
+STABILITY & SECURITY
+--------------------
+- Rate Limiting (Prevent spamming)
+- Background/Foreground sync (Auto-refresh on resume)
+- Timeout handling for slow networks
+- Abort controller for network requests
+- Server-side validation for all actions
+
+WEBSKR (c) 2026

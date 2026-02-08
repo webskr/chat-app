@@ -10,7 +10,7 @@ export const Config = {
 
     // Your local Machine IP (Updated: 2026-02-01)
     // If this changes, run 'ipconfig' in terminal to find the new IPv4 Address.
-    IP_ADDRESS: '10.182.106.5',
+    IP_ADDRESS: '10.61.238.5',
 
     // Android Emulator special alias (10.0.2.2 = localhost of host machine)
     // Use this if the IP method doesn't work on Android Emulator
@@ -22,6 +22,13 @@ export const Config = {
         } else {
             // Defaulting to IP address which works for both Physical & Emulator (usually)
             return `http://${this.IP_ADDRESS}/chat-app/backend`;
+        }
+    },
+    get SOCKET_URL() {
+        if (this.USE_LOCALHOST) {
+            return 'http://localhost:3000';
+        } else {
+            return `http://${this.IP_ADDRESS}:3000`;
         }
     }
 };

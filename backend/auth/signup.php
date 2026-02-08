@@ -21,7 +21,22 @@ if (!empty($data->username) && !empty($data->email) && !empty($data->password)) 
 
     try {
         $avatar_id = (string)rand(0, 5);
-        $query = "INSERT INTO users (username, email, password, avatar_id) VALUES (:username, :email, :password, :avatar_id)";
+        
+        // Random Neon Color Generator for default appearance
+        $neon_colors = [
+            '#FF00FF', // Neon Magenta
+            '#00FFFF', // Neon Cyan
+            '#39FF14', // Neon Green
+            '#FFE700', // Neon Yellow
+            '#FF10F0', // Neon Pink
+            '#BF00FF', // Electric Purple
+            '#FF3131', // Neon Red
+            '#1F51FF', // Neon Blue
+            '#FF5F1F', // Neon Orange
+        ];
+        $random_color = $neon_colors[array_rand($neon_colors)];
+
+        $query = "INSERT INTO users (username, email, password, avatar_id, border_color, button_color) VALUES (:username, :email, :password, :avatar_id, :border_color, :button_color)";
         $stmt = $pdo->prepare($query);
 
         $password_hash = password_hash($password, PASSWORD_BCRYPT);
@@ -30,6 +45,8 @@ if (!empty($data->username) && !empty($data->email) && !empty($data->password)) 
         $stmt->bindParam(':email', $email);
         $stmt->bindParam(':password', $password_hash);
         $stmt->bindParam(':avatar_id', $avatar_id);
+        $stmt->bindParam(':border_color', $random_color);
+        $stmt->bindParam(':button_color', $random_color);
 
         if ($stmt->execute()) {
             http_response_code(201);

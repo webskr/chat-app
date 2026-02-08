@@ -13,7 +13,17 @@ include_once '../includes/db_connection.php';
 
 $data = json_decode(file_get_contents("php://input"));
 
-if (!empty($data->user_id) && (isset($data->auto_delete_minutes) || isset($data->scramble_name))) {
+if (!empty($data->user_id) && (
+    isset($data->auto_delete_minutes) || 
+    isset($data->scramble_name) || 
+    isset($data->privacy_last_seen) || 
+    isset($data->privacy_read_receipts) || 
+    isset($data->privacy_profile_visibility) ||
+    isset($data->show_in_world) ||
+    isset($data->neon_color) ||
+    isset($data->border_color) ||
+    isset($data->button_color)
+)) {
     try {
         $pdo->beginTransaction();
 
@@ -29,6 +39,41 @@ if (!empty($data->user_id) && (isset($data->auto_delete_minutes) || isset($data-
         if (isset($data->scramble_name)) {
             $fieldsToUpdate[] = "scramble_name = :scramble";
             $params[':scramble'] = $data->scramble_name ? 1 : 0;
+        }
+
+        if (isset($data->privacy_last_seen)) {
+            $fieldsToUpdate[] = "privacy_last_seen = :pls";
+            $params[':pls'] = $data->privacy_last_seen ? 1 : 0;
+        }
+
+        if (isset($data->privacy_read_receipts)) {
+            $fieldsToUpdate[] = "privacy_read_receipts = :prr";
+            $params[':prr'] = $data->privacy_read_receipts ? 1 : 0;
+        }
+
+        if (isset($data->privacy_profile_visibility)) {
+            $fieldsToUpdate[] = "privacy_profile_visibility = :ppv";
+            $params[':ppv'] = $data->privacy_profile_visibility;
+        }
+
+        if (isset($data->show_in_world)) {
+            $fieldsToUpdate[] = "show_in_world = :siw";
+            $params[':siw'] = $data->show_in_world ? 1 : 0;
+        }
+
+        if (isset($data->neon_color)) {
+            $fieldsToUpdate[] = "neon_color = :nc";
+            $params[':nc'] = $data->neon_color;
+        }
+
+        if (isset($data->border_color)) {
+            $fieldsToUpdate[] = "border_color = :boc";
+            $params[':boc'] = $data->border_color;
+        }
+
+        if (isset($data->button_color)) {
+            $fieldsToUpdate[] = "button_color = :buc";
+            $params[':buc'] = $data->button_color;
         }
 
         if (count($fieldsToUpdate) > 0) {

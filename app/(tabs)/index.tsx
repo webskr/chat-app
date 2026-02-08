@@ -9,17 +9,20 @@ import { GlassCard } from '../../components/GlassCard';
 import { SearchInput } from '../../components/SearchInput';
 import { router } from 'expo-router';
 import { Bookmark, MoreVertical } from 'lucide-react-native';
-
 import { getAvatarById } from '../../constants/Avatars';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
 import { useFocusEffect } from 'expo-router';
+import { formatChatTime } from '../../utils/time';
+import { EmptyState } from '../../components/EmptyState';
+import { MessageSquare } from 'lucide-react-native';
 
 export default function ChatScreen() {
     const { user } = useUser();
     const [chats, setChats] = React.useState<any[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [searchQuery, setSearchQuery] = React.useState('');
+    // const hasNavigatedRef = React.useRef(false); // REMOVED
 
     const fetchConversations = React.useCallback(async () => {
         if (!user) return;
@@ -39,8 +42,30 @@ export default function ChatScreen() {
     useFocusEffect(
         React.useCallback(() => {
             fetchConversations();
+            markDelivered();
+
+            const interval = setInterval(() => {
+                fetchConversations();
+                markDelivered();
+            }, 5000);
+
+            return () => clearInterval(interval);
         }, [fetchConversations])
     );
+
+    // Auto-redirection logic removed as per user request to always show chat list
+    const markDelivered = async () => {
+        if (!user) return;
+        try {
+            await fetch(`${Config.API_URL}/chat/mark_delivered.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: user.id })
+            });
+        } catch (error) {
+            console.error('Error marking delivered:', error);
+        }
+    };
 
     const filteredChats = React.useMemo(() => {
         return chats.filter(chat =>
@@ -64,14 +89,14 @@ export default function ChatScreen() {
             })}
         >
             <View style={styles.chatRow}>
-                <Avatar source={getAvatarById(item.other_avatar_id)} online={false} size={50} />
+                <Avatar source={getAvatarById(item.other_avatar_id)} online={item.is_online} size={50} />
                 <View style={styles.chatDetails}>
                     <View style={styles.rowTop}>
                         <ThemedText type="defaultSemiBold" style={styles.username} numberOfLines={1}>
                             {String(item.other_user_id) === String(user?.id) ? 'Note to self' : item.other_username}
                         </ThemedText>
                         <ThemedText style={[styles.time, item.unread_count > 0 && styles.timeActive]}>
-                            {new Date(item.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {formatChatTime(item.last_message_time)}
                         </ThemedText>
                     </View>
                     <View style={styles.rowBottom}>
@@ -116,8 +141,17 @@ export default function ChatScreen() {
                 data={filteredChats}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={renderItem}
-                contentContainerStyle={styles.listContent}
+                contentContainerStyle={[styles.listContent, filteredChats.length === 0 && { flex: 1 }]}
                 showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                    !isLoading ? (
+                        <EmptyState
+                            icon={MessageSquare}
+                            title="No conversations yet"
+                            message="Start chatting 🚀"
+                        />
+                    ) : null
+                }
             />
         </SafeAreaView>
     );
@@ -215,7 +249,7 @@ const styles = StyleSheet.create({
     },
     divider: {
         height: StyleSheet.hairlineWidth,
-        backgroundColor: Colors.glassBorder,
+        backgroundColor: '#454545ff',
         marginLeft: 80, // 16(pad) + 50(avatar) + 14(gap)
         opacity: 0.3,
     },
