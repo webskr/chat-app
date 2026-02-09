@@ -79,6 +79,8 @@ try {
             m.receiver_id, 
             m.message_text, 
             m.media_url,
+            m.duration,
+            m.message_type,
             m.status, 
             m.is_deleted,
             m.created_at,

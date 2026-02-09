@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Image as RNImage, Dimensions, AlertButton, Modal } from 'react-native';
+import { View, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Image as RNImage, Dimensions, AlertButton, Modal, Keyboard, Vibration } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -8,7 +8,7 @@ import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { GlassCard } from '../../components/GlassCard';
-import { ChevronLeft, Send, Image as ImageIcon, Smile, MoreVertical, Heart, ThumbsUp, Laugh, Angry, Frown, Sparkles, User, BellOff, Trash2, UserMinus, ShieldAlert, Flag, Timer, X, Paperclip, Check, CheckCheck, Edit2 } from 'lucide-react-native';
+import { ChevronLeft, Send, Image as ImageIcon, Smile, MoreVertical, Heart, ThumbsUp, Laugh, Angry, Frown, Sparkles, User, BellOff, Trash2, UserMinus, ShieldAlert, Flag, Timer, X, Paperclip, Check, CheckCheck, Edit2, Mic, StopCircle } from 'lucide-react-native';
 import { useFocusEffect } from 'expo-router';
 import { AppState } from 'react-native';
 import { getAvatarById } from '../../constants/Avatars';
@@ -23,6 +23,8 @@ import { EmptyState } from '../../components/EmptyState';
 import { MessageSquare, Copy, Trash } from 'lucide-react-native';
 import { FullScreenImageModal } from '../../components/FullScreenImageModal';
 import { ImageEditorModal } from '../../components/ImageEditorModal';
+import { VoiceMessageBubble } from '../../components/VoiceMessageBubble';
+import { Audio } from 'expo-av';
 
 import { ChatLockService } from '../../utils/ChatLockService';
 import { Lock, Unlock } from 'lucide-react-native';
@@ -47,6 +49,10 @@ export default function ChatDetailScreen() {
 
     const appState = useRef(AppState.currentState);
 
+    // Keyboard Handling State
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const [inputHeight, setInputHeight] = useState(60);
+
     // Socket & Typing Refs
     const socket = useRef<Socket | null>(null);
     const [isTyping, setIsTyping] = useState(false);
@@ -63,6 +69,13 @@ export default function ChatDetailScreen() {
 
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
     const [isFullScreenVisible, setIsFullScreenVisible] = useState(false);
+
+    // Voice Recording State
+    const [recording, setRecording] = useState<Audio.Recording | null>(null);
+    const [recordingStatus, setRecordingStatus] = useState<'idle' | 'recording' | 'stopped'>('idle');
+    const [recordingDuration, setRecordingDuration] = useState(0);
+    const recordingInterval = useRef<NodeJS.Timeout | null>(null);
+    const [isRecordingPermissionGranted, setIsRecordingPermissionGranted] = useState(false);
 
     // Chat Lock State
     const [isLocked, setIsLocked] = useState(false);
@@ -138,6 +151,12 @@ export default function ChatDetailScreen() {
                 }
             }, 3000);
 
+            // Request audio permissions on mount
+            (async () => {
+                const { status } = await Audio.requestPermissionsAsync();
+                setIsRecordingPermissionGranted(status === 'granted');
+            })();
+
             return () => {
                 subscription.remove();
                 clearInterval(interval);
@@ -184,6 +203,22 @@ export default function ChatDetailScreen() {
             socket.current?.disconnect();
         };
     }, [id, currentUser]);
+
+    useEffect(() => {
+        if (Platform.OS === 'android') {
+            const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
+                setKeyboardHeight(e.endCoordinates.height);
+            });
+            const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+                setKeyboardHeight(0);
+            });
+
+            return () => {
+                showSubscription.remove();
+                hideSubscription.remove();
+            };
+        }
+    }, []);
 
     const handleTyping = (text: string) => {
         setInputText(text);
@@ -414,6 +449,203 @@ export default function ChatDetailScreen() {
             if (!imagePath) setInputText(messageText);
         } finally {
             setIsSending(false);
+        }
+    };
+
+    const startRecording = async () => {
+        try {
+            if (!isRecordingPermissionGranted) {
+                const { status } = await Audio.requestPermissionsAsync();
+                if (status !== 'granted') {
+                    Alert.alert('Permission needed', 'Please grant microphone permission to record voice messages.');
+                    return;
+                }
+                setIsRecordingPermissionGranted(true);
+            }
+
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+            });
+
+            const { recording } = await Audio.Recording.createAsync(
+                Audio.RecordingOptionsPresets.HIGH_QUALITY
+            );
+            setRecording(recording);
+            setRecordingStatus('recording');
+            setRecordingDuration(0);
+
+            // Haptic feedback
+            if (Platform.OS !== 'web') Vibration.vibrate(50);
+
+            recordingInterval.current = setInterval(() => {
+                setRecordingDuration(prev => prev + 1);
+            }, 1000);
+
+            console.log('Recording started');
+        } catch (err) {
+            console.error('Failed to start recording', err);
+        }
+    };
+
+    const stopRecording = async () => {
+        console.log('Stopping recording..');
+        if (!recording) return;
+
+        setRecordingStatus('stopped');
+        if (recordingInterval.current) {
+            clearInterval(recordingInterval.current);
+            recordingInterval.current = null;
+        }
+
+        try {
+            await recording.stopAndUnloadAsync();
+            const uri = recording.getURI();
+            console.log('Recording stopped and stored at', uri);
+
+            // Validate duration
+            if (recordingDuration < 1) {
+                // Too short, discard
+                setRecording(null);
+                setRecordingStatus('idle');
+                setRecordingDuration(0);
+                return;
+            }
+
+            // Upload and send
+            if (uri) {
+                await uploadVoiceMessage(uri, recordingDuration);
+            }
+
+        } catch (error) {
+            console.error('Error stopping recording', error);
+        }
+
+        // Reset
+        setRecording(null);
+        setRecordingStatus('idle');
+        setRecordingDuration(0);
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+    };
+
+    const cancelRecording = async () => {
+        if (!recording) return;
+
+        setRecordingStatus('idle');
+        if (recordingInterval.current) {
+            clearInterval(recordingInterval.current);
+            recordingInterval.current = null;
+        }
+
+        try {
+            await recording.stopAndUnloadAsync();
+        } catch (error) {
+            console.error('Error cancelling recording', error);
+        }
+
+        setRecording(null);
+        setRecordingDuration(0);
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+    };
+
+    const uploadVoiceMessage = async (uri: string, duration: number) => {
+        setIsUploading(true);
+        const formData = new FormData();
+        const filename = uri.split('/').pop() || 'voice.m4a';
+
+        // Improve mime type detection if needed
+        const type = 'audio/m4a';
+
+        if (Platform.OS === 'web') {
+            try {
+                const res = await fetch(uri);
+                const blob = await res.blob();
+                formData.append('audio', blob, filename);
+            } catch (e) {
+                console.error("Web Blob conversion failed:", e);
+                setIsUploading(false);
+                return;
+            }
+        } else {
+            formData.append('audio', {
+                uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+                name: filename,
+                type: type
+            } as any);
+        }
+
+        if (currentUser?.id) formData.append('sender_id', String(currentUser.id));
+        formData.append('receiver_id', String(id));
+        formData.append('duration', String(duration));
+
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/upload_audio.php`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                },
+            });
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+
+                // Actually handleSend handles media via imagePath param but we have specific structure now
+                // Ideally handleSend should be generic.
+                // Our handleSend signature: (text, imagePath, isRetry).
+                // We need to support audioUrl.
+                // Let's modify handleSend to support generic media or call API directly here.
+                // Better: modify handleSend to accept an object or just call the API directly here to ensure fields are right.
+                // Re-using handleSend logic for optimistic UI is good though.
+
+                // Let's CALL the API directly to contain specific logic and avoid breaking handleSend signature too much, 
+                // OR overload handleSend.
+                // Let's overload handleSend to accept an optional 'extraParams' object?
+
+                // Actually, let's just do it here for simplicity and to match the backend 'send_message' expecting 'audio_url'.
+
+                // Optimistic update
+                const tempId = Date.now();
+                const newMessage = {
+                    id: tempId,
+                    sender_id: currentUser?.id,
+                    receiver_id: id,
+                    message_text: '',
+                    media_url: data.audio_url,
+                    message_type: 'voice',
+                    duration: duration,
+                    status: 'sending',
+                    created_at: new Date().toISOString(),
+                    is_local: true
+                };
+
+                // Add to list
+                // Add to list
+                setMessages(prev => [...prev, newMessage]);
+
+                // Send API
+                await fetch(`${Config.API_URL}/chat/send_message.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sender_id: currentUser?.id,
+                        receiver_id: id,
+                        audio_url: data.audio_url,
+                        duration: duration
+                    })
+                });
+
+                fetchMessages(); // Refresh to get real ID
+
+            } else {
+                Alert.alert('Upload Failed', data.message);
+            }
+
+        } catch (error) {
+            console.error('Voice upload error', error);
+            Alert.alert('Error', 'Failed to send voice message');
+        } finally {
+            setIsUploading(false);
         }
     };
 
@@ -1070,10 +1302,11 @@ export default function ChatDetailScreen() {
                             styles.bubble,
                             isMe ? styles.myBubble : styles.friendBubble,
                             !isLastInGroup && (isMe ? styles.myBubbleGroup : styles.friendBubbleGroup),
-                            item.media_url ? styles.imageBubble : null
+                            (item.media_url && (item.message_type === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.media_url)) && !/\.(m4a|mp3|wav|aac)$/i.test(item.media_url)) ? styles.imageBubble : null
                         ]}
                     >
-                        {item.media_url ? (
+
+                        {(item.media_url && (item.message_type === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.media_url)) && !/\.(m4a|mp3|wav|aac)$/i.test(item.media_url)) ? (
                             <TouchableOpacity
                                 onPress={() => {
                                     setFullScreenImage(`${Config.API_URL}/${item.media_url.replace(/^\//, '')}`);
@@ -1089,6 +1322,8 @@ export default function ChatDetailScreen() {
                                     resizeMode="cover"
                                 />
                             </TouchableOpacity>
+                        ) : (item.message_type === 'voice' || (item.media_url && /\.(m4a|mp3|wav|aac)$/i.test(item.media_url))) ? (
+                            <VoiceMessageBubble audioUrl={item.media_url} duration={item.duration || 0} isMe={isMe} />
                         ) : null}
 
                         {item.message_text ? (
@@ -1099,7 +1334,13 @@ export default function ChatDetailScreen() {
                     {isLastInGroup && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 2 }}>
                             <ThemedText numberOfLines={1} style={[styles.messageTime, isMe ? styles.myMessageTime : styles.friendMessageTime, { marginRight: isMe ? 4 : 0 }]}>
-                                {formatChatTime(item.created_at)}
+                                {(item.message_type === 'voice' || (item.media_url && /\.(m4a|mp3|wav|aac)$/i.test(item.media_url))) && item.duration ? (
+                                    <ThemedText style={{ fontSize: 10, marginRight: 6 }}>
+                                        {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, '0')} · {formatChatTime(item.created_at)}
+                                    </ThemedText>
+                                ) : (
+                                    formatChatTime(item.created_at)
+                                )}
                                 {item.is_edited && <ThemedText style={{ fontSize: 9, marginLeft: 4, fontStyle: 'italic', color: Colors.textSecondary }}>edited</ThemedText>}
                             </ThemedText>
                             {isMe && (
@@ -1227,107 +1468,313 @@ export default function ChatDetailScreen() {
                     <Timer size={32} color={Colors.primary} />
                 </View>
             ) : !isLocked || isAuthenticated ? (
-                <KeyboardAvoidingView
-                    style={{ flex: 1 }}
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-                    keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 100}
-                >
-                    <FlatList
-                        ref={flatListRef}
-                        data={[...messages, ...failedMessages]}
-                        keyExtractor={(item) => item.id.toString()}
-                        renderItem={renderMessage}
-                        style={{ flex: 1 }}
-                        contentContainerStyle={[styles.listContent, messages.length === 0 && { flex: 1 }, { paddingBottom: 20 }]}
-                        onScroll={handleScroll}
-                        scrollEventThrottle={16}
-                        onContentSizeChange={() => {
-                            if (isAtBottomRef.current) {
-                                flatListRef.current?.scrollToEnd({ animated: true });
+                Platform.OS === 'android' ? (
+                    <View style={{ flex: 1 }}>
+                        <FlatList
+                            ref={flatListRef}
+                            data={[...messages, ...failedMessages]}
+                            keyExtractor={(item) => item.id.toString()}
+                            renderItem={renderMessage}
+                            style={{ flex: 1 }}
+                            contentContainerStyle={[
+                                styles.listContent,
+                                messages.length === 0 && { flex: 1 },
+                                { paddingBottom: keyboardHeight + inputHeight + 20 }
+                            ]}
+                            onScroll={handleScroll}
+                            scrollEventThrottle={16}
+                            onContentSizeChange={() => {
+                                if (isAtBottomRef.current) {
+                                    flatListRef.current?.scrollToEnd({ animated: true });
+                                }
+                            }}
+                            keyboardShouldPersistTaps="handled"
+                            ListEmptyComponent={
+                                !isLoading ? (
+                                    <EmptyState
+                                        icon={MessageSquare}
+                                        title="No messages yet"
+                                        message={`Me: ${currentUser?.id || '?'}, Partner: ${id}. Waiting for messages... 👋`}
+                                    />
+                                ) : null
                             }
-                        }}
-                        ListEmptyComponent={
-                            !isLoading ? (
-                                <EmptyState
-                                    icon={MessageSquare}
-                                    title="No messages yet"
-                                    message={`Me: ${currentUser?.id || '?'}, Partner: ${id}. Waiting for messages... 👋`}
-                                />
-                            ) : null
-                        }
-                        showsVerticalScrollIndicator={false}
-                    />
+                            showsVerticalScrollIndicator={false}
+                        />
 
-                    {/* Input Area */}
-                    <View style={[styles.inputContainer]}>
-                        {showEmojiPicker && (
-                            <GlassCard style={styles.inputEmojiPicker}>
-                                <View style={styles.inputEmojiRow}>
-                                    {EMOJIS.map(emoji => (
-                                        <TouchableOpacity
-                                            key={emoji}
-                                            onPress={() => handleEmojiSelect(emoji)}
-                                            style={styles.inputEmojiButton}
-                                        >
-                                            <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
+                        {/* Input Area (Android Fixed) */}
+                        <View
+                            style={[
+                                styles.inputContainer,
+                                {
+                                    position: 'absolute',
+                                    bottom: keyboardHeight,
+                                    left: 0,
+                                    right: 0,
+                                }
+                            ]}
+                            onLayout={(e) => setInputHeight(e.nativeEvent.layout.height)}
+                        >
+                            {showEmojiPicker && (
+                                <GlassCard style={styles.inputEmojiPicker}>
+                                    <View style={styles.inputEmojiRow}>
+                                        {EMOJIS.map(emoji => (
+                                            <TouchableOpacity
+                                                key={emoji}
+                                                onPress={() => handleEmojiSelect(emoji)}
+                                                style={styles.inputEmojiButton}
+                                            >
+                                                <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
+                                            </TouchableOpacity>
+                                        ))}
+                                        <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
+                                            <X size={20} color={Colors.textSecondary} />
                                         </TouchableOpacity>
-                                    ))}
-                                    <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
-                                        <X size={20} color={Colors.textSecondary} />
-                                    </TouchableOpacity>
-                                </View>
-                            </GlassCard>
-                        )}
+                                    </View>
+                                </GlassCard>
+                            )}
 
-                        <View style={styles.inputArea}>
-                            <GlassCard
-                                style={styles.inputWrapper}
-                                contentContainerStyle={styles.inputContent}
-                                intensity={30}
-                            >
-                                {editingMessage ? (
-                                    <TouchableOpacity style={styles.iconButton} onPress={handleCancelEdit}>
-                                        <X size={22} color={Colors.error || '#FF3B30'} />
-                                    </TouchableOpacity>
-                                ) : (
-                                    <TouchableOpacity style={styles.iconButton} onPress={handlePickImage} disabled={isUploading}>
-                                        <Paperclip size={22} color={Colors.textSecondary} />
-                                    </TouchableOpacity>
-                                )}
-
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder={editingMessage ? "Edit message..." : "Type something..."}
-                                    placeholderTextColor={Colors.textSecondary}
-                                    value={inputText}
-                                    onChangeText={handleTyping}
-                                    multiline
-                                    maxLength={5000}
-                                    onFocus={() => setShowEmojiPicker(false)}
-                                />
-
-                                <TouchableOpacity
-                                    style={styles.iconButton}
-                                    onPress={() => editingMessage ? handleSaveEdit() : handleSend(inputText)}
-                                    disabled={!inputText.trim() || isSending || isUploading}
+                            <View style={styles.inputArea}>
+                                <GlassCard
+                                    style={styles.inputWrapper}
+                                    contentContainerStyle={styles.inputContent}
+                                    intensity={30}
                                 >
                                     {editingMessage ? (
-                                        <Check
-                                            size={22}
-                                            color={(inputText.trim()) ? Colors.primary : Colors.textSecondary}
-                                        />
+                                        <TouchableOpacity style={styles.iconButton} onPress={handleCancelEdit}>
+                                            <X size={22} color={Colors.error || '#FF3B30'} />
+                                        </TouchableOpacity>
                                     ) : (
-                                        <Send
-                                            size={22}
-                                            color={(inputText.trim() && !isSending && !isUploading) ? Colors.primary : Colors.textSecondary}
-                                            fill={(inputText.trim() && !isSending && !isUploading) ? Colors.primary : 'transparent'}
-                                        />
+                                        <TouchableOpacity style={styles.iconButton} onPress={handlePickImage} disabled={isUploading}>
+                                            <Paperclip size={22} color={Colors.textSecondary} />
+                                        </TouchableOpacity>
                                     )}
-                                </TouchableOpacity>
-                            </GlassCard>
+
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder={editingMessage ? "Edit message..." : "Type something..."}
+                                        placeholderTextColor={Colors.textSecondary}
+                                        value={inputText}
+                                        onChangeText={handleTyping}
+                                        multiline
+                                        maxLength={5000}
+                                        onFocus={() => setShowEmojiPicker(false)}
+                                    />
+
+                                    {inputText.trim() || editingMessage ? (
+                                        <TouchableOpacity
+                                            style={styles.iconButton}
+                                            onPress={() => editingMessage ? handleSaveEdit() : handleSend(inputText)}
+                                            disabled={!inputText.trim() || isSending || isUploading}
+                                        >
+                                            {editingMessage ? (
+                                                <View style={{ width: 30, height: 30, justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Check
+                                                        size={22}
+                                                        color={(inputText.trim()) ? Colors.primary : Colors.textSecondary}
+                                                    />
+                                                </View>
+                                            ) : (
+                                                <View style={{ width: 30, height: 30, justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Send
+                                                        size={22}
+                                                        color={(inputText.trim() && !isSending && !isUploading) ? Colors.primary : Colors.textSecondary}
+                                                        fill={(inputText.trim() && !isSending && !isUploading) ? Colors.primary : 'transparent'}
+                                                    />
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <TouchableOpacity
+                                            style={styles.iconButton}
+                                            onPressIn={startRecording}
+                                            onPressOut={stopRecording}
+                                            disabled={isUploading}
+                                        >
+                                            <View style={{
+                                                width: 30,
+                                                height: 30,
+                                                borderRadius: 20,
+                                                backgroundColor: recordingStatus === 'recording' ? Colors.error : 'transparent',
+                                                justifyContent: 'center',
+                                                alignItems: 'center'
+                                            }}>
+                                                <Mic
+                                                    size={22}
+                                                    color={recordingStatus === 'recording' ? '#fff' : Colors.textSecondary}
+                                                    fill={recordingStatus === 'recording' ? '#fff' : 'transparent'}
+                                                />
+                                            </View>
+                                        </TouchableOpacity>
+                                    )}
+                                </GlassCard>
+                                {recordingStatus === 'recording' && (
+                                    <View style={{
+                                        position: 'absolute',
+                                        top: -40,
+                                        left: 0,
+                                        right: 0,
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <GlassCard style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.error }} />
+                                                <ThemedText>{new Date(recordingDuration * 1000).toISOString().substr(14, 5)}</ThemedText>
+                                            </View>
+                                        </GlassCard>
+                                    </View>
+                                )}
+                            </View>
                         </View>
                     </View>
-                </KeyboardAvoidingView>
+                ) : (
+                    <KeyboardAvoidingView
+                        style={{ flex: 1 }}
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                    >
+                        <FlatList
+                            ref={flatListRef}
+                            data={[...messages, ...failedMessages]}
+                            keyExtractor={(item) => item.id.toString()}
+                            renderItem={renderMessage}
+                            style={{ flex: 1 }}
+                            contentContainerStyle={[styles.listContent, messages.length === 0 && { flex: 1 }, { paddingBottom: 20 }]}
+                            onScroll={handleScroll}
+                            scrollEventThrottle={16}
+                            onContentSizeChange={() => {
+                                if (isAtBottomRef.current) {
+                                    flatListRef.current?.scrollToEnd({ animated: true });
+                                }
+                            }}
+                            ListEmptyComponent={
+                                !isLoading ? (
+                                    <EmptyState
+                                        icon={MessageSquare}
+                                        title="No messages yet"
+                                        message={`Me: ${currentUser?.id || '?'}, Partner: ${id}. Waiting for messages... 👋`}
+                                    />
+                                ) : null
+                            }
+                            showsVerticalScrollIndicator={false}
+                        />
+
+                        {/* Input Area (iOS Standard) */}
+                        <View style={[styles.inputContainer]}>
+                            {showEmojiPicker && (
+                                <GlassCard style={styles.inputEmojiPicker}>
+                                    <View style={styles.inputEmojiRow}>
+                                        {EMOJIS.map(emoji => (
+                                            <TouchableOpacity
+                                                key={emoji}
+                                                onPress={() => handleEmojiSelect(emoji)}
+                                                style={styles.inputEmojiButton}
+                                            >
+                                                <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
+                                            </TouchableOpacity>
+                                        ))}
+                                        <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
+                                            <X size={20} color={Colors.textSecondary} />
+                                        </TouchableOpacity>
+                                    </View>
+                                </GlassCard>
+                            )}
+
+                            <View style={styles.inputArea}>
+                                <GlassCard
+                                    style={styles.inputWrapper}
+                                    contentContainerStyle={styles.inputContent}
+                                    intensity={30}
+                                >
+                                    {editingMessage ? (
+                                        <TouchableOpacity style={styles.iconButton} onPress={handleCancelEdit}>
+                                            <X size={22} color={Colors.error || '#FF3B30'} />
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <TouchableOpacity style={styles.iconButton} onPress={handlePickImage} disabled={isUploading}>
+                                            <Paperclip size={22} color={Colors.textSecondary} />
+                                        </TouchableOpacity>
+                                    )}
+
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder={editingMessage ? "Edit message..." : "Type something..."}
+                                        placeholderTextColor={Colors.textSecondary}
+                                        value={inputText}
+                                        onChangeText={handleTyping}
+                                        multiline
+                                        maxLength={5000}
+                                        onFocus={() => setShowEmojiPicker(false)}
+                                    />
+
+                                    {inputText.trim() || editingMessage ? (
+                                        <TouchableOpacity
+                                            style={styles.iconButton}
+                                            onPress={() => editingMessage ? handleSaveEdit() : handleSend(inputText)}
+                                            disabled={!inputText.trim() || isSending || isUploading}
+                                        >
+                                            {editingMessage ? (
+                                                <View style={{ width: 30, height: 30, justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Check
+                                                        size={22}
+                                                        color={(inputText.trim()) ? Colors.primary : Colors.textSecondary}
+                                                    />
+                                                </View>
+                                            ) : (
+                                                <View style={{ width: 30, height: 30, justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Send
+                                                        size={22}
+                                                        color={(inputText.trim() && !isSending && !isUploading) ? Colors.primary : Colors.textSecondary}
+                                                        fill={(inputText.trim() && !isSending && !isUploading) ? Colors.primary : 'transparent'}
+                                                    />
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <TouchableOpacity
+                                            style={styles.iconButton}
+                                            onPressIn={startRecording}
+                                            onPressOut={stopRecording}
+                                            disabled={isUploading}
+                                        >
+                                            <View style={{
+                                                width: 30,
+                                                height: 30,
+                                                borderRadius: 20,
+                                                backgroundColor: recordingStatus === 'recording' ? Colors.error : 'transparent',
+                                                justifyContent: 'center',
+                                                alignItems: 'center'
+                                            }}>
+                                                <Mic
+                                                    size={22}
+                                                    color={recordingStatus === 'recording' ? '#fff' : Colors.textSecondary}
+                                                    fill={recordingStatus === 'recording' ? '#fff' : 'transparent'}
+                                                />
+                                            </View>
+                                        </TouchableOpacity>
+                                    )}
+                                </GlassCard>
+                                {recordingStatus === 'recording' && (
+                                    <View style={{
+                                        position: 'absolute',
+                                        top: -40,
+                                        left: 0,
+                                        right: 0,
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <GlassCard style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.error }} />
+                                                <ThemedText>{new Date(recordingDuration * 1000).toISOString().substr(14, 5)}</ThemedText>
+                                            </View>
+                                        </GlassCard>
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+                    </KeyboardAvoidingView>
+                )
             ) : (
                 <View style={styles.lockScreenContainer}>
                     <Lock size={64} color={Colors.primary} style={styles.lockIcon} />
@@ -1692,11 +2139,11 @@ const styles = StyleSheet.create({
     },
     inputArea: {
         paddingHorizontal: 16,
-        paddingTop: 8,
-        paddingBottom: 8,
+        paddingTop: 6,
+        paddingBottom: 6,
     },
     inputWrapper: {
-        borderRadius: 25,
+        borderRadius: 24,
         overflow: 'hidden',
         backgroundColor: Colors.surface, // Or Colors.white if you want strictly white
         borderWidth: 1,
@@ -1704,12 +2151,12 @@ const styles = StyleSheet.create({
     },
     inputContent: {
         flexDirection: 'row',
-        alignItems: 'flex-end',
-        paddingHorizontal: 8,
-        paddingVertical: 10,
+        alignItems: 'center',
+        paddingHorizontal: 6,
+        paddingVertical: 6,
     },
     iconButton: {
-        padding: 10,
+        padding: 6,
     },
     input: {
         flex: 1,

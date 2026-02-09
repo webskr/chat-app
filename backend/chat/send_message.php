@@ -13,7 +13,7 @@ include_once '../includes/db_connection.php';
 
 $data = json_decode(file_get_contents("php://input"));
 
-if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->message) || !empty($data->image_path))) {
+if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->message) || !empty($data->image_path) || !empty($data->audio_url))) {
     // 0. Validate Message Length
     if (!empty($data->message) && mb_strlen($data->message) > 5000) {
         http_response_code(400);
@@ -53,7 +53,7 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
         $user1_id = min((int)$data->sender_id, (int)$data->receiver_id);
         $user2_id = max((int)$data->sender_id, (int)$data->receiver_id);
 
-        $msg_content = !empty($data->message) ? $data->message : '📷 Image';
+        $msg_content = !empty($data->message) ? $data->message : (!empty($data->audio_url) ? '🎤 Voice Message' : '📷 Image');
 
         // 1. Get or Create Conversation
         $conv_query = "INSERT INTO conversations (user1_id, user2_id, last_message) 
@@ -77,11 +77,16 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
         if ($image_path) {
             $message_type = 'image';
             $media_url = $image_path;
+        } elseif (!empty($data->audio_url)) {
+            $message_type = 'voice';
+            $media_url = $data->audio_url;
         }
 
+        $duration = !empty($data->duration) ? (int)$data->duration : 0;
+
         // 2. Insert Message
-        $msg_query = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_url) 
-                      VALUES (:cid, :sid, :rid, :msg, :type, :media)";
+        $msg_query = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_url, duration) 
+                      VALUES (:cid, :sid, :rid, :msg, :type, :media, :dur)";
         $msg_stmt = $pdo->prepare($msg_query);
         
         $message_text = !empty($data->message) ? $data->message : '';
@@ -92,7 +97,8 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
             ':rid' => $data->receiver_id, 
             ':msg' => $message_text,
             ':type' => $message_type,
-            ':media' => $media_url
+            ':media' => $media_url,
+            ':dur' => $duration
         ])) {
             http_response_code(200);
             echo json_encode(array("message" => "Message sent.", "conversation_id" => $conv_id));
