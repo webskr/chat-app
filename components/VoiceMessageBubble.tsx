@@ -20,7 +20,7 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({ audioUrl
     const [currentDuration, setCurrentDuration] = useState(duration * 1000); // ms
 
     // Mock waveform bars
-    const barCount = 20;
+    const barCount = 30;
     const waveformBars = useMemo(() => {
         return Array.from({ length: barCount }).map(() => Math.floor(Math.random() * 20) + 10);
     }, []);
@@ -167,8 +167,8 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     bar: {
-        width: 3,
-        borderRadius: 1.5,
+        width: 2,
+        borderRadius: 1,
     },
     durationText: {
         fontSize: 10,

@@ -1530,3 +1530,70 @@
 2026-02-07 10:12:13 - Extension: jpg
 2026-02-07 10:12:13 - Generated Filename: 10702202615ReactNative-snapshot-image8223014812822128745.jpg
 2026-02-07 10:12:13 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/10702202615ReactNative-snapshot-image8223014812822128745.jpg
+2026-02-10 05:29:31 - VIDEO UPLOAD REQUEST RECEIVED
+2026-02-10 05:29:31 - Extension: mp4, Size: 5822431
+2026-02-10 05:29:31 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/videos/vid_1_10022026052931_1000056087.mp4
+2026-02-10 06:17:06 - REQUEST RECEIVED
+2026-02-10 06:17:06 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [HTTP_ACCEPT] => application/json
+    [CONTENT_TYPE] => multipart/form-data; boundary=d54fd8f1-07b4-4d68-a5ec-e65425f69b2d
+    [CONTENT_LENGTH] => 50943
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 38282
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770700626.9275
+    [REQUEST_TIME] => 1770700626
+)
+
+2026-02-10 06:17:06 - FILES received:
+2026-02-10 06:17:06 - Array
+(
+    [image] => Array
+        (
+            [name] => ReactNative-snapshot-image6203218025470007582.jpg
+            [full_path] => ReactNative-snapshot-image6203218025470007582.jpg
+            [type] => image/jpeg
+            [tmp_name] => C:\xampp\tmp\phpBC62.tmp
+            [error] => 0
+            [size] => 50470
+        )
+
+)
+
+2026-02-10 06:17:06 - Extension: jpg
+2026-02-10 06:17:06 - Generated Filename: 1100220265ReactNative-snapshot-image6203218025470007582.jpg
+2026-02-10 06:17:06 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/1100220265ReactNative-snapshot-image6203218025470007582.jpg

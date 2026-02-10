@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert, ToastAndroid } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { BlurView } from 'expo-blur';
@@ -45,9 +45,12 @@ export default function SignupScreen() {
             if (response.ok) {
                 setIsLoading(false);
                 console.info('Signup response OK, showing alert');
-                Alert.alert('Success', 'Account created successfully!', [
-                    { text: 'OK', onPress: () => router.replace('/(auth)/login') }
-                ]);
+                if (Platform.OS === 'android') {
+                    ToastAndroid.show('Account created successfully!', ToastAndroid.LONG);
+                } else {
+                    Alert.alert('Success', 'Account created successfully!');
+                }
+                router.replace('/(auth)/login');
             } else {
                 setIsLoading(false);
                 const msg = data.message || 'Could not create account';

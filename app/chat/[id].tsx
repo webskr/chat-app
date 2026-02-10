@@ -24,10 +24,13 @@ import { MessageSquare, Copy, Trash } from 'lucide-react-native';
 import { FullScreenImageModal } from '../../components/FullScreenImageModal';
 import { ImageEditorModal } from '../../components/ImageEditorModal';
 import { VoiceMessageBubble } from '../../components/VoiceMessageBubble';
+import { VideoMessageBubble } from '../../components/VideoMessageBubble';
+import { DocumentMessageBubble } from '../../components/DocumentMessageBubble';
 import { Audio } from 'expo-av';
 
 import { ChatLockService } from '../../utils/ChatLockService';
-import { Lock, Unlock } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { Lock, Unlock, Video } from 'lucide-react-native';
 
 const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥', '✨', '👋', '🙏', '🎉', '💩', '🍔', '🍕'];
 
@@ -70,6 +73,10 @@ export default function ChatDetailScreen() {
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
     const [isFullScreenVisible, setIsFullScreenVisible] = useState(false);
 
+    const [isPlaying, setIsPlaying] = useState<boolean>(false);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
+
     // Voice Recording State
     const [recording, setRecording] = useState<Audio.Recording | null>(null);
     const [recordingStatus, setRecordingStatus] = useState<'idle' | 'recording' | 'stopped'>('idle');
@@ -85,6 +92,52 @@ export default function ChatDetailScreen() {
     const [lockPin, setLockPin] = useState('');
     const [unlockPin, setUnlockPin] = useState('');
     const [isCheckingLock, setIsCheckingLock] = useState(true);
+
+    // Helper to detect GIF URLs
+    const isGifUrl = (text: string) => {
+        return /(https?:\/\/.*\.(?:png|jpg|jpeg|gif|webp))/i.test(text) && (text.includes('giphy') || text.includes('tenor') || text.includes('imgur'));
+    };
+
+    const handleSendMessage = async () => {
+        if ((!inputText.trim() && !selectedImage) || !currentUser || !id) return;
+
+        const messageText = inputText.trim();
+        setInputText(''); // Clear input immediately
+
+        // Detect if it's a GIF URL
+        if (isGifUrl(messageText)) {
+            try {
+                await fetch(`${Config.API_URL}/chat/send_message.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sender_id: currentUser.id,
+                        receiver_id: id,
+                        gif_url: messageText
+                    })
+                });
+                fetchMessages();
+                return;
+            } catch (error) {
+                console.error('Error sending GIF:', error);
+            }
+        }
+
+        try {
+            await fetch(`${Config.API_URL}/chat/send_message.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sender_id: currentUser.id,
+                    receiver_id: id,
+                    message: messageText
+                })
+            });
+            fetchMessages();
+        } catch (error) {
+            console.error('Error sending message:', error);
+        }
+    };
 
     useEffect(() => {
         checkLockStatus();
@@ -649,6 +702,19 @@ export default function ChatDetailScreen() {
         }
     };
 
+    const handleAttachmentSelect = () => {
+        Alert.alert(
+            'Exclude', // Title - weird behavior on some platforms if empty
+            'Choose Media Type',
+            [
+                { text: 'Photo', onPress: handlePickImage },
+                { text: 'Video', onPress: handlePickVideo },
+                { text: 'Document', onPress: handlePickDocument },
+                { text: 'Cancel', style: 'cancel' }
+            ]
+        );
+    };
+
     const handlePickImage = async () => {
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
@@ -681,6 +747,220 @@ export default function ChatDetailScreen() {
         };
         await uploadImage(asset);
         setEditorImageUri(null);
+    };
+
+    const handlePickVideo = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+                allowsEditing: true, // Allow basic trimming if supported
+                quality: 1,
+            });
+
+            console.log('VIDEO PICKER RESULT:', result);
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const asset = result.assets[0];
+
+                // Validate size (approx 20MB limit)
+                if (asset.fileSize && asset.fileSize > 20 * 1024 * 1024) {
+                    Alert.alert('File too large', 'Video must be under 20MB.');
+                    return;
+                }
+
+                // Validate duration (60s limit)
+                if (asset.duration && asset.duration > 60000) {
+                    Alert.alert('Video too long', 'Video must be under 60 seconds.');
+                    return;
+                }
+
+                await uploadVideo(asset);
+            }
+        } catch (e) {
+            console.error('VIDEO PICKER ERROR:', e);
+            Alert.alert('Error', 'Failed to pick video');
+        }
+    };
+
+    const uploadVideo = async (asset: any) => {
+        setIsUploading(true);
+        console.log('STARTING VIDEO UPLOAD', asset);
+
+        const formData = new FormData();
+        const uri = asset.uri;
+        const filename = asset.fileName || uri.split('/').pop() || 'video.mp4';
+
+        let type = asset.mimeType || 'video/mp4';
+
+        if (Platform.OS === 'web') {
+            try {
+                const res = await fetch(uri);
+                const blob = await res.blob();
+                formData.append('video', blob, filename);
+            } catch (e) {
+                console.error("Web Blob conversion failed:", e);
+                setIsUploading(false);
+                return;
+            }
+        } else {
+            formData.append('video', {
+                uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+                name: filename,
+                type: type
+            } as any);
+        }
+
+        if (currentUser?.id) formData.append('sender_id', String(currentUser.id));
+        formData.append('receiver_id', String(id));
+        if (asset.duration) formData.append('duration', String(Math.ceil(asset.duration / 1000)));
+
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/upload_video.php`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                },
+            });
+
+            const text = await response.text();
+            console.log('UPLOAD VIDEO RESPONSE:', text);
+
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error("JSON Parse error", e);
+                Alert.alert('Error', 'Server returned invalid response');
+                return;
+            }
+
+            if (response.ok && data.success) {
+                await fetch(`${Config.API_URL}/chat/send_message.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sender_id: currentUser?.id,
+                        receiver_id: id,
+                        video_url: data.video_path,
+                        thumbnail_url: data.thumbnail_path,
+                        file_size: data.file_size,
+                        duration: Math.ceil((asset.duration || 0) / 1000)
+                    })
+                });
+
+                fetchMessages();
+            } else {
+                Alert.alert('Upload Failed', data.message || 'Could not upload video');
+            }
+        } catch (error) {
+            console.error('VIDEO UPLOAD ERROR:', error);
+            Alert.alert('Error', 'Network error during upload');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handlePickDocument = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/plain', 'application/zip'],
+                copyToCacheDirectory: true,
+            });
+
+            console.log('DOC PICKER RESULT:', result);
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const asset = result.assets[0];
+
+                if (asset.size && asset.size > 20 * 1024 * 1024) {
+                    Alert.alert('File too large', 'Max document size is 20MB');
+                    return;
+                }
+
+                await uploadDocument(asset);
+            }
+        } catch (e) {
+            console.error('DOC PICKER ERROR:', e);
+            Alert.alert('Error', 'Failed to pick document');
+        }
+    };
+
+    const uploadDocument = async (asset: any) => {
+        setIsUploading(true);
+        console.log('STARTING DOC UPLOAD', asset);
+
+        const formData = new FormData();
+        const uri = asset.uri;
+        const filename = asset.name || 'document';
+        const type = asset.mimeType || 'application/octet-stream';
+
+        if (Platform.OS === 'web') {
+            try {
+                const res = await fetch(uri);
+                const blob = await res.blob();
+                formData.append('document', blob, filename);
+            } catch (e) {
+                console.error("Web Blob conversion failed:", e);
+                setIsUploading(false);
+                return;
+            }
+        } else {
+            formData.append('document', {
+                uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+                name: filename,
+                type: type
+            } as any);
+        }
+
+        if (currentUser?.id) formData.append('sender_id', String(currentUser.id));
+        formData.append('receiver_id', String(id));
+
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/upload_document.php`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                },
+            });
+
+            const text = await response.text();
+            console.log('UPLOAD DOC RESPONSE:', text);
+
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error("JSON Parse error", e);
+                Alert.alert('Error', 'Server returned invalid response');
+                return;
+            }
+
+            if (response.ok && data.success) {
+                await fetch(`${Config.API_URL}/chat/send_message.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sender_id: currentUser?.id,
+                        receiver_id: id,
+                        file_url: data.file_path,
+                        file_size: data.file_size,
+                        file_name: data.file_name,
+                        mime_type: data.mime_type
+                    })
+                });
+
+                fetchMessages();
+            } else {
+                Alert.alert('Upload Failed', data.message || data.error || 'Could not upload document');
+            }
+        } catch (error) {
+            console.error('DOC UPLOAD ERROR:', error);
+            Alert.alert('Error', 'Network error during upload');
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     // Removed the old pickImage helper since we don't need the alert anymore
@@ -1324,6 +1604,41 @@ export default function ChatDetailScreen() {
                             </TouchableOpacity>
                         ) : (item.message_type === 'voice' || (item.media_url && /\.(m4a|mp3|wav|aac)$/i.test(item.media_url))) ? (
                             <VoiceMessageBubble audioUrl={item.media_url} duration={item.duration || 0} isMe={isMe} />
+                        ) : (item.message_type === 'video' || (item.media_url && /\.(mp4|mov|mkv|webm)$/i.test(item.media_url))) ? (
+                            <VideoMessageBubble
+                                videoUrl={item.media_url}
+                                thumbnailUrl={item.thumbnail_url}
+                                duration={item.duration}
+                                fileSize={item.file_size}
+                                isMe={isMe}
+                            />
+                        ) : (item.message_type === 'document' || (item.media_url && !/\.(jpg|jpeg|png|gif|webp|m4a|mp3|wav|aac|mp4|mov|mkv|webm)$/i.test(item.media_url))) ? (
+                            <DocumentMessageBubble
+                                fileUrl={item.media_url}
+                                fileName={item.file_name}
+                                fileSize={item.file_size}
+                                mimeType={item.mime_type}
+                                isMe={isMe}
+                            />
+                        ) : (item.message_type === 'gif' || (item.media_url && (item.media_url.includes('tenor') || item.media_url.includes('.gif')))) ? (
+                            <TouchableOpacity onPress={() => {
+                                setFullScreenImage(item.media_url);
+                                setIsFullScreenVisible(true);
+                            }} activeOpacity={0.9}>
+                                <RNImage
+                                    source={{ uri: item.media_url }}
+                                    style={{
+                                        width: 200,
+                                        height: 150,
+                                        borderRadius: 12,
+                                        backgroundColor: '#f0f0f0'
+                                    }}
+                                    resizeMode="cover"
+                                />
+                                <View style={{ position: 'absolute', bottom: 5, right: 5, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 4, borderRadius: 4 }}>
+                                    <ThemedText style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>GIF</ThemedText>
+                                </View>
+                            </TouchableOpacity>
                         ) : null}
 
                         {item.message_text ? (
@@ -1544,7 +1859,7 @@ export default function ChatDetailScreen() {
                                             <X size={22} color={Colors.error || '#FF3B30'} />
                                         </TouchableOpacity>
                                     ) : (
-                                        <TouchableOpacity style={styles.iconButton} onPress={handlePickImage} disabled={isUploading}>
+                                        <TouchableOpacity style={styles.iconButton} onPress={handleAttachmentSelect} disabled={isUploading}>
                                             <Paperclip size={22} color={Colors.textSecondary} />
                                         </TouchableOpacity>
                                     )}
