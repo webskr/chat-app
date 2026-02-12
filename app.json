@@ -13,15 +13,23 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.skr.chatapp"
     },
     "android": {
+      "package": "com.skr.chatapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "READ_MEDIA_AUDIO",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -29,7 +37,19 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Vegarm to access your photos",
+          "savePhotosPermission": "Allow Vegarm to save photos",
+          "isAccessMediaLocationEnabled": true,
+          "audioPermission": "Allow Vegarm to access your audio",
+          "videoPermission": "Allow Vegarm to access your videos"
+        }
+      ],
+      "expo-image-picker",
+      "expo-secure-store"
     ]
   }
 }

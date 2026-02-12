@@ -62,12 +62,6 @@ export default function TabLayout() {
                     href: null,
                 }}
             />
-            <Tabs.Screen
-                name="appearance"
-                options={{
-                    href: null,
-                }}
-            />
         </Tabs>
     );
 }

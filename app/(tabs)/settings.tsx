@@ -16,6 +16,7 @@ import {
     CircleHelp,
     MoreVertical,
     UserX,
+    UserPlus,
     Sliders,
     ChevronDown,
     Check
@@ -31,6 +32,7 @@ const SECTIONS = [
         title: 'Account',
         items: [
             { id: 'profile', icon: User, label: 'Profile', type: 'link' },
+            { id: 'invite', icon: UserPlus, label: 'Invite Friends', type: 'link' },
             { id: 'privacy', icon: Lock, label: 'Privacy', type: 'link' },
             { id: 'security', icon: Shield, label: 'Security', type: 'link' },
             { id: 'blocked', icon: UserX, label: 'Blocked Contacts', type: 'link' },
@@ -139,6 +141,7 @@ export default function SettingsScreen() {
                                         disabled={item.type === 'toggle'}
                                         onPress={() => {
                                             if (item.id === 'profile') router.push('/(tabs)/profile-edit');
+                                            if (item.id === 'invite') router.push('/invite');
                                             if (item.id === 'controls') router.push('/settings/controls');
                                             if (item.id === 'appearance') router.push('/appearance');
                                             if (item.id === 'blocked') router.push('/settings/blocked');

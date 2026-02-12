@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Image, Modal, Dimensions } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
-import { Play, X, Maximize2 } from 'lucide-react-native';
+import { Play, X, Download } from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
 import { ThemedText } from './ThemedText';
 import { Config } from '../constants/Config';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { saveMedia } from '../utils/mediaSaver';
 
 /* 
   RECOMMENDED: install expo-av if not already
@@ -18,11 +19,12 @@ interface VideoMessageBubbleProps {
     duration?: number;
     fileSize?: number;
     isMe: boolean;
+    onLongPress?: () => void;
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl, thumbnailUrl, duration, fileSize, isMe }) => {
+export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl, thumbnailUrl, duration, fileSize, isMe, onLongPress }) => {
     const [modalVisible, setModalVisible] = useState(false);
     const [status, setStatus] = useState<any>({});
 
@@ -49,6 +51,8 @@ export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl
             <TouchableOpacity
                 style={styles.container}
                 onPress={() => setModalVisible(true)}
+                onLongPress={onLongPress}
+                delayLongPress={300}
                 activeOpacity={0.9}
             >
                 <View style={styles.thumbnailContainer}>
@@ -73,13 +77,18 @@ export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl
                         </View>
                     </View>
 
-                    <View style={styles.footer}>
-                        <View style={styles.badge}>
-                            <ThemedText style={styles.badgeText}>
-                                {duration ? formatTime(duration) : 'Video'} • {formatSize(fileSize)}
-                            </ThemedText>
-                        </View>
+                    <View style={styles.badge}>
+                        <ThemedText style={styles.badgeText}>
+                            {duration ? formatTime(duration) : 'Video'} • {formatSize(fileSize)}
+                        </ThemedText>
                     </View>
+
+                    <TouchableOpacity
+                        style={styles.bubbleDownloadButton}
+                        onPress={() => saveMedia(videoUrl, 'video')}
+                    >
+                        <Download size={18} color="white" />
+                    </TouchableOpacity>
                 </View>
             </TouchableOpacity>
 
@@ -100,12 +109,21 @@ export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl
                         onPlaybackStatusUpdate={status => setStatus(() => status)}
                     />
 
-                    <TouchableOpacity
-                        style={styles.closeButton}
-                        onPress={() => setModalVisible(false)}
-                    >
-                        <X size={28} color="white" />
-                    </TouchableOpacity>
+                    <View style={styles.headerButtons}>
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={() => saveMedia(videoUrl, 'video')}
+                        >
+                            <Download size={26} color="white" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.headerButton}
+                            onPress={() => setModalVisible(false)}
+                        >
+                            <X size={28} color="white" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </Modal>
         </>
@@ -177,12 +195,27 @@ const styles = StyleSheet.create({
         width: SCREEN_WIDTH,
         height: SCREEN_HEIGHT,
     },
-    closeButton: {
+    headerButtons: {
         position: 'absolute',
         top: 50,
         right: 20,
+        flexDirection: 'row',
+        gap: 15,
+        alignItems: 'center',
+    },
+    headerButton: {
         backgroundColor: 'rgba(0,0,0,0.5)',
         padding: 8,
         borderRadius: 20,
-    }
+    },
+    bubbleDownloadButton: {
+        position: 'absolute',
+        bottom: 8,
+        right: 8,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: 6,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.3)',
+    },
 });

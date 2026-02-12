@@ -17,13 +17,27 @@ export const formatChatTime = (dateString: string | Date): string => {
 
     const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
+    // Manual Time Format (h:mm A)
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const formattedHours = hours % 12 || 12;
+    const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
+    const timeStr = `${formattedHours}:${formattedMinutes} ${ampm}`;
+
     if (compareDate.getTime() === today.getTime()) {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return timeStr;
     }
 
     if (compareDate.getTime() === yesterday.getTime()) {
-        return 'Yesterday';
+        return `Yesterday, ${timeStr}`;
     }
 
-    return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+    // Manual Date Format (d MMM yyyy, h:mm A)
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = date.getDate();
+    const month = MONTHS[date.getMonth()];
+    const year = date.getFullYear();
+
+    return `${day} ${month} ${year}, ${timeStr}`;
 };

@@ -92,12 +92,21 @@ try {
             m.read_at,
             m.is_edited,
             m.edited_at,
+            m.reply_to_message_id,
+            m.is_forwarded,
+            rm.sender_id AS reply_sender_id,
+            ru.username AS reply_username,
+            rm.message_text AS reply_text,
+            rm.media_url AS reply_media_url,
+            rm.message_type AS reply_type,
             u.username AS sender_name,
             u.avatar_id AS sender_avatar_id,
             ur.privacy_read_receipts AS receiver_read_receipts
         FROM messages m
         JOIN users u ON u.id = m.sender_id
         JOIN users ur ON ur.id = m.receiver_id
+        LEFT JOIN messages rm ON rm.id = m.reply_to_message_id
+        LEFT JOIN users ru ON ru.id = rm.sender_id
         WHERE m.conversation_id = :cid
           AND (:clearedAt IS NULL OR :clearedAt2 = '' OR m.created_at > :clearedAt3)
           AND (

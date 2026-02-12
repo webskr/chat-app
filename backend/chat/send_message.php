@@ -13,7 +13,7 @@ include_once '../includes/db_connection.php';
 
 $data = json_decode(file_get_contents("php://input"));
 
-if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->message) || !empty($data->image_path) || !empty($data->audio_url) || !empty($data->video_url) || !empty($data->file_url) || !empty($data->gif_url))) {
+if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->message) || !empty($data->image_path) || !empty($data->audio_url) || !empty($data->video_url) || !empty($data->file_url) || !empty($data->gif_url) || !empty($data->sticker_url))) {
     // 0. Validate Message Length
     if (!empty($data->message) && mb_strlen($data->message) > 5000) {
         http_response_code(400);
@@ -53,7 +53,7 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
         $user1_id = min((int)$data->sender_id, (int)$data->receiver_id);
         $user2_id = max((int)$data->sender_id, (int)$data->receiver_id);
 
-        $msg_content = !empty($data->message) ? $data->message : (!empty($data->audio_url) ? '🎤 Voice Message' : (!empty($data->video_url) ? '🎥 Video' : (!empty($data->file_url) ? '📄 Document' : (!empty($data->gif_url) ? '👾 GIF' : '📷 Image'))));
+        $msg_content = !empty($data->message) ? $data->message : (!empty($data->audio_url) ? '🎤 Voice Message' : (!empty($data->video_url) ? '🎥 Video' : (!empty($data->file_url) ? '📄 Document' : (!empty($data->gif_url) ? '👾 GIF' : (!empty($data->sticker_url) ? '🧩 Sticker' : '📷 Image')))));
 
         // 1. Get or Create Conversation
         $conv_query = "INSERT INTO conversations (user1_id, user2_id, last_message) 
@@ -95,15 +95,19 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
         } elseif (!empty($data->gif_url)) {
             $message_type = 'gif';
             $media_url = $data->gif_url;
+        } elseif (!empty($data->sticker_url)) {
+            $message_type = 'sticker';
+            $media_url = $data->sticker_url;
         }
 
         $duration = !empty($data->duration) ? (int)$data->duration : 0;
         $file_name = !empty($data->file_name) ? $data->file_name : null;
         $mime_type = !empty($data->mime_type) ? $data->mime_type : null;
+        $reply_to_message_id = !empty($data->reply_to_message_id) ? (int)$data->reply_to_message_id : null;
 
         // 2. Insert Message
-        $msg_query = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_url, thumbnail_url, duration, file_size, file_name, mime_type) 
-                      VALUES (:cid, :sid, :rid, :msg, :type, :media, :thumb, :dur, :size, :fname, :mime)";
+        $msg_query = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_url, thumbnail_url, duration, file_size, file_name, mime_type, reply_to_message_id) 
+                      VALUES (:cid, :sid, :rid, :msg, :type, :media, :thumb, :dur, :size, :fname, :mime, :reply_id)";
         $msg_stmt = $pdo->prepare($msg_query);
         
         $message_text = !empty($data->message) ? $data->message : '';
@@ -119,7 +123,8 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
             ':dur' => $duration,
             ':size' => $file_size,
             ':fname' => $file_name,
-            ':mime' => $mime_type
+            ':mime' => $mime_type,
+            ':reply_id' => $reply_to_message_id
         ])) {
             http_response_code(200);
             echo json_encode(array("message" => "Message sent.", "conversation_id" => $conv_id));

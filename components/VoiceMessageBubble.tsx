@@ -10,9 +10,10 @@ interface VoiceMessageBubbleProps {
     audioUrl: string;
     duration: number; // in seconds
     isMe: boolean;
+    onLongPress?: () => void;
 }
 
-export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({ audioUrl, duration, isMe }) => {
+export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({ audioUrl, duration, isMe, onLongPress }) => {
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [position, setPosition] = useState(0);
@@ -102,7 +103,12 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({ audioUrl
     const currentBarIndex = Math.floor(progress * barCount);
 
     return (
-        <View style={styles.container}>
+        <TouchableOpacity
+            style={styles.container}
+            onLongPress={onLongPress}
+            delayLongPress={300}
+            activeOpacity={1} // Don't dim the whole bubble on tap, only play button dims
+        >
             <View style={styles.mainRow}>
                 <TouchableOpacity onPress={handlePlayPause} style={styles.playButton} disabled={isLoading}>
                     {isLoading ? (
@@ -134,8 +140,7 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({ audioUrl
                     })}
                 </View>
             </View>
-
-        </View>
+        </TouchableOpacity>
     );
 };
 

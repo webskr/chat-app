@@ -1,10 +1,10 @@
 export const Colors = {
   // USER CONTROL: Change the 'primary' color below to change the app's main accent color
-  primary: '#036727ff', // WhatsApp Green
+  primary: '#036727', // WhatsApp Green
 
   // Base Colors
   background: '#0b1014', // Deep slate/charcoal - Main App Background
-  surface: '#152613ff',    // Card/Header Background
+  surface: '#152613',    // Card/Header Background
   surfaceLight: '#334155',
 
   // Secondary Colors

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert, ToastAndroid } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Link, router } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { BlurView } from 'expo-blur';
@@ -14,6 +15,16 @@ export default function SignupScreen() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [lastError, setLastError] = useState('');
+    const [inviteCode, setInviteCode] = useState<string | null>(null);
+
+    React.useEffect(() => {
+        AsyncStorage.getItem('pending_invite_code').then(code => {
+            if (code) {
+                console.log('Found pending invite code during signup:', code);
+                setInviteCode(code);
+            }
+        });
+    }, []);
 
     const handleSignup = async () => {
         setLastError('');
@@ -37,7 +48,7 @@ export default function SignupScreen() {
             const response = await fetch(`${Config.API_URL}/auth/signup.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, email, password }),
+                body: JSON.stringify({ username, email, password, invite_code: inviteCode }),
             });
 
             const data = await response.json();
@@ -50,6 +61,12 @@ export default function SignupScreen() {
                 } else {
                     Alert.alert('Success', 'Account created successfully!');
                 }
+
+                // Clear invite code after success
+                if (inviteCode) {
+                    await AsyncStorage.removeItem('pending_invite_code');
+                }
+
                 router.replace('/(auth)/login');
             } else {
                 setIsLoading(false);

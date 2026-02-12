@@ -4,7 +4,7 @@ import { FileText, Download, FileJson, FileType2, FileCode, FileSpreadsheet, Fil
 import { ThemedText } from './ThemedText';
 import { Colors } from '../constants/Colors';
 import { Config } from '../constants/Config';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 interface DocumentMessageBubbleProps {
@@ -13,9 +13,10 @@ interface DocumentMessageBubbleProps {
     fileSize: number;
     mimeType: string | null;
     isMe: boolean;
+    onLongPress?: () => void;
 }
 
-export const DocumentMessageBubble: React.FC<DocumentMessageBubbleProps> = ({ fileUrl, fileName, fileSize, mimeType, isMe }) => {
+export const DocumentMessageBubble: React.FC<DocumentMessageBubbleProps> = ({ fileUrl, fileName, fileSize, mimeType, isMe, onLongPress }) => {
 
     const fullUrl = fileUrl.startsWith('http') ? fileUrl : `${Config.API_URL}/${fileUrl.replace(/^\//, '')}`;
     const displaySize = fileSize ? (fileSize / (1024 * 1024)).toFixed(2) + ' MB' : '';
@@ -81,7 +82,13 @@ export const DocumentMessageBubble: React.FC<DocumentMessageBubbleProps> = ({ fi
     };
 
     return (
-        <TouchableOpacity style={styles.container} onPress={handleDownload} activeOpacity={0.8}>
+        <TouchableOpacity
+            style={styles.container}
+            onPress={handleDownload}
+            onLongPress={onLongPress}
+            delayLongPress={300}
+            activeOpacity={0.8}
+        >
             <View style={styles.iconContainer}>
                 {getIcon()}
             </View>

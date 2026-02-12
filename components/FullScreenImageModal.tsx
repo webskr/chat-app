@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Modal, View, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform, Image } from 'react-native';
 import { X, Download, Share2 } from 'lucide-react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { Colors } from '../constants/Colors';
 import { ThemedText } from './ThemedText';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { saveMedia } from '../utils/mediaSaver';
 
 interface FullScreenImageModalProps {
     visible: boolean;
@@ -21,30 +22,10 @@ export function FullScreenImageModal({ visible, imageUri, onClose }: FullScreenI
 
         setIsDownloading(true);
         try {
-            const { status } = await MediaLibrary.requestPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permission needed', 'Please grant permission to save images.');
-                setIsDownloading(false);
-                return;
-            }
-
-            const filename = imageUri.split('/').pop() || 'download.jpg';
-            const fileUri = FileSystem.cacheDirectory + filename;
-
-            const downloadRes = await FileSystem.downloadAsync(imageUri, fileUri);
-
-            if (downloadRes.status === 200) {
-                const asset = await MediaLibrary.createAssetAsync(downloadRes.uri);
-                await MediaLibrary.createAlbumAsync('ChatApp', asset, false);
-
-                if (Platform.OS === 'android') {
-                    const { ToastAndroid } = require('react-native');
-                    ToastAndroid.show('Image saved to gallery', ToastAndroid.SHORT);
-                } else {
-                    Alert.alert('Success', 'Image saved to gallery');
-                }
-            } else {
-                Alert.alert('Error', 'Failed to download image');
+            const success = await saveMedia(imageUri, 'image');
+            if (success && Platform.OS === 'android') {
+                const { ToastAndroid } = require('react-native');
+                ToastAndroid.show('Image saved to gallery', ToastAndroid.SHORT);
             }
         } catch (error) {
             console.error('Download error:', error);
