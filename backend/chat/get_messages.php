@@ -10,6 +10,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 include_once '../includes/db_connection.php';
+include_once 'otv_cleanup.php';
+include_once 'scheduled_message_service.php';
+
+// Lazy Execution: Process scheduled messages whenever someone fetches messages
+// This ensures messages are sent even if the CRON job is delayed or not set up
+processScheduledMessages($pdo);
 
 $me       = isset($_GET['sender_id']) ? (int)$_GET['sender_id'] : null;
 $other_id = isset($_GET['receiver_id']) ? (int)$_GET['receiver_id'] : null;
@@ -42,17 +48,23 @@ try {
         exit;
     }
 
-    // 1.5️⃣ Auto-Delete Cleanup (DISABLED TEMPORARILY FOR DEBUGGING)
-    /*
+    // 1.5️⃣ Auto-Delete Cleanup
     if (!empty($conv['auto_delete_minutes']) && $conv['auto_delete_minutes'] > 0) {
         $minutes = (int)$conv['auto_delete_minutes'];
+        // Use soft delete instead of hard delete to be safe, or hard delete if that's the requirement.
+        // User asked for "auto delete msgs", usually implies removal.
+        // The commented out code was DELETE. Let's stick to DELETE for now as per previous implementation intent, 
+        // or check if 'is_deleted' is preferred. 
+        // Given the OTV logic uses is_deleted, maybe we should use is_deleted here too for consistency?
+        // However, "Auto Delete" usually means "Disappearing Messages" which are gone forever. 
+        // Let's use DELETE but maybe keep the code simple.
+        
         $deleteSql = "DELETE FROM messages 
                       WHERE conversation_id = :cid 
                       AND created_at < (NOW() - INTERVAL :min MINUTE)";
         $delStmt = $pdo->prepare($deleteSql);
         $delStmt->execute([':cid' => $conv['id'], ':min' => $minutes]);
     }
-    */
 
     // 2️⃣ Determine cleared_at for current user
     if ($conv['user1_id'] == $me) {
@@ -87,6 +99,7 @@ try {
             m.mime_type,
             m.status, 
             m.is_deleted,
+            m.is_one_time,
             m.created_at,
             m.delivered_at,
             m.read_at,
@@ -113,6 +126,7 @@ try {
             (m.sender_id = :me AND m.hidden_for_sender = 0)
             OR (m.receiver_id = :me2 AND m.hidden_for_receiver = 0)
           )
+          AND m.status != 'scheduled'
         ORDER BY m.created_at ASC
     ";
 

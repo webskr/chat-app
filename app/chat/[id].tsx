@@ -28,14 +28,18 @@ import { ChatInputBar } from '../../components/chat/features/ChatInputBar';
 import { ReplyPreview } from '../../components/chat/features/ReplyPreview';
 import { ChatAttachmentPanel } from '../../components/chat/features/ChatAttachmentPanel';
 import { ChatLockScreen, LockSetupModal, UnlockPromptModal } from '../../components/chat/features/ChatLockUI';
+import { MediaPreviewModal } from '../../components/chat/features/MediaPreviewModal';
+import { OneTimeViewerModal } from '../../components/chat/features/OneTimeViewerModal';
 import { useVoiceRecording } from '../../components/chat/features/hooks/useVoiceRecording';
 import { useChatLock } from '../../components/chat/features/hooks/useChatLock';
 import { usePermissions } from '../../components/chat/features/hooks/usePermissions';
 import { styles } from '../../components/chat/features/styles';
 import { saveMedia } from '../../utils/mediaSaver';
+import { ScheduleConfirmationModal } from '../../components/chat/features/ScheduleConfirmationModal';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function ChatDetailScreen() {
-    const { id, user: otherUsername, avatar_id } = useLocalSearchParams<{ id: string, user: string, avatar_id: string }>();
+    const { id, user: otherUsername, avatar_id, avatar_url } = useLocalSearchParams<{ id: string, user: string, avatar_id: string, avatar_url?: string }>();
     const { user: currentUser } = useUser();
 
     // Core State
@@ -61,13 +65,32 @@ export default function ChatDetailScreen() {
     const [isEditorVisible, setIsEditorVisible] = useState(false);
     const [editorImageUri, setEditorImageUri] = useState<string | null>(null);
 
+    // Media Preview State
+    const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+    const [previewMedia, setPreviewMedia] = useState<{ type: 'image' | 'video' | 'document'; uri: string; name?: string; mimeType?: string; size?: number; duration?: number }[] | null>(null);
+
+    // OTV Viewer State
+    const [otvUrl, setOtvUrl] = useState<string | null>(null);
+    const [otvType, setOtvType] = useState<'image' | 'video'>('image');
+    const [otvVisible, setOtvVisible] = useState(false);
+
+
+
     // Media Panel State
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     const [isAttachmentPanelOpen, setIsAttachmentPanelOpen] = useState(false);
     const [isMediaSearching, setIsMediaSearching] = useState(false);
     const isMediaSearchingRef = useRef(false);
     const [panelActiveTab, setPanelActiveTab] = useState<'emoji' | 'gif' | 'sticker'>('emoji');
+
     const [panelHeight, setPanelHeight] = useState(380);
+
+    // Schedule State
+    const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
+    const [pendingScheduleTime, setPendingScheduleTime] = useState<Date | null>(null);
+    const [pendingScheduleText, setPendingScheduleText] = useState('');
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [datePickerMode, setDatePickerMode] = useState<'date' | 'time'>('date');
 
     // Data State
     const [relationshipStatus, setRelationshipStatus] = useState<string | null>(null);
@@ -145,6 +168,12 @@ export default function ChatDetailScreen() {
             const handleAppStateChange = async (nextAppState: any) => {
                 if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
                     setIsLoading(true);
+                    // Lazy Trigger: Check for scheduled messages on resume
+                    try {
+                        await fetch(`${Config.API_URL}/chat/trigger_scheduled.php`);
+                    } catch (e) {
+                        console.error("Scheduled trigger failed", e);
+                    }
                     await fetchMessages();
                     await updateLastSeen();
                     setIsLoading(false);
@@ -274,7 +303,8 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const handleSend = async (text: string = inputText, imagePath: string | null = null, isRetry = false) => {
+    const handleSend = async (text: string = inputText, imagePath: string | null = null, isRetry = false, isOneTime = false, scheduledAt: Date | null = null) => {
+        console.log('handleSend called:', { text, imagePath, isOneTime, scheduledAt });
         if (!currentUser) return;
         const messageText = text.trim();
         if (!messageText && !imagePath) return;
@@ -299,22 +329,33 @@ export default function ChatDetailScreen() {
             message_text: messageText,
             media_url: imagePath,
             message_type: imagePath ? 'image' : 'text',
-            status: 'sending',
-            created_at: new Date().toISOString(),
             is_local: true,
             reply_to_message_id: replyingToMessage?.id || null,
+            is_one_time: isOneTime ? 1 : 0,
+            status: scheduledAt ? 'scheduled' : 'sending', // Update status
         };
 
-        const localMessage = {
-            ...newMessage,
-            reply_sender_id: replyingToMessage?.sender_id,
-            reply_username: replyingToMessage ? (String(replyingToMessage.sender_id) === String(currentUser?.id) ? 'You' : (replyingToMessage.sender_name || 'User')) : null,
-            reply_text: replyingToMessage?.message_text,
-            reply_type: replyingToMessage?.message_type,
-            reply_media_url: replyingToMessage?.media_url
-        };
+        // If scheduled, we don't add to messages immediately OR we add it with a special status?
+        // Requirement: "Message must NOT appear in chat until delivered."
+        // So we should NOT add to `messages` state if scheduled.
+        // We can optionally show a toast or feedback.
 
-        setMessages(prev => [...prev, localMessage]);
+        if (!scheduledAt) {
+            const localMessage = {
+                ...newMessage,
+                reply_sender_id: replyingToMessage?.sender_id,
+                reply_username: replyingToMessage ? (String(replyingToMessage.sender_id) === String(currentUser?.id) ? 'You' : (replyingToMessage.sender_name || 'User')) : null,
+                reply_text: replyingToMessage?.message_text,
+                reply_type: replyingToMessage?.message_type,
+                reply_media_url: replyingToMessage?.media_url
+            };
+            setMessages(prev => [...prev, localMessage]);
+        } else {
+            // Provide feedback for scheduled message
+            Alert.alert("Scheduled", `Message scheduled for ${formatChatTime(scheduledAt)}`);
+            setInputText(''); // Clear input
+        }
+
         setReplyingToMessage(null);
 
         if (isRetry) {
@@ -330,16 +371,25 @@ export default function ChatDetailScreen() {
                     receiver_id: id,
                     message: messageText,
                     image_path: imagePath,
-                    reply_to_message_id: newMessage.reply_to_message_id
+                    reply_to_message_id: newMessage.reply_to_message_id,
+
+                    is_one_time: isOneTime ? 1 : 0,
+                    scheduled_at: scheduledAt ? scheduledAt.toISOString() : null
                 })
             });
 
             if (response.ok) {
-                isAtBottomRef.current = true;
-                fetchMessages();
+                if (!scheduledAt) {
+                    isAtBottomRef.current = true;
+                    fetchMessages();
+                }
             } else {
-                setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed' }]);
-                if (!imagePath) setInputText(messageText);
+                if (!scheduledAt) {
+                    setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed' }]);
+                    if (!imagePath) setInputText(messageText);
+                } else {
+                    Alert.alert("Error", "Failed to schedule message.");
+                }
             }
         } catch (error) {
             console.error('Error sending message:', error);
@@ -349,6 +399,7 @@ export default function ChatDetailScreen() {
             setIsSending(false);
         }
     };
+
 
     const handleTyping = (text: string) => {
         setInputText(text);
@@ -366,6 +417,8 @@ export default function ChatDetailScreen() {
         }
     };
 
+
+    // Media Panel State
     const handleAttachmentSelect = () => {
         Alert.alert('Choose Media Type', '', [
             { text: 'Photo', onPress: handlePickImage },
@@ -377,13 +430,34 @@ export default function ChatDetailScreen() {
 
     const handlePickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false,
+            mediaTypes: ImagePicker.MediaTypeOptions.All,
+            allowsMultipleSelection: true,
+            selectionLimit: 10,
+            allowsEditing: false, // Editing not supported for multiple selection usually
             quality: 0.8,
         });
+
         if (!result.canceled && result.assets && result.assets.length > 0) {
-            setEditorImageUri(result.assets[0].uri);
-            setIsEditorVisible(true);
+            const newMediaItems = result.assets.map(asset => {
+                const type = asset.type === 'video' ? 'video' : 'image';
+                if (type === 'video' && asset.fileSize && asset.fileSize > 50 * 1024 * 1024) {
+                    Alert.alert('File too large', 'One or more videos exceed the 50MB limit and were skipped.');
+                    return null;
+                }
+                return {
+                    type: type as 'image' | 'video',
+                    uri: asset.uri,
+                    name: asset.fileName || (type === 'video' ? 'video.mp4' : 'image.jpg'),
+                    mimeType: asset.mimeType || (type === 'video' ? 'video/mp4' : 'image/jpeg'),
+                    size: asset.fileSize ?? undefined,
+                    duration: asset.duration ?? undefined
+                };
+            }).filter(item => item !== null) as any[];
+
+            if (newMediaItems.length > 0) {
+                setPreviewMedia(newMediaItems);
+                setIsPreviewVisible(true);
+            }
         }
     };
 
@@ -422,22 +496,46 @@ export default function ChatDetailScreen() {
         try {
             const response = await fetch(`${Config.API_URL}/chat/upload_image.php`, { method: 'POST', body: formData });
             const data = await response.json();
-            if (response.ok && data.success) handleSend('', data.image_path);
+            if (response.ok && data.success) {
+                return { success: true, ...data };
+            }
         } catch (e) {
             console.error("Image upload failed", e);
         } finally {
             setIsUploading(false);
         }
+        return { success: false };
     };
 
     const handlePickVideo = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Videos, allowsEditing: true, quality: 1 });
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+            allowsMultipleSelection: true,
+            selectionLimit: 10,
+            allowsEditing: false,
+            quality: 1
+        });
+
         if (!result.canceled && result.assets && result.assets.length > 0) {
-            const asset = result.assets[0];
-            if (asset.fileSize && asset.fileSize > 20 * 1024 * 1024) return Alert.alert('File too large');
-            await uploadVideo(asset);
+            const newMediaItems = result.assets.map(asset => {
+                if (asset.fileSize && asset.fileSize > 50 * 1024 * 1024) return null;
+                return {
+                    type: 'video',
+                    uri: asset.uri,
+                    name: asset.fileName || 'video.mp4',
+                    mimeType: asset.mimeType || 'video/mp4',
+                    size: asset.fileSize ?? undefined,
+                    duration: asset.duration ?? undefined
+                };
+            }).filter(item => item !== null) as any[];
+
+            if (newMediaItems.length > 0) {
+                setPreviewMedia(newMediaItems);
+                setIsPreviewVisible(true);
+            }
         }
     };
+
 
     const uploadVideo = async (asset: any) => {
         setIsUploading(true);
@@ -457,26 +555,34 @@ export default function ChatDetailScreen() {
             const response = await fetch(`${Config.API_URL}/chat/upload_video.php`, { method: 'POST', body: formData });
             const data = await response.json();
             if (response.ok && data.success) {
-                await fetch(`${Config.API_URL}/chat/send_message.php`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sender_id: currentUser?.id, receiver_id: id, video_url: data.video_path, thumbnail_url: data.thumbnail_path, file_size: data.file_size, duration: Math.ceil((asset.duration || 0) / 1000) })
-                });
-                fetchMessages();
+                return { success: true, ...data };
             }
         } catch (e) {
             console.error("Video upload error", e);
         } finally {
             setIsUploading(false);
         }
+        return { success: false };
     };
 
     const handlePickDocument = async () => {
-        const result = await DocumentPicker.getDocumentAsync({ type: ['*/*'] });
+        const result = await DocumentPicker.getDocumentAsync({ type: ['*/*'], multiple: true });
         if (!result.canceled && result.assets && result.assets.length > 0) {
-            const asset = result.assets[0];
-            if (asset.size && asset.size > 20 * 1024 * 1024) return Alert.alert('File too large');
-            await uploadDocument(asset);
+            const newMediaItems = result.assets.map(asset => {
+                if (asset.size && asset.size > 50 * 1024 * 1024) return null;
+                return {
+                    type: 'document',
+                    uri: asset.uri,
+                    name: asset.name,
+                    mimeType: asset.mimeType,
+                    size: asset.size
+                };
+            }).filter(item => item !== null) as any[];
+
+            if (newMediaItems.length > 0) {
+                setPreviewMedia(newMediaItems);
+                setIsPreviewVisible(true);
+            }
         }
     };
 
@@ -497,18 +603,75 @@ export default function ChatDetailScreen() {
             const response = await fetch(`${Config.API_URL}/chat/upload_document.php`, { method: 'POST', body: formData });
             const data = await response.json();
             if (response.ok && data.success) {
-                await fetch(`${Config.API_URL}/chat/send_message.php`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sender_id: currentUser?.id, receiver_id: id, file_url: data.file_path, file_size: data.file_size, file_name: data.file_name, mime_type: data.mime_type })
-                });
-                fetchMessages();
+                return { success: true, ...data };
             }
         } catch (e) {
             console.error("Doc upload error", e);
         } finally {
             setIsUploading(false);
         }
+        return { success: false };
+    };
+
+    const handleMediaPreviewSend = async (caption: string, isOneTime: boolean) => {
+        console.log('handleMediaPreviewSend called:', isOneTime);
+        if (!previewMedia || previewMedia.length === 0) return;
+        setIsPreviewVisible(false);
+
+        const mediaItems = previewMedia; // Capture current state
+        setPreviewMedia(null); // Clear state immediately
+
+        // Iterate and send
+        for (let i = 0; i < mediaItems.length; i++) {
+            const item = mediaItems[i];
+            const itemCaption = i === 0 ? caption : ''; // Attach caption only to the first item
+
+            let uploadResult;
+
+            if (item.type === 'image') {
+                uploadResult = await uploadImage({ uri: item.uri, type: item.mimeType, fileName: item.name });
+                if (uploadResult.success) {
+                    handleSend(itemCaption, uploadResult.image_path, false, isOneTime);
+                }
+            } else if (item.type === 'video') {
+                uploadResult = await uploadVideo({ uri: item.uri, fileName: item.name, mimeType: item.mimeType, duration: item.duration });
+                if (uploadResult.success) {
+                    await fetch(`${Config.API_URL}/chat/send_message.php`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sender_id: currentUser?.id,
+                            receiver_id: id,
+                            message: itemCaption,
+                            video_url: uploadResult.video_path,
+                            thumbnail_url: uploadResult.thumbnail_path,
+                            file_size: uploadResult.file_size,
+                            duration: Math.ceil((item.duration || 0) / 1000),
+                            is_one_time: isOneTime ? 1 : 0
+                        })
+                    });
+                }
+            } else if (item.type === 'document') {
+                uploadResult = await uploadDocument({ uri: item.uri, name: item.name, mimeType: item.mimeType, size: item.size });
+                if (uploadResult.success) {
+                    await fetch(`${Config.API_URL}/chat/send_message.php`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sender_id: currentUser?.id,
+                            receiver_id: id,
+                            message: itemCaption,
+                            file_url: uploadResult.file_path,
+                            file_size: uploadResult.file_size,
+                            file_name: uploadResult.file_name,
+                            mime_type: uploadResult.mime_type,
+                            is_one_time: isOneTime ? 1 : 0
+                        })
+                    });
+                }
+            }
+        }
+        fetchMessages();
     };
 
     const uploadVoiceMessage = async (uri: string, duration: number) => {
@@ -630,6 +793,27 @@ export default function ChatDetailScreen() {
         ]);
     };
 
+    const handleRequestSchedule = (date: Date, text: string) => {
+        setPendingScheduleTime(date);
+        setPendingScheduleText(text);
+        setScheduleModalVisible(true);
+    };
+
+    const handleConfirmSchedule = () => {
+        if (pendingScheduleTime && pendingScheduleText) {
+            handleSend(pendingScheduleText, null, false, false, pendingScheduleTime);
+            setScheduleModalVisible(false);
+            setPendingScheduleTime(null);
+            setPendingScheduleText('');
+        }
+    };
+
+    const handleCancelSchedule = () => {
+        setScheduleModalVisible(false);
+        setPendingScheduleTime(null);
+        setPendingScheduleText('');
+    };
+
     const handleClearChat = async () => {
         Alert.alert('Clear Chat', 'Delete all messages?', [
             { text: 'Cancel', style: 'cancel' },
@@ -734,8 +918,15 @@ export default function ChatDetailScreen() {
     };
 
     const handleForwardSelected = () => {
-        const selectedMsgs = messages.filter(m => selectedMessageIds.includes(m.id));
-        if (selectedMsgs.length === 0) return;
+        // Filter out One-Time View messages from forwarding
+        const selectedMsgs = messages.filter(m => selectedMessageIds.includes(m.id) && !m.is_one_time);
+
+        if (selectedMsgs.length === 0) {
+            if (selectedMessageIds.some(id => messages.find(m => m.id === id)?.is_one_time)) {
+                Alert.alert('Cannot Forward', 'One-Time View messages cannot be forwarded.');
+            }
+            return;
+        }
 
         const messageIds = selectedMsgs.map(m => m.id).join(',');
         const firstMessageText = selectedMsgs[0].message_text || (selectedMsgs[0].media_url ? '[Media]' : '');
@@ -827,13 +1018,39 @@ export default function ChatDetailScreen() {
     };
 
     const handleSaveMediaToDevice = async (msg: any) => {
-        if (!msg.media_url) return;
+        if (!msg.media_url || msg.is_one_time) {
+            if (msg.is_one_time) Alert.alert('Restricted', 'One-Time View messages cannot be saved.');
+            return;
+        }
         setMessageOptionsVisible(false);
         const type = (msg.message_type === 'voice' || (msg.media_url && /\.(m4a|mp3|wav|aac)$/i.test(msg.media_url))) ? 'audio' :
             (msg.message_type === 'video' || (msg.media_url && /\.(mp4|mov|mkv|webm)$/i.test(msg.media_url))) ? 'video' :
                 (msg.message_type === 'document' || (msg.media_url && !/\.(jpg|jpeg|png|webp|gif|sticker|mp4|mov|mkv|webm|m4a|mp3|wav|aac)$/i.test(msg.media_url))) ? 'document' : 'image';
 
         await saveMedia(msg.media_url, type, msg.file_name);
+    };
+
+    const handleViewOneTimeMessage = async (url: string, messageId: number) => {
+        console.log('handleViewOneTimeMessage called:', { url, messageId });
+        // Detect type
+        const type = (/\.(mp4|mov|mkv|webm)$/i.test(url)) ? 'video' : 'image';
+
+        setOtvUrl(url);
+        setOtvType(type);
+        setOtvVisible(true);
+
+        // Optimistic update
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'seen' } : m));
+
+        try {
+            await fetch(`${Config.API_URL}/chat/mark_one_time_seen.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message_id: messageId, user_id: currentUser?.id })
+            });
+        } catch (e) {
+            console.error('Failed to mark OTV as seen', e);
+        }
     };
 
     const renderMessage = ({ item, index }: any) => (
@@ -856,7 +1073,14 @@ export default function ChatDetailScreen() {
             onReaction={(msgId: number, emoji: string) => { }} // TODO
             onDelete={handleDeleteMessage}
             onSend={handleSend}
-            onImagePress={(url: string) => { setFullScreenImage(url); setIsFullScreenVisible(true); }}
+            onImagePress={(url: string, isOneTime?: boolean, messageId?: number) => {
+                if (isOneTime && messageId) {
+                    handleViewOneTimeMessage(url, messageId);
+                } else {
+                    setFullScreenImage(url);
+                    setIsFullScreenVisible(true);
+                }
+            }}
             onQuotePress={scrollToMessage}
             onForward={handleForwardMessage}
             selectedMessageId={selectedMessageId}
@@ -880,6 +1104,7 @@ export default function ChatDetailScreen() {
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <ChatHeader
                 id={id} otherUsername={otherUsername} avatar_id={avatar_id}
+                avatar_url={avatar_url}
                 currentUser={currentUser} targetUserProfile={targetUserProfile}
                 isTyping={isTyping} relationshipStatus={relationshipStatus}
                 menuVisible={menuVisible} setMenuVisible={setMenuVisible}
@@ -921,6 +1146,7 @@ export default function ChatDetailScreen() {
                                 panelActiveTab={panelActiveTab} setPanelActiveTab={setPanelActiveTab}
                                 isAttachmentPanelOpen={isAttachmentPanelOpen} setIsAttachmentPanelOpen={setIsAttachmentPanelOpen}
                                 isUploading={isUploading} isSending={isSending} inputRef={inputRef} Platform={Platform}
+                                onRequestSchedule={handleRequestSchedule}
                             />
                         </View>
                     </View>
@@ -949,6 +1175,7 @@ export default function ChatDetailScreen() {
                                 panelActiveTab={panelActiveTab} setPanelActiveTab={setPanelActiveTab}
                                 isAttachmentPanelOpen={isAttachmentPanelOpen} setIsAttachmentPanelOpen={setIsAttachmentPanelOpen}
                                 isUploading={isUploading} isSending={isSending} inputRef={inputRef} Platform={Platform}
+                                onRequestSchedule={handleRequestSchedule}
                             />
                         </View>
                     </KeyboardAvoidingView>
@@ -970,8 +1197,18 @@ export default function ChatDetailScreen() {
 
             <LockSetupModal visible={showLockSetup} onClose={() => setShowLockSetup(false)} lockPin={lockPin} setLockPin={setLockPin} onConfirm={handleConfirmLock} />
             <UnlockPromptModal visible={showUnlockPrompt} onClose={() => setShowUnlockPrompt(false)} unlockPin={unlockPin} setUnlockPin={setUnlockPin} onConfirm={handleConfirmUnlock} />
+            <OneTimeViewerModal visible={otvVisible} url={otvUrl} type={otvType} onClose={() => setOtvVisible(false)} />
             <FullScreenImageModal visible={isFullScreenVisible} imageUri={fullScreenImage} onClose={() => setIsFullScreenVisible(false)} />
             <ImageEditorModal visible={isEditorVisible} imageUri={editorImageUri} onClose={() => setIsEditorVisible(false)} onSend={handleEditorSend} />
+            <MediaPreviewModal visible={isPreviewVisible} media={previewMedia} onClose={() => setIsPreviewVisible(false)} onSend={handleMediaPreviewSend} />
+
+            <ScheduleConfirmationModal
+                visible={scheduleModalVisible}
+                scheduledTime={pendingScheduleTime}
+                messageText={pendingScheduleText}
+                onConfirm={handleConfirmSchedule}
+                onCancel={handleCancelSchedule}
+            />
 
             {/* Options Modal */}
             <Modal transparent={true} visible={messageOptionsVisible} animationType="fade" onRequestClose={() => setMessageOptionsVisible(false)}>
@@ -981,10 +1218,12 @@ export default function ChatDetailScreen() {
                         <TouchableOpacity style={styles.modalOption} onPress={() => { Clipboard.setStringAsync(selectedMessageForOptions?.message_text || ''); setMessageOptionsVisible(false); }}>
                             <Copy size={20} color={Colors.text} /><ThemedText style={styles.modalOptionText}>Copy</ThemedText>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.modalOption} onPress={() => handleForwardMessage(selectedMessageForOptions)}>
-                            <Send size={20} color={Colors.text} /><ThemedText style={styles.modalOptionText}>Forward</ThemedText>
-                        </TouchableOpacity>
-                        {selectedMessageForOptions?.media_url && (
+                        {!selectedMessageForOptions?.is_one_time && (
+                            <TouchableOpacity style={styles.modalOption} onPress={() => handleForwardMessage(selectedMessageForOptions)}>
+                                <Send size={20} color={Colors.text} /><ThemedText style={styles.modalOptionText}>Forward</ThemedText>
+                            </TouchableOpacity>
+                        )}
+                        {selectedMessageForOptions?.media_url && !selectedMessageForOptions.is_one_time && (
                             <TouchableOpacity style={styles.modalOption} onPress={() => handleSaveMediaToDevice(selectedMessageForOptions)}>
                                 <Download size={20} color={Colors.text} />
                                 <ThemedText style={styles.modalOptionText}>

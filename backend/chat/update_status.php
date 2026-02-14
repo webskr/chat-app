@@ -61,6 +61,7 @@ if (!empty($data->user_id) && !empty($data->sender_id) && !empty($data->status))
                   delivered_at = COALESCE(delivered_at, NOW())
               WHERE receiver_id = :me
               AND sender_id = :them
+              AND is_one_time = 0 
               AND status != 'seen'";
             $stmt = $pdo->prepare($query);
             $stmt->execute([':me' => $user_id, ':them' => $sender_id]);

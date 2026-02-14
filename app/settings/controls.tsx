@@ -221,6 +221,22 @@ export default function ControlsScreen() {
                                 disabled={isUpdating}
                             />
                         </View>
+                        <View style={styles.innerDivider} />
+
+                        {/* OTV Auto-Delete Toggle */}
+                        <View style={styles.switchRow}>
+                            <View style={styles.settingTextContainer}>
+                                <ThemedText style={styles.settingLabel}>Auto-delete Sent OTV</ThemedText>
+                                <ThemedText style={styles.settingCaption}>Automatically delete one-time messages you send 5 minutes after they are opened.</ThemedText>
+                            </View>
+                            <Switch
+                                value={!!user?.auto_delete_otv}
+                                onValueChange={(val) => updatePrivacySetting('auto_delete_otv', val)}
+                                trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
+                                thumbColor={Colors.white}
+                                disabled={isUpdating}
+                            />
+                        </View>
                     </View>
                 </View>
 

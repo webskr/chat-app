@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Animated, Dimensions, TouchableWithoutFeedback, Platform, Text } from 'react-native';
-import { Image, Camera, MapPin, User, FileText, Music, BarChart2, IndianRupee, Map, Sparkles, X } from 'lucide-react-native';
+import { Image, Camera, MapPin, User, FileText, Music, BarChart2, IndianRupee, Map, Sparkles, X, Clock } from 'lucide-react-native';
 import { Colors } from '../../../constants/Colors';
 import { ThemedText } from '../../../components/ThemedText';
 import { GlassCard } from '../../../components/GlassCard';
@@ -75,6 +75,7 @@ export const ChatAttachmentPanel: React.FC<ChatAttachmentPanelProps> = ({ visibl
         { id: 'location', label: 'Location', icon: MapPin, color: '#00C7BE', onPress: () => onSelect('location') },
         { id: 'contact', label: 'Contact', icon: User, color: '#30D158', onPress: () => onSelect('contact') },
         { id: 'poll', label: 'Poll', icon: BarChart2, color: '#FFCC00', onPress: () => onSelect('poll') },
+        { id: 'schedule', label: 'Schedule', icon: Clock, color: '#FF9500', onPress: () => onSelect('schedule') },
         { id: 'ai', label: 'AI Gen', icon: Sparkles, color: '#007AFF', onPress: () => onSelect('ai') },
     ];
 

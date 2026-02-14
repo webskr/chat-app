@@ -21,7 +21,7 @@ if (!$user_id) {
 
 try {
     // Fetch users who sent a friend request to the current user (Received)
-    $queryReceived = "SELECT u.id, u.username, u.display_name, u.avatar_id, u.created_at, r.created_at as request_time
+    $queryReceived = "SELECT u.id, u.username, u.display_name, u.avatar_id, u.avatar_url, u.created_at, r.created_at as request_time
                       FROM users u
                       JOIN relationships r ON u.id = r.user_id
                       WHERE r.target_id = :uid AND r.status = 'pending'
@@ -32,7 +32,7 @@ try {
     $received = $stmtReceived->fetchAll(PDO::FETCH_ASSOC);
 
     // Fetch users to whom the current user sent a request (Sent)
-    $querySent = "SELECT u.id, u.username, u.display_name, u.avatar_id, u.created_at, r.created_at as request_time
+    $querySent = "SELECT u.id, u.username, u.display_name, u.avatar_id, u.avatar_url, u.created_at, r.created_at as request_time
                   FROM users u
                   JOIN relationships r ON u.id = r.target_id
                   WHERE r.user_id = :uid AND r.status = 'pending'

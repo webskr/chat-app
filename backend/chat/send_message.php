@@ -105,9 +105,18 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
         $mime_type = !empty($data->mime_type) ? $data->mime_type : null;
         $reply_to_message_id = !empty($data->reply_to_message_id) ? (int)$data->reply_to_message_id : null;
 
+        // OTV Fields
+        $is_one_time = !empty($data->is_one_time) ? 1 : 0;
+        // Default 5 minutes if not specified, only if is_one_time
+        $delete_after_seconds = ($is_one_time && !empty($data->delete_after_seconds)) ? (int)$data->delete_after_seconds : ($is_one_time ? 300 : 0);
+
+        // Scheduled Message
+        $scheduled_at = !empty($data->scheduled_at) ? $data->scheduled_at : null;
+        $status = $scheduled_at ? 'scheduled' : 'sent';
+
         // 2. Insert Message
-        $msg_query = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_url, thumbnail_url, duration, file_size, file_name, mime_type, reply_to_message_id) 
-                      VALUES (:cid, :sid, :rid, :msg, :type, :media, :thumb, :dur, :size, :fname, :mime, :reply_id)";
+        $msg_query = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_url, thumbnail_url, duration, file_size, file_name, mime_type, reply_to_message_id, is_one_time, delete_after_seconds, scheduled_at, status) 
+                      VALUES (:cid, :sid, :rid, :msg, :type, :media, :thumb, :dur, :size, :fname, :mime, :reply_id, :is_ot, :del_sec, :sch_at, :status)";
         $msg_stmt = $pdo->prepare($msg_query);
         
         $message_text = !empty($data->message) ? $data->message : '';
@@ -124,7 +133,11 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
             ':size' => $file_size,
             ':fname' => $file_name,
             ':mime' => $mime_type,
-            ':reply_id' => $reply_to_message_id
+            ':reply_id' => $reply_to_message_id,
+            ':is_ot' => $is_one_time,
+            ':del_sec' => $delete_after_seconds,
+            ':sch_at' => $scheduled_at,
+            ':status' => $status
         ])) {
             http_response_code(200);
             echo json_encode(array("message" => "Message sent.", "conversation_id" => $conv_id));

@@ -1787,3 +1787,1337 @@
 2026-02-11 17:33:16 - Extension: jpg
 2026-02-11 17:33:16 - Generated Filename: 1110220265ReactNative-snapshot-image8353899613794182776.jpg
 2026-02-11 17:33:16 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/1110220265ReactNative-snapshot-image8353899613794182776.jpg
+2026-02-12 14:40:40 - REQUEST RECEIVED
+2026-02-12 14:40:40 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=101d30a0-ffb4-4b49-ac25-3c711f4f5e8f
+    [CONTENT_LENGTH] => 93562
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 40732
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770903640.2583
+    [REQUEST_TIME] => 1770903640
+)
+
+2026-02-12 14:40:40 - FILES received:
+2026-02-12 14:40:40 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056880.png
+            [full_path] => 1000056880.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpBA6.tmp
+            [error] => 0
+            [size] => 93125
+        )
+
+)
+
+2026-02-12 14:40:40 - Extension: png
+2026-02-12 14:40:40 - Generated Filename: 11202202651000056880.png
+2026-02-12 14:40:40 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056880.png
+2026-02-12 14:43:09 - REQUEST RECEIVED
+2026-02-12 14:43:09 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=ba1a6822-f0bb-4b45-a7bc-bb4e78ccf58a
+    [CONTENT_LENGTH] => 298175
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 48322
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770903789.2335
+    [REQUEST_TIME] => 1770903789
+)
+
+2026-02-12 14:43:09 - FILES received:
+2026-02-12 14:43:09 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056885.png
+            [full_path] => 1000056885.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\php5171.tmp
+            [error] => 0
+            [size] => 297737
+        )
+
+)
+
+2026-02-12 14:43:09 - Extension: png
+2026-02-12 14:43:09 - Generated Filename: 11202202651000056885.png
+2026-02-12 14:43:09 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056885.png
+2026-02-12 14:57:43 - REQUEST RECEIVED
+2026-02-12 14:57:43 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=df23cf11-b305-42c8-9082-e447a32ad17f
+    [CONTENT_LENGTH] => 948316
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 40484
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770904662.8291
+    [REQUEST_TIME] => 1770904662
+)
+
+2026-02-12 14:57:43 - FILES received:
+2026-02-12 14:57:43 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056930.png
+            [full_path] => 1000056930.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpA5EB.tmp
+            [error] => 0
+            [size] => 947878
+        )
+
+)
+
+2026-02-12 14:57:43 - Extension: png
+2026-02-12 14:57:43 - Generated Filename: 11202202651000056930.png
+2026-02-12 14:57:43 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056930.png
+2026-02-12 14:59:44 - REQUEST RECEIVED
+2026-02-12 14:59:44 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=8b0d3f56-0b36-49ff-a2f1-e157d2fb1d26
+    [CONTENT_LENGTH] => 1137906
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 44086
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770904784.5017
+    [REQUEST_TIME] => 1770904784
+)
+
+2026-02-12 14:59:44 - FILES received:
+2026-02-12 14:59:44 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056928.png
+            [full_path] => 1000056928.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\php8134.tmp
+            [error] => 0
+            [size] => 1137467
+        )
+
+)
+
+2026-02-12 14:59:44 - Extension: png
+2026-02-12 14:59:44 - Generated Filename: 11202202651000056928.png
+2026-02-12 14:59:44 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056928.png
+2026-02-12 15:02:17 - REQUEST RECEIVED
+2026-02-12 15:02:17 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=3ecb25a9-df86-4212-9c44-c1c94337a384
+    [CONTENT_LENGTH] => 1161590
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 44086
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770904936.8887
+    [REQUEST_TIME] => 1770904936
+)
+
+2026-02-12 15:02:17 - FILES received:
+2026-02-12 15:02:17 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056927.png
+            [full_path] => 1000056927.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpD47C.tmp
+            [error] => 0
+            [size] => 1161151
+        )
+
+)
+
+2026-02-12 15:02:17 - Extension: png
+2026-02-12 15:02:17 - Generated Filename: 11202202651000056927.png
+2026-02-12 15:02:17 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056927.png
+2026-02-12 15:02:28 - REQUEST RECEIVED
+2026-02-12 15:02:28 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=d5c87df7-76f2-4cde-b0f2-5a33ed08893d
+    [CONTENT_LENGTH] => 1137906
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 44086
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770904948.3819
+    [REQUEST_TIME] => 1770904948
+)
+
+2026-02-12 15:02:28 - FILES received:
+2026-02-12 15:02:28 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056928.png
+            [full_path] => 1000056928.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\php159.tmp
+            [error] => 0
+            [size] => 1137467
+        )
+
+)
+
+2026-02-12 15:02:28 - Extension: png
+2026-02-12 15:02:28 - Generated Filename: 11202202651000056928.png
+2026-02-12 15:02:28 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056928.png
+2026-02-12 15:05:59 - REQUEST RECEIVED
+2026-02-12 15:05:59 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=217f2bba-23be-42b8-8896-302d5a05953e
+    [CONTENT_LENGTH] => 1137906
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 39668
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770905158.8135
+    [REQUEST_TIME] => 1770905158
+)
+
+2026-02-12 15:05:59 - FILES received:
+2026-02-12 15:05:59 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056928.png
+            [full_path] => 1000056928.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\php3760.tmp
+            [error] => 0
+            [size] => 1137467
+        )
+
+)
+
+2026-02-12 15:05:59 - Extension: png
+2026-02-12 15:05:59 - Generated Filename: 11202202651000056928.png
+2026-02-12 15:05:59 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056928.png
+2026-02-12 15:12:01 - REQUEST RECEIVED
+2026-02-12 15:12:01 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=b75ed149-34f2-4cde-b129-2a7dabaa9667
+    [CONTENT_LENGTH] => 895499
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 44452
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770905520.8868
+    [REQUEST_TIME] => 1770905520
+)
+
+2026-02-12 15:12:01 - FILES received:
+2026-02-12 15:12:01 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056931.png
+            [full_path] => 1000056931.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpBDBF.tmp
+            [error] => 0
+            [size] => 895061
+        )
+
+)
+
+2026-02-12 15:12:01 - Extension: png
+2026-02-12 15:12:01 - Generated Filename: 11202202651000056931.png
+2026-02-12 15:12:01 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056931.png
+2026-02-12 15:12:39 - REQUEST RECEIVED
+2026-02-12 15:12:39 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => keep-alive
+    [CONTENT_LENGTH] => 345925
+    [HTTP_USER_AGENT] => Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+    [CONTENT_TYPE] => multipart/form-data; boundary=----WebKitFormBoundary6q6shTfzrGBVnt63
+    [HTTP_ACCEPT] => */*
+    [HTTP_ORIGIN] => http://localhost:8082
+    [HTTP_REFERER] => http://localhost:8082/
+    [HTTP_ACCEPT_ENCODING] => gzip, deflate
+    [HTTP_ACCEPT_LANGUAGE] => en-US,en;q=0.9,hi;q=0.8
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.5
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 58038
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770905559.4584
+    [REQUEST_TIME] => 1770905559
+)
+
+2026-02-12 15:12:39 - FILES received:
+2026-02-12 15:12:39 - Array
+(
+    [image] => Array
+        (
+            [name] => Untitled_design__25_-removebg-preview.png
+            [full_path] => Untitled_design__25_-removebg-preview.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\php5462.tmp
+            [error] => 0
+            [size] => 345514
+        )
+
+)
+
+2026-02-12 15:12:39 - Extension: png
+2026-02-12 15:12:39 - Generated Filename: 5120220261Untitled_design__25_-removebg-preview.png
+2026-02-12 15:12:39 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/5120220261Untitled_design__25_-removebg-preview.png
+2026-02-12 15:13:41 - REQUEST RECEIVED
+2026-02-12 15:13:41 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => keep-alive
+    [CONTENT_LENGTH] => 89017
+    [HTTP_USER_AGENT] => Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1
+    [CONTENT_TYPE] => multipart/form-data; boundary=----WebKitFormBoundaryM3JBkzyRekheiLaq
+    [HTTP_ACCEPT] => */*
+    [HTTP_ORIGIN] => http://localhost:8082
+    [HTTP_REFERER] => http://localhost:8082/
+    [HTTP_ACCEPT_ENCODING] => gzip, deflate
+    [HTTP_ACCEPT_LANGUAGE] => en-US,en;q=0.9,hi;q=0.8
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.5
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 50322
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770905621.0118
+    [REQUEST_TIME] => 1770905621
+)
+
+2026-02-12 15:13:41 - FILES received:
+2026-02-12 15:13:41 - Array
+(
+    [image] => Array
+        (
+            [name] => WhatsApp Image 2026-02-10 at 12.21.20 PM.jpeg
+            [full_path] => WhatsApp Image 2026-02-10 at 12.21.20 PM.jpeg
+            [type] => image/jpeg
+            [tmp_name] => C:\xampp\tmp\php44DE.tmp
+            [error] => 0
+            [size] => 88601
+        )
+
+)
+
+2026-02-12 15:13:41 - Extension: jpeg
+2026-02-12 15:13:41 - Generated Filename: 5120220261WhatsAppImage2026-02-10at122120PM.jpeg
+2026-02-12 15:13:41 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/5120220261WhatsAppImage2026-02-10at122120PM.jpeg
+2026-02-12 15:17:32 - REQUEST RECEIVED
+2026-02-12 15:17:32 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=35402b28-be16-417d-95b7-d3a0a358c467
+    [CONTENT_LENGTH] => 895499
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 44562
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770905852.6042
+    [REQUEST_TIME] => 1770905852
+)
+
+2026-02-12 15:17:32 - FILES received:
+2026-02-12 15:17:32 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056931.png
+            [full_path] => 1000056931.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpCD89.tmp
+            [error] => 0
+            [size] => 895061
+        )
+
+)
+
+2026-02-12 15:17:33 - Extension: png
+2026-02-12 15:17:33 - Generated Filename: 11202202651000056931.png
+2026-02-12 15:17:33 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056931.png
+2026-02-12 15:29:53 - REQUEST RECEIVED
+2026-02-12 15:29:53 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=28cb4e24-4279-4bca-8abe-c585f0aa30fd
+    [CONTENT_LENGTH] => 895499
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 43536
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770906593.2315
+    [REQUEST_TIME] => 1770906593
+)
+
+2026-02-12 15:29:53 - FILES received:
+2026-02-12 15:29:53 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056931.png
+            [full_path] => 1000056931.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\php1A9B.tmp
+            [error] => 0
+            [size] => 895061
+        )
+
+)
+
+2026-02-12 15:29:53 - Extension: png
+2026-02-12 15:29:53 - Generated Filename: 11202202651000056931.png
+2026-02-12 15:29:53 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056931.png
+2026-02-12 15:36:10 - REQUEST RECEIVED
+2026-02-12 15:36:10 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=870e98c1-e1c9-4ab8-a6a3-77d29a8830d2
+    [CONTENT_LENGTH] => 948316
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 44378
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770906970.1076
+    [REQUEST_TIME] => 1770906970
+)
+
+2026-02-12 15:36:10 - FILES received:
+2026-02-12 15:36:10 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056930.png
+            [full_path] => 1000056930.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpDAC7.tmp
+            [error] => 0
+            [size] => 947878
+        )
+
+)
+
+2026-02-12 15:36:10 - Extension: png
+2026-02-12 15:36:10 - Generated Filename: 11202202651000056930.png
+2026-02-12 15:36:10 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056930.png
+2026-02-12 16:31:10 - REQUEST RECEIVED
+2026-02-12 16:31:10 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=96892313-65dc-4462-9119-8e6302653785
+    [CONTENT_LENGTH] => 1161590
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 40414
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770910270.3582
+    [REQUEST_TIME] => 1770910270
+)
+
+2026-02-12 16:31:10 - FILES received:
+2026-02-12 16:31:10 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056927.png
+            [full_path] => 1000056927.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\php3662.tmp
+            [error] => 0
+            [size] => 1161151
+        )
+
+)
+
+2026-02-12 16:31:10 - Extension: png
+2026-02-12 16:31:10 - Generated Filename: 11202202651000056927.png
+2026-02-12 16:31:10 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056927.png
+2026-02-12 16:37:35 - REQUEST RECEIVED
+2026-02-12 16:37:35 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=c4ddc64c-e1d5-421c-9f1e-9de2d4c02483
+    [CONTENT_LENGTH] => 948316
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 38284
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770910654.9815
+    [REQUEST_TIME] => 1770910654
+)
+
+2026-02-12 16:37:35 - FILES received:
+2026-02-12 16:37:35 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056930.png
+            [full_path] => 1000056930.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\php14D4.tmp
+            [error] => 0
+            [size] => 947878
+        )
+
+)
+
+2026-02-12 16:37:35 - Extension: png
+2026-02-12 16:37:35 - Generated Filename: 11202202651000056930.png
+2026-02-12 16:37:35 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11202202651000056930.png
+2026-02-13 06:55:52 - VIDEO UPLOAD REQUEST RECEIVED
+2026-02-13 06:55:52 - Extension: mp4, Size: 3540442
+2026-02-13 06:55:52 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/videos/vid_1_13022026065552_1000051957.mp4
+2026-02-13 07:23:02 - REQUEST RECEIVED
+2026-02-13 07:23:02 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=139d7c62-97b3-4e7d-bd24-76348c7f8f81
+    [CONTENT_LENGTH] => 351505
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 39826
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770963782.4893
+    [REQUEST_TIME] => 1770963782
+)
+
+2026-02-13 07:23:02 - FILES received:
+2026-02-13 07:23:02 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056943.png
+            [full_path] => 1000056943.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpBE23.tmp
+            [error] => 0
+            [size] => 351067
+        )
+
+)
+
+2026-02-13 07:23:02 - Extension: png
+2026-02-13 07:23:02 - Generated Filename: 11302202651000056943.png
+2026-02-13 07:23:02 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11302202651000056943.png
+2026-02-13 07:23:02 - REQUEST RECEIVED
+2026-02-13 07:23:02 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=a125d4a1-778c-4fed-9d74-26dd2ab442fe
+    [CONTENT_LENGTH] => 895499
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 39826
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770963782.7235
+    [REQUEST_TIME] => 1770963782
+)
+
+2026-02-13 07:23:02 - FILES received:
+2026-02-13 07:23:02 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056931.png
+            [full_path] => 1000056931.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpBF0E.tmp
+            [error] => 0
+            [size] => 895061
+        )
+
+)
+
+2026-02-13 07:23:02 - Extension: png
+2026-02-13 07:23:02 - Generated Filename: 11302202651000056931.png
+2026-02-13 07:23:02 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11302202651000056931.png
+2026-02-13 07:23:03 - REQUEST RECEIVED
+2026-02-13 07:23:03 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=ca1861f2-3487-4c60-9e23-e838d9afbc00
+    [CONTENT_LENGTH] => 948316
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 39828
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770963782.9936
+    [REQUEST_TIME] => 1770963782
+)
+
+2026-02-13 07:23:03 - FILES received:
+2026-02-13 07:23:03 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056930.png
+            [full_path] => 1000056930.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpC019.tmp
+            [error] => 0
+            [size] => 947878
+        )
+
+)
+
+2026-02-13 07:23:03 - Extension: png
+2026-02-13 07:23:03 - Generated Filename: 11302202651000056930.png
+2026-02-13 07:23:03 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11302202651000056930.png
+2026-02-13 07:23:03 - REQUEST RECEIVED
+2026-02-13 07:23:03 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=25133310-a144-4be5-b00e-8470b16bb56c
+    [CONTENT_LENGTH] => 1161590
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 39828
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770963783.4229
+    [REQUEST_TIME] => 1770963783
+)
+
+2026-02-13 07:23:03 - FILES received:
+2026-02-13 07:23:03 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056927.png
+            [full_path] => 1000056927.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpC1CF.tmp
+            [error] => 0
+            [size] => 1161151
+        )
+
+)
+
+2026-02-13 07:23:03 - Extension: png
+2026-02-13 07:23:03 - Generated Filename: 11302202651000056927.png
+2026-02-13 07:23:03 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11302202651000056927.png
+2026-02-13 07:23:04 - REQUEST RECEIVED
+2026-02-13 07:23:04 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=c74839ab-fbcb-4850-9772-4ae42b6eafa9
+    [CONTENT_LENGTH] => 1137906
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 39826
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770963783.9605
+    [REQUEST_TIME] => 1770963783
+)
+
+2026-02-13 07:23:04 - FILES received:
+2026-02-13 07:23:04 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056928.png
+            [full_path] => 1000056928.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpC3E3.tmp
+            [error] => 0
+            [size] => 1137467
+        )
+
+)
+
+2026-02-13 07:23:04 - Extension: png
+2026-02-13 07:23:04 - Generated Filename: 11302202651000056928.png
+2026-02-13 07:23:04 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11302202651000056928.png
+2026-02-13 07:23:04 - REQUEST RECEIVED
+2026-02-13 07:23:04 - Array
+(
+    [MIBDIRS] => C:/xampp/php/extras/mibs
+    [MYSQL_HOME] => \xampp\mysql\bin
+    [OPENSSL_CONF] => C:/xampp/apache/bin/openssl.cnf
+    [PHP_PEAR_SYSCONF_DIR] => \xampp\php
+    [PHPRC] => \xampp\php
+    [TMP] => \xampp\tmp
+    [CONTENT_TYPE] => multipart/form-data; boundary=0eb02359-4115-45ba-b584-1d478093687b
+    [CONTENT_LENGTH] => 129040
+    [HTTP_HOST] => 10.61.238.5
+    [HTTP_CONNECTION] => Keep-Alive
+    [HTTP_ACCEPT_ENCODING] => gzip
+    [HTTP_USER_AGENT] => okhttp/4.12.0
+    [PATH] => C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Program Files (x86)\VMware\VMware Workstation\bin\;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;C:\Program Files\nodejs\;C:\Program Files\cursor\resources\app\bin;C:\Users\draj8\AppData\Local\Programs\Python\Python313\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python313\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\Scripts\;C:\Users\draj8\AppData\Local\Programs\Python\Python312\;C:\Users\draj8\AppData\Local\Microsoft\WindowsApps;C:\Users\draj8\Downloads\flutter_windows_3.19.2-stable\flutter\bin;C:\Users\draj8\AppData\Local\Programs\Microsoft VS Code\bin;D:\MinGW\bin;C:\Users\draj8\AppData\Roaming\npm;C:\Users\draj8\AppData\Local\Programs\Qoder\bin;C:\Users\draj8\AppData\Local\Programs\Antigravity\bin
+    [SystemRoot] => C:\WINDOWS
+    [COMSPEC] => C:\WINDOWS\system32\cmd.exe
+    [PATHEXT] => .COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW
+    [WINDIR] => C:\WINDOWS
+    [SERVER_SIGNATURE] => <address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at 10.61.238.5 Port 80</address>
+
+    [SERVER_SOFTWARE] => Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12
+    [SERVER_NAME] => 10.61.238.5
+    [SERVER_ADDR] => 10.61.238.5
+    [SERVER_PORT] => 80
+    [REMOTE_ADDR] => 10.61.238.188
+    [DOCUMENT_ROOT] => C:/xampp/htdocs
+    [REQUEST_SCHEME] => http
+    [CONTEXT_PREFIX] => 
+    [CONTEXT_DOCUMENT_ROOT] => C:/xampp/htdocs
+    [SERVER_ADMIN] => postmaster@localhost
+    [SCRIPT_FILENAME] => C:/xampp/htdocs/chat-app/backend/chat/upload_image.php
+    [REMOTE_PORT] => 39828
+    [GATEWAY_INTERFACE] => CGI/1.1
+    [SERVER_PROTOCOL] => HTTP/1.1
+    [REQUEST_METHOD] => POST
+    [QUERY_STRING] => 
+    [REQUEST_URI] => /chat-app/backend/chat/upload_image.php
+    [SCRIPT_NAME] => /chat-app/backend/chat/upload_image.php
+    [PHP_SELF] => /chat-app/backend/chat/upload_image.php
+    [REQUEST_TIME_FLOAT] => 1770963784.3213
+    [REQUEST_TIME] => 1770963784
+)
+
+2026-02-13 07:23:04 - FILES received:
+2026-02-13 07:23:04 - Array
+(
+    [image] => Array
+        (
+            [name] => 1000056923.png
+            [full_path] => 1000056923.png
+            [type] => image/png
+            [tmp_name] => C:\xampp\tmp\phpC54C.tmp
+            [error] => 0
+            [size] => 128602
+        )
+
+)
+
+2026-02-13 07:23:04 - Extension: png
+2026-02-13 07:23:04 - Generated Filename: 11302202651000056923.png
+2026-02-13 07:23:04 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11302202651000056923.png

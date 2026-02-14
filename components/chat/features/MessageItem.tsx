@@ -52,6 +52,7 @@ export const MessageItem = React.memo(({
     const isVideo = item.message_type === 'video' || (item.media_url && /\.(mp4|mov|mkv|webm)$/i.test(item.media_url));
     const isDocument = item.message_type === 'document' || (item.media_url && !isSticker && !isGif && !isVideo && !/\.(jpg|jpeg|png|webp|m4a|mp3|wav|aac)$/i.test(item.media_url));
     const isImage = (item.media_url && (item.message_type === 'image' || (!item.message_type && /\.(jpg|jpeg|png|webp)$/i.test(item.media_url)))) && !isSticker && !isGif;
+    const isOneTime = Number(item.is_one_time) === 1 || item.is_one_time === true || item.is_one_time === 'true';
 
     const renderLeftActions = () => {
         return (
@@ -148,6 +149,7 @@ export const MessageItem = React.memo(({
                             isVideo ? styles.videoBubble : null,
                             isGif ? styles.gifBubble : null,
                             isDocument ? styles.documentBubble : null,
+                            isOneTime ? styles.otvBubble : null,
                             isSticker ? { backgroundColor: 'transparent', borderWidth: 0, padding: 0, shadowOpacity: 0, elevation: 0, borderRadius: 0 } : null,
                             { opacity: pressed ? 0.9 : 1 }
                         ]}
@@ -189,96 +191,112 @@ export const MessageItem = React.memo(({
                         ) : null}
 
                         {!item.is_deleted ? (
-                            isSticker ? (
-                                <Pressable onLongPress={handleLongPress} onPress={handlePress} android_ripple={null}>
-                                    <RNImage
-                                        source={{ uri: item.media_url.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url.replace(/^\//, '')}` }}
-                                        style={{ width: 160, height: 160 }}
-                                        resizeMode="contain"
-                                    />
-                                </Pressable>
-                            ) : isImage ? (
-                                <Pressable
-                                    onPress={handleImagePress}
-                                    onLongPress={handleLongPress}
-                                    delayLongPress={300}
-                                    android_ripple={null}
-                                >
-                                    <RNImage
-                                        source={{ uri: item.media_url?.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url?.replace(/^\//, '')}` }}
-                                        style={[styles.messageImage, { width: 220, height: 280 }]}
-                                        resizeMode="cover"
-                                    />
-                                    {!selectionMode && (
-                                        <TouchableOpacity
-                                            style={styles.mediaDownloadButton}
-                                            onPress={() => saveMedia(item.media_url, 'image')}
-                                        >
-                                            <Download size={18} color="white" />
-                                        </TouchableOpacity>
-                                    )}
-                                </Pressable>
-                            ) : (item.message_type === 'voice' || (item.media_url && /\.(m4a|mp3|wav|aac)$/i.test(item.media_url))) ? (
-                                <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
-                                    <VoiceMessageBubble
-                                        audioUrl={item.media_url}
-                                        duration={item.duration || 0}
-                                        isMe={isMe}
-                                        onLongPress={handleLongPress} // Pass selection handler
-                                    />
-                                </Pressable>
-                            ) : isVideo ? (
-                                <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
-                                    <VideoMessageBubble
-                                        videoUrl={item.media_url}
-                                        thumbnailUrl={item.thumbnail_url}
-                                        duration={item.duration}
-                                        fileSize={item.file_size}
-                                        isMe={isMe}
+                            isOneTime ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <TouchableOpacity
+                                        style={styles.otvContent}
+                                        onPress={() => onImagePress(item.media_url ? (item.media_url.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url.replace(/^\//, '')}`) : '', true, item.id)}
+                                        disabled={isMe || item.status === 'seen'}
+                                    >
+                                        <View style={[styles.otvIconWrapper, { borderColor: isMe ? '#fff' : Colors.text }]}>
+                                            <ThemedText style={[styles.otvIconText, { color: isMe ? '#fff' : Colors.text }]}>1</ThemedText>
+                                        </View>
+                                        <ThemedText style={[styles.otvText, { color: isMe ? '#fff' : Colors.text }]}>
+                                            {item.status === 'seen' ? 'Opened' : (item.message_type === 'image' ? 'Photo' : 'Video')}
+                                        </ThemedText>
+                                    </TouchableOpacity>
+                                </View>
+                            ) :
+                                isSticker ? (
+                                    <Pressable onLongPress={handleLongPress} onPress={handlePress} android_ripple={null}>
+                                        <RNImage
+                                            source={{ uri: item.media_url.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url.replace(/^\//, '')}` }}
+                                            style={{ width: 160, height: 160 }}
+                                            resizeMode="contain"
+                                        />
+                                    </Pressable>
+                                ) : isImage ? (
+                                    <Pressable
+                                        onPress={handleImagePress}
                                         onLongPress={handleLongPress}
-                                    />
-                                </Pressable>
-                            ) : isDocument ? (
-                                <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
-                                    <DocumentMessageBubble
-                                        fileUrl={item.media_url}
-                                        fileName={item.file_name}
-                                        fileSize={item.file_size}
-                                        mimeType={item.mime_type}
-                                        isMe={isMe}
+                                        delayLongPress={300}
+                                        android_ripple={null}
+                                    >
+                                        <RNImage
+                                            source={{ uri: item.media_url?.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url?.replace(/^\//, '')}` }}
+                                            style={[styles.messageImage, { width: 220, height: 280 }]}
+                                            resizeMode="cover"
+                                        />
+                                        {!selectionMode && (
+                                            <TouchableOpacity
+                                                style={styles.mediaDownloadButton}
+                                                onPress={() => saveMedia(item.media_url, 'image')}
+                                            >
+                                                <Download size={18} color="white" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </Pressable>
+                                ) : (item.message_type === 'voice' || (item.media_url && /\.(m4a|mp3|wav|aac)$/i.test(item.media_url))) ? (
+                                    <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
+                                        <VoiceMessageBubble
+                                            audioUrl={item.media_url}
+                                            duration={item.duration || 0}
+                                            isMe={isMe}
+                                            onLongPress={handleLongPress} // Pass selection handler
+                                        />
+                                    </Pressable>
+                                ) : isVideo ? (
+                                    <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
+                                        <VideoMessageBubble
+                                            videoUrl={item.media_url}
+                                            thumbnailUrl={item.thumbnail_url}
+                                            duration={item.duration}
+                                            fileSize={item.file_size}
+                                            isMe={isMe}
+                                            onLongPress={handleLongPress}
+                                        />
+                                    </Pressable>
+                                ) : isDocument ? (
+                                    <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
+                                        <DocumentMessageBubble
+                                            fileUrl={item.media_url}
+                                            fileName={item.file_name}
+                                            fileSize={item.file_size}
+                                            mimeType={item.mime_type}
+                                            isMe={isMe}
+                                            onLongPress={handleLongPress}
+                                        />
+                                    </Pressable>
+                                ) : isGif ? (
+                                    <Pressable
+                                        onPress={handleImagePress}
                                         onLongPress={handleLongPress}
-                                    />
-                                </Pressable>
-                            ) : isGif ? (
-                                <Pressable
-                                    onPress={handleImagePress}
-                                    onLongPress={handleLongPress}
-                                    delayLongPress={300}
-                                    android_ripple={null}
-                                >
-                                    <RNImage
-                                        source={{ uri: item.media_url?.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url?.replace(/^\//, '')}` }}
-                                        style={{
-                                            width: 220,
-                                            height: 280,
-                                            borderRadius: 12,
-                                            backgroundColor: '#f0f0f0'
-                                        }}
-                                        resizeMode="cover"
-                                    />
-                                    <View style={{ position: 'absolute', bottom: 5, left: 5, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 4, borderRadius: 4 }}>
-                                        <ThemedText style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>GIF</ThemedText>
-                                    </View>
-                                    {!selectionMode && (
-                                        <TouchableOpacity
-                                            style={styles.mediaDownloadButton}
-                                            onPress={() => saveMedia(item.media_url, 'image')}
-                                        >
-                                            <Download size={18} color="white" />
-                                        </TouchableOpacity>
-                                    )}
-                                </Pressable>
-                            ) : null
+                                        delayLongPress={300}
+                                        android_ripple={null}
+                                    >
+                                        <RNImage
+                                            source={{ uri: item.media_url?.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url?.replace(/^\//, '')}` }}
+                                            style={{
+                                                width: 220,
+                                                height: 280,
+                                                borderRadius: 12,
+                                                backgroundColor: '#f0f0f0'
+                                            }}
+                                            resizeMode="cover"
+                                        />
+                                        <View style={{ position: 'absolute', bottom: 5, left: 5, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 4, borderRadius: 4 }}>
+                                            <ThemedText style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>GIF</ThemedText>
+                                        </View>
+                                        {!selectionMode && (
+                                            <TouchableOpacity
+                                                style={styles.mediaDownloadButton}
+                                                onPress={() => saveMedia(item.media_url, 'image')}
+                                            >
+                                                <Download size={18} color="white" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </Pressable>
+                                ) : null
                         ) : null}
 
                         {item.message_text ? (
@@ -600,6 +618,35 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginLeft: 10,
+    },
+    otvBubble: {
+        paddingVertical: 10,
+        minWidth: 100,
+        paddingHorizontal: 8, // Added padding for better feel
+    },
+    otvContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    otvIconWrapper: {
+        width: 20, // Smaller icon size
+        height: 20,
+        borderRadius: 10,
+        borderWidth: 1.5,
+        alignItems: 'center',
+        justifyContent: 'center',
+        // Incomplete circle logic is complex in pure CSS/View, keeping full circle for now or could use SVG if needed. 
+        // Keeping it simple as requested: "1" in a ring.
+        borderStyle: 'dashed', // close approximation to "incomplete" look if supported, else solid
+    },
+    otvIconText: {
+        fontSize: 9,
+        fontWeight: 'bold',
+    },
+    otvText: {
+        fontSize: 15, // Matching message text size
+        fontWeight: '400',
     },
     replyQuoteContainer: {
         flexDirection: 'row',

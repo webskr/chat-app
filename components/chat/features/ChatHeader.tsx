@@ -10,10 +10,13 @@ import { formatChatTime } from '../../../utils/time';
 import { OverflowMenu } from '../../../components/OverflowMenu';
 import { ProfileModal } from '../../../components/ProfileModal';
 
+import { Config } from '../../../constants/Config';
+
 export const ChatHeader = ({
     id,
     otherUsername,
     avatar_id,
+    avatar_url, // Added prop
     currentUser,
     targetUserProfile,
     isTyping,
@@ -73,7 +76,12 @@ export const ChatHeader = ({
                     activeOpacity={0.7}
                 >
                     <Avatar
-                        source={getAvatarById(targetUserProfile?.avatar_id || avatar_id || id)}
+                        source={
+                            (String(id) === String(currentUser?.id) && currentUser?.avatar_url) ? `${Config.API_URL}/${currentUser.avatar_url}` :
+                                (targetUserProfile?.avatar_url) ? `${Config.API_URL}/${targetUserProfile.avatar_url}` :
+                                    (avatar_url) ? `${Config.API_URL}/${avatar_url}` :
+                                        getAvatarById(targetUserProfile?.avatar_id || avatar_id || id)
+                        }
                         online={!!targetUserProfile?.last_seen && (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000)}
                         size={40}
                     />

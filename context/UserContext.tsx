@@ -7,6 +7,7 @@ interface User {
     display_name?: string;
     email: string;
     avatar_id: string;
+    avatar_url?: string;
     bio?: string;
     username_last_updated?: string;
     global_auto_delete_minutes?: number;
@@ -18,12 +19,17 @@ interface User {
     neon_color?: string;
     border_color?: string;
     button_color?: string;
+    auto_delete_otv?: number | boolean;
+    scramble_name?: number | boolean;
+    website?: string;
+    website_label?: string;
 }
 
 interface UserContextType {
     user: User | null;
     setUser: (user: User | null) => void;
     updateUserProfile: (data: Partial<User>) => Promise<void>;
+    reloadUser: () => Promise<void>;
     isLoading: boolean;
 }
 
@@ -50,6 +56,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const reloadUser = async () => {
+        await loadUser();
+    };
+
     const setUser = async (newUser: User | null) => {
         try {
             if (newUser) {
@@ -70,7 +80,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <UserContext.Provider value={{ user, setUser, updateUserProfile, isLoading }}>
+        <UserContext.Provider value={{ user, setUser, updateUserProfile, reloadUser, isLoading }}>
             {children}
         </UserContext.Provider>
     );

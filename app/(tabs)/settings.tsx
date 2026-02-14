@@ -22,7 +22,7 @@ import {
     Check
 } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
@@ -64,12 +64,17 @@ const AUTO_DELETE_OPTIONS = [
 ];
 
 export default function SettingsScreen() {
-    const { user, setUser } = useUser();
+    const { user, setUser, reloadUser } = useUser();
     const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+    const [avatarKey, setAvatarKey] = React.useState(Date.now());
 
-    React.useEffect(() => {
-        loadSettings();
-    }, []);
+    useFocusEffect(
+        React.useCallback(() => {
+            reloadUser();
+            setAvatarKey(Date.now()); // Force refresh image
+            loadSettings();
+        }, [])
+    );
 
     const loadSettings = async () => {
         try {
@@ -116,7 +121,12 @@ export default function SettingsScreen() {
                         onPress={() => router.push('/(tabs)/profile-edit')}
                         activeOpacity={0.7}
                     >
-                        <Avatar source={getAvatarById(user?.avatar_id || '1')} size={60} online={true} />
+                        <Avatar
+                            key={`${user?.avatar_url}-${avatarKey}`}
+                            source={user?.avatar_url ? `${Config.API_URL}/${user.avatar_url}?t=${avatarKey}` : getAvatarById(user?.avatar_id || '1')}
+                            size={60}
+                            online={true}
+                        />
                         <View style={styles.profileInfo}>
                             <ThemedText type="defaultSemiBold" style={styles.profileName}>
                                 {user?.username || 'Guest'}

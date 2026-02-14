@@ -1,0 +1,20 @@
+Time: 2026-02-13 07:52:27
+POST: Array
+(
+    [user_id] => 1
+)
+
+FILES: Array
+(
+    [avatar] => Array
+        (
+            [name] => 1344e366-6125-47d8-ad42-9665c5818806.png
+            [full_path] => 1344e366-6125-47d8-ad42-9665c5818806.png
+            [type] => image/jpeg
+            [tmp_name] => C:\xampp\tmp\phpABF6.tmp
+            [error] => 0
+            [size] => 1552345
+        )
+
+)
+

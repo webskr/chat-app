@@ -32,7 +32,7 @@ if (!empty($user_id)) {
                             ELSE c.last_message 
                          END as last_message,
                          c.last_message_time, 
-                         u.id as other_user_id, u.username as other_username, u.avatar_id as other_avatar_id,
+                         u.id as other_user_id, u.username as other_username, u.avatar_id as other_avatar_id, u.avatar_url as other_avatar_url,
                          u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility
                   FROM conversations c
                   JOIN users u ON (c.user1_id = u.id OR c.user2_id = u.id)

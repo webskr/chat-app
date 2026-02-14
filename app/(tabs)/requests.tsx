@@ -89,6 +89,7 @@ export default function RequestsScreen() {
         setSelectedUser({
             ...item,
             avatar_id: item.avatar_id,
+            avatar_url: item.avatar_url,
             created_at: item.created_at
         });
         setModalVisible(true);
@@ -102,7 +103,10 @@ export default function RequestsScreen() {
                     onPress={() => openProfile(item)}
                     activeOpacity={0.7}
                 >
-                    <Avatar source={getAvatarById(item.avatar_id)} size={46} />
+                    <Avatar
+                        source={item.avatar_url ? `${Config.API_URL}/${item.avatar_url}` : getAvatarById(item.avatar_id)}
+                        size={46}
+                    />
 
                     <View style={styles.textInfo}>
                         <ThemedText type="defaultSemiBold" numberOfLines={1}>

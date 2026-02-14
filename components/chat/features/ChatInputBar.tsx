@@ -1,9 +1,12 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { View, StyleSheet, TextInput, TouchableOpacity, Keyboard, Animated, PanResponder, Platform, Dimensions } from 'react-native';
-import { Smile, X, Paperclip, Send, Check, Mic, ChevronLeft, Trash2 } from 'lucide-react-native';
+import { Smile, X, Paperclip, Send, Check, Mic, ChevronLeft, Trash2, Clock } from 'lucide-react-native';
 import { Colors } from '../../../constants/Colors';
 import { GlassCard } from '../../../components/GlassCard';
 import { ThemedText } from '../../../components/ThemedText';
+import { SlashCommandSuggestions } from './SlashCommandSuggestions';
+import { InlineScheduleGuidance } from './InlineScheduleGuidance';
+import { parseNaturalLanguageTime } from '../../../utils/timeParser';
 
 const { width } = Dimensions.get('window');
 
@@ -32,7 +35,94 @@ export const ChatInputBar = ({
     inputRef,
     setInputHeight,
     keyboardHeight,
+    onRequestSchedule, // New prop
 }: any) => {
+
+    // Schedule Logic State
+    const [showSlashSuggestions, setShowSlashSuggestions] = useState(false);
+    const [showScheduleGuidance, setShowScheduleGuidance] = useState(false);
+    const [scheduledTime, setScheduledTime] = useState<Date | null>(null);
+    const [scheduleError, setScheduleError] = useState<string | null>(null);
+
+    const handleTextChange = (text: string) => {
+        handleTyping(text);
+
+        // Slash Command Detection
+        if (text === '/') {
+            setShowSlashSuggestions(true);
+            setShowScheduleGuidance(false);
+        } else if (text.startsWith('/schedule')) {
+            setShowSlashSuggestions(false);
+            setShowScheduleGuidance(true);
+
+            const timePart = text.replace('/schedule', '').trim();
+            if (timePart) {
+                const { date, error } = parseNaturalLanguageTime(timePart);
+                setScheduledTime(date);
+                setScheduleError(error || null);
+            } else {
+                setScheduledTime(null);
+                setScheduleError(null);
+            }
+        } else {
+            setShowSlashSuggestions(false);
+            setShowScheduleGuidance(false);
+            setScheduledTime(null);
+            setScheduleError(null);
+        }
+    };
+
+    const handleSelectCommand = (cmd: string) => {
+        handleTextChange(cmd);
+    };
+
+    const handleSendWithSchedule = () => {
+        if (scheduledTime && !scheduleError && inputText.replace('/schedule', '').trim()) {
+            const cleanText = inputText.replace(/^\/schedule\s+.*?\s+/, '').trim() || inputText.replace('/schedule', '').trim();
+            // We need to extract the message content logic better
+            // Pattern: /schedule [time] [message]
+            // We don't strictly separate them in parser, parser just grabs time.
+            // Let's rely on the parser to be robust or just pass the whole text minus command to parent?
+            // Actually, the requirements say: "/schedule 5pm Hello" -> Message is "Hello"
+            // My parser is simple.
+            // Let's improve extraction:
+            // The parser `parseNaturalLanguageTime` takes "5pm Hello"? 
+            // Currently my parser might get confused by extra text.
+            // Let's refine the usage here.
+
+            // Re-parsing strategy for message extraction:
+            // We need to split time and message.
+            // "5pm Hello" -> Time: 5pm, Msg: Hello
+            // "tomorrow 9am Meeting" -> Time: tomorrow 9am, Msg: Meeting
+
+            // Since the parser is basic, let's assume the time is at the start.
+            // But `parseNaturalLanguageTime` creates a Date. It doesn't return "rest of string".
+            // That is a limitation.
+
+            // For now, let's just pass the raw input text to `onRequestSchedule` and let parent or a helper handle extraction?
+            // Or better: Let's assume the user MUST confirm the message in the modal, 
+            // so we can pass the whole text to the modal and let the user edit it? 
+            // OR simple regex: split by first space after time?
+            // It's hard to know where time ends. "tomorrow 9am".
+
+            // Quick fix: The `scheduledTime` state is already set by `handleTextChange` calling parser.
+            // Does the parser handle trailing text?
+            // "5pm Hello" -> `parseNaturalLanguageTime` might return Valid Date if it matches "5pm".
+            // My parser uses regex `^...$`. It expects EXACT match for "in X mins".
+            // But for "today..." it does `startsWith`.
+            // For time `match`, it checks `^...$`.
+            // So "5pm Hello" will FAIL my parser.
+
+            // PROPOSED FIX: Update `handleTextChange` to try to identify the time part.
+            // OR update parser to be more loose.
+            // Let's update `onRequestSchedule` blindly with current parsed time.
+            // BUT wait, if parser failed on "5pm Hello", `scheduledTime` is NULL.
+            // So the user can't send.
+
+            // I need to update `utils/timeParser.ts` to support extracting time from start of string.
+            // This is safer.
+        }
+    };
 
     // Animation Values
     const micScale = useRef(new Animated.Value(1)).current;
@@ -181,6 +271,20 @@ export const ChatInputBar = ({
 
     return (
         <View style={styles.inputArea}>
+            {/* Suggested Commands */}
+            <SlashCommandSuggestions
+                visible={showSlashSuggestions}
+                onSelect={handleSelectCommand}
+            />
+
+            {/* Inline Guidance */}
+            <InlineScheduleGuidance
+                visible={showScheduleGuidance}
+                isValid={!!scheduledTime && !scheduleError}
+                parseError={scheduleError || undefined}
+                parsedTime={scheduledTime}
+            />
+
             <GlassCard
                 style={styles.inputWrapper}
                 contentContainerStyle={styles.inputContent}
@@ -259,7 +363,7 @@ export const ChatInputBar = ({
                             placeholder={editingMessage ? "Edit message..." : "Type something..."}
                             placeholderTextColor={Colors.textSecondary}
                             value={inputText}
-                            onChangeText={handleTyping}
+                            onChangeText={handleTextChange}
                             multiline
                             maxLength={5000}
                             onFocus={() => {
@@ -283,8 +387,33 @@ export const ChatInputBar = ({
                         {isInputAreaActive ? (
                             <TouchableOpacity
                                 style={styles.iconButton}
-                                onPress={() => editingMessage ? handleSaveEdit() : handleSend(inputText)}
-                                disabled={!inputText.trim() || isSending || isUploading}
+                                onPress={() => {
+                                    if (editingMessage) {
+                                        handleSaveEdit();
+                                    } else if (scheduledTime && !scheduleError) {
+                                        // Extract message content safely
+                                        const scheduleCommandRegex = /^\/schedule\s+/i;
+                                        const textWithoutCommand = inputText.replace(scheduleCommandRegex, '').trim();
+
+                                        // Re-parse to get the exact used time string
+                                        const { usedText } = parseNaturalLanguageTime(textWithoutCommand);
+
+                                        let finalMessage = textWithoutCommand;
+                                        if (usedText) {
+                                            // Escape usedText for regex safely just in case, though it's simple usually
+                                            // Simple replace should work since it matches start
+                                            // Handle case-insensitive match for the usedText
+                                            const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                            const usedTextRegex = new RegExp(`^${escapeRegExp(usedText)}\\s*`, 'i');
+                                            finalMessage = textWithoutCommand.replace(usedTextRegex, '').trim();
+                                        }
+
+                                        onRequestSchedule(scheduledTime, finalMessage);
+                                    } else {
+                                        handleSend(inputText);
+                                    }
+                                }}
+                                disabled={!inputText.trim() || isSending || isUploading || (showScheduleGuidance && !scheduledTime)}
                             >
                                 {editingMessage ? (
                                     <View style={styles.sendIconContainer}>
@@ -297,9 +426,14 @@ export const ChatInputBar = ({
                                     <View style={styles.sendIconContainer}>
                                         <Send
                                             size={22}
-                                            color={(inputText.trim() && !isSending && !isUploading) ? Colors.primary : Colors.textSecondary}
-                                            fill={(inputText.trim() && !isSending && !isUploading) ? Colors.primary : 'transparent'}
+                                            color={(inputText.trim() && !isSending && !isUploading) ? (scheduledTime ? Colors.primary : Colors.primary) : Colors.textSecondary}
+                                            fill={(inputText.trim() && !isSending && !isUploading) ? (scheduledTime ? 'transparent' : Colors.primary) : 'transparent'}
                                         />
+                                        {scheduledTime && (
+                                            <View style={{ position: 'absolute', bottom: -2, right: -2 }}>
+                                                <Clock size={10} color={Colors.primary} />
+                                            </View>
+                                        )}
                                     </View>
                                 )}
                             </TouchableOpacity>

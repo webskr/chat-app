@@ -103,7 +103,11 @@ export default function GlobalFriendsScreen() {
                     }
                 ]}>
                     <View style={styles.row}>
-                        <Avatar source={getAvatarById(item.avatar_id)} online={item.is_online} size={48} />
+                        <Avatar
+                            source={item.avatar_url ? `${Config.API_URL}/${item.avatar_url}` : getAvatarById(item.avatar_id)}
+                            online={item.is_online}
+                            size={48}
+                        />
                         <View style={styles.info}>
                             <ThemedText type="defaultSemiBold" style={styles.username}>{item.username}</ThemedText>
                         </View>
@@ -113,7 +117,12 @@ export default function GlobalFriendsScreen() {
                                 style={[styles.actionButton, styles.chatButton]}
                                 onPress={() => router.push({
                                     pathname: '/chat/[id]',
-                                    params: { id: item.id, user: item.username, avatar_id: item.avatar_id }
+                                    params: {
+                                        id: item.id,
+                                        user: item.username,
+                                        avatar_id: item.avatar_id,
+                                        avatar_url: item.avatar_url // Pass it here
+                                    }
                                 })}
                             >
                                 <MessageSquare size={18} color={Colors.white} />

@@ -57,7 +57,8 @@ export function ProfileModal({ visible, onClose, user, currentUser, relationship
             params: {
                 id: user.id,
                 user: user.username,
-                avatar_id: user.avatar_id
+                avatar_id: user.avatar_id,
+                avatar_url: user.avatar_url
             }
         });
     };
@@ -78,7 +79,11 @@ export function ProfileModal({ visible, onClose, user, currentUser, relationship
                     </TouchableOpacity>
 
                     <View style={styles.header}>
-                        <Avatar source={getAvatarById(user.avatar_id)} size={100} online={relationship === 'friend'} />
+                        <Avatar
+                            source={user.avatar_url ? `${Config.API_URL}/${user.avatar_url}` : getAvatarById(user.avatar_id)}
+                            size={100}
+                            online={relationship === 'friend'}
+                        />
                         <View style={styles.nameSection}>
                             <ThemedText type="title" style={styles.displayName}>
                                 {user.display_name || user.username}

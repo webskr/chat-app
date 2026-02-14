@@ -84,12 +84,17 @@ export default function ChatScreen() {
                 params: {
                     id: item.other_user_id.toString(),
                     user: String(item.other_user_id) === String(user?.id) ? 'Note to self' : item.other_username,
-                    avatar_id: item.other_avatar_id
+                    avatar_id: item.other_avatar_id,
+                    avatar_url: item.other_avatar_url
                 }
             })}
         >
             <View style={styles.chatRow}>
-                <Avatar source={getAvatarById(item.other_avatar_id)} online={item.is_online} size={50} />
+                <Avatar
+                    source={item.other_avatar_url ? `${Config.API_URL}/${item.other_avatar_url}` : getAvatarById(item.other_avatar_id)}
+                    online={item.is_online}
+                    size={50}
+                />
                 <View style={styles.chatDetails}>
                     <View style={styles.rowTop}>
                         <ThemedText type="defaultSemiBold" style={styles.username} numberOfLines={1}>

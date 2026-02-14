@@ -61,6 +61,11 @@ if (!empty($data->user_id) && (
             $params[':siw'] = $data->show_in_world ? 1 : 0;
         }
 
+        if (isset($data->auto_delete_otv)) {
+            $fieldsToUpdate[] = "auto_delete_otv = :ado";
+            $params[':ado'] = $data->auto_delete_otv ? 1 : 0;
+        }
+
         if (isset($data->neon_color)) {
             $fieldsToUpdate[] = "neon_color = :nc";
             $params[':nc'] = $data->neon_color;

@@ -72,9 +72,29 @@ if (!empty($data->id) && (!empty($data->username) || !empty($data->avatar_id))) 
             $params[':bio'] = trim($data->bio);
         }
 
+        if (isset($data->website)) {
+            $update_fields[] = "website = :website";
+            $params[':website'] = trim($data->website);
+        }
+
+        if (isset($data->website_label)) {
+            $update_fields[] = "website_label = :website_label";
+            $params[':website_label'] = trim($data->website_label);
+        }
+
         if (!empty($data->avatar_id)) {
             $update_fields[] = "avatar_id = :avatar_id";
             $params[':avatar_id'] = $data->avatar_id;
+
+            // If switching to a standard avatar, clear the custom URL
+            if ($data->avatar_id !== 'custom') {
+                $update_fields[] = "avatar_url = NULL";
+            }
+        }
+
+        if (!empty($data->avatar_url)) {
+            $update_fields[] = "avatar_url = :avatar_url";
+            $params[':avatar_url'] = $data->avatar_url;
         }
 
         if (empty($update_fields)) {
@@ -87,8 +107,8 @@ if (!empty($data->id) && (!empty($data->username) || !empty($data->avatar_id))) 
         $stmt = $pdo->prepare($query);
 
         if ($stmt->execute($params)) {
-            // Fetch updated user data to return
-            $fetchStmt = $pdo->prepare("SELECT id, username, display_name, bio, avatar_id, username_last_updated FROM users WHERE id = :id");
+             // Fetch updated user data to return
+            $fetchStmt = $pdo->prepare("SELECT id, username, display_name, bio, website, website_label, avatar_id, avatar_url, username_last_updated FROM users WHERE id = :id");
             $fetchStmt->execute([':id' => $data->id]);
             $updatedUser = $fetchStmt->fetch(PDO::FETCH_ASSOC);
 
