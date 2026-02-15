@@ -90,7 +90,7 @@ export default function InviteFriendsScreen() {
 
     const handleShare = async (code: string) => {
         const deepLink = `chat-app://invite?code=${code}`;
-        const playStoreLink = `https://play.google.com/store/apps/details?id=com.skr.chatapp&referrer=invite_code%3D${code}`;
+        const playStoreLink = `https://play.google.com/store/apps/details?id=com.skr.vegarm&referrer=invite_code%3D${code}`;
 
         const message = Platform.OS === 'android'
             ? `Connect with me on ChatApp! 

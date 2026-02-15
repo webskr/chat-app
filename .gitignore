@@ -40,4 +40,5 @@ yarn-error.*
 /ios
 
 # Secrets
-*.json
+# Secrets
+vegarm-*.json
