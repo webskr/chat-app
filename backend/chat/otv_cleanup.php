@@ -30,7 +30,7 @@ try {
         JOIN users u ON m.sender_id = u.id
         SET 
             m.is_deleted = 1,
-            m.message_text = 'Message Deleted',
+            m.message_text = 'This message was viewed and deleted',
             m.media_url = NULL,
             m.thumbnail_url = NULL
         WHERE 

@@ -58,8 +58,7 @@ try {
     $update_conv = $pdo->prepare("
         UPDATE conversations 
         SET last_message = NULL, 
-            user1_cleared_at = NOW(), 
-            user2_cleared_at = NOW() 
+            last_message_time = NULL 
         WHERE id = :cid
     ");
     $update_conv->execute([':cid' => $cid]);

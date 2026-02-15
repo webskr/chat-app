@@ -13,6 +13,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { UserProvider } from '../context/UserContext';
 import { ThemeProvider as NeonThemeProvider } from '../context/ThemeContext';
 import * as Linking from 'expo-linking';
+import * as Notifications from 'expo-notifications';
+import { handleNotificationResponse } from '../utils/notifications';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -43,6 +45,14 @@ export default function RootLayout() {
         if (Platform.OS === 'android') {
             checkDeferredInvite();
         }
+    }, []);
+
+    useEffect(() => {
+        // Notification Listener
+        const responseListener = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+        return () => {
+            if (responseListener) responseListener.remove();
+        };
     }, []);
 
     const handleURL = async (link: string) => {

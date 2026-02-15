@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import { registerForPushNotificationsAsync } from '../utils/notifications';
+import { Config } from '../constants/Config';
 
 interface User {
     id: string;
@@ -64,6 +67,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         try {
             if (newUser) {
                 await AsyncStorage.setItem('user', JSON.stringify(newUser));
+
+                // Register Device Token
+                // We do this in background to not block UI
+                if (Platform.OS !== 'web') {
+                    registerForPushNotificationsAsync().then(token => {
+                        if (token) {
+                            console.log('Updating device token:', token);
+                            fetch(`${Config.API_URL}/auth/update_token.php`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ user_id: newUser.id, token })
+                            }).catch(err => console.error("Token update failed", err));
+                        }
+                    }).catch(err => console.error("Token registration failed", err));
+                }
+
             } else {
                 await AsyncStorage.removeItem('user');
             }

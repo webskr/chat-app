@@ -101,6 +101,7 @@ try {
             m.is_deleted,
             m.is_one_time,
             m.created_at,
+            m.sent_at,
             m.delivered_at,
             m.read_at,
             m.is_edited,
@@ -145,8 +146,17 @@ try {
     // DEBUG: Log counts
     // file_put_contents('debug.txt', "Params: me=$me, other=$other_id, cid={$conv['id']}, cleared=$clearedAt, found=" . count($messages) . "\n", FILE_APPEND);
 
-    // 4️⃣ Fetch reactions & Process Privacy
+    // 4️⃣ Fetch reactions & Process Privacy & OTV Masking
     foreach ($messages as &$msg) {
+        // OTV Logic: Mask content for one-time messages
+        // 1. If I am sender: I can't view it. Mask it.
+        // 2. If I am receiver: I need to request it via mark_one_time_seen. Mask it here.
+        if ($msg['is_one_time']) {
+            $msg['message_text'] = '🔒 One-Time Message';
+            $msg['media_url'] = null; // Hide media URL too if any
+            $msg['thumbnail_url'] = null;
+        }
+
         // Privacy Logic: Mask 'seen' if receiver has read receipts disabled
         if ($msg['sender_id'] == $me) {
             // I sent this message. I want to know if they read it.

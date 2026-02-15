@@ -26,7 +26,7 @@ function processScheduledMessages($pdo) {
             $ids = array_column($messages, 'id');
             // 2. Update status to 'sent'
             $inQuery = implode(',', array_fill(0, count($ids), '?'));
-            $updateSql = "UPDATE messages SET status = 'sent' WHERE id IN ($inQuery)";
+            $updateSql = "UPDATE messages SET status = 'sent', sent_at = NOW() WHERE id IN ($inQuery)";
             $updateStmt = $pdo->prepare($updateSql);
             $updateStmt->execute($ids);
 

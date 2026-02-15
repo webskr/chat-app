@@ -191,18 +191,21 @@ export const MessageItem = React.memo(({
                         ) : null}
 
                         {!item.is_deleted ? (
-                            isOneTime ? (
+                            isOneTime && (item.media_url || item.message_text === '🔒 One-Time Message' || item.status === 'seen') ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                     <TouchableOpacity
                                         style={styles.otvContent}
-                                        onPress={() => onImagePress(item.media_url ? (item.media_url.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url.replace(/^\//, '')}`) : '', true, item.id)}
+                                        onPress={() => onImagePress(item.media_url ? (item.media_url.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url.replace(/^\//, '')}`) : 'TEXT_OTV', true, item.id)}
                                         disabled={isMe || item.status === 'seen'}
                                     >
                                         <View style={[styles.otvIconWrapper, { borderColor: isMe ? '#fff' : Colors.text }]}>
                                             <ThemedText style={[styles.otvIconText, { color: isMe ? '#fff' : Colors.text }]}>1</ThemedText>
                                         </View>
                                         <ThemedText style={[styles.otvText, { color: isMe ? '#fff' : Colors.text }]}>
-                                            {item.status === 'seen' ? 'Opened' : (item.message_type === 'image' ? 'Photo' : 'Video')}
+                                            {item.status === 'seen' ?
+                                                (item.media_url ? 'Opened' : 'Message was deleted') :
+                                                (item.message_type === 'image' ? 'Photo' :
+                                                    item.message_type === 'video' ? 'Video' : 'Text Message')}
                                         </ThemedText>
                                     </TouchableOpacity>
                                 </View>
@@ -299,7 +302,7 @@ export const MessageItem = React.memo(({
                                 ) : null
                         ) : null}
 
-                        {item.message_text ? (
+                        {(item.message_text && (!isOneTime || item.message_text !== '🔒 One-Time Message')) ? (
                             <View>
                                 <View style={styles.textWrap}>
                                     {item.message_text.split(URL_REGEX).map((part: string, i: number) => {
@@ -333,10 +336,10 @@ export const MessageItem = React.memo(({
                             <ThemedText numberOfLines={1} style={[styles.messageTime, isMe ? styles.myMessageTime : styles.friendMessageTime, { marginRight: isMe ? 4 : 0 }]}>
                                 {(item.message_type === 'voice' || (item.media_url && /\.(m4a|mp3|wav|aac)$/i.test(item.media_url))) && item.duration ? (
                                     <ThemedText style={{ fontSize: 10, marginRight: 6 }}>
-                                        {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, '0')} · {formatChatTime(item.created_at)}
+                                        {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, '0')} · {formatChatTime(item.sent_at || item.created_at)}
                                     </ThemedText>
                                 ) : (
-                                    formatChatTime(item.created_at)
+                                    formatChatTime(item.sent_at || item.created_at)
                                 )}
                                 {item.is_edited && <ThemedText style={{ fontSize: 9, marginLeft: 4, fontStyle: 'italic', color: Colors.textSecondary }}>edited</ThemedText>}
                             </ThemedText>

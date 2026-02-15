@@ -16,7 +16,7 @@ $data = json_decode(file_get_contents("php://input"));
 if (!empty($data->message_id) && !empty($data->user_id)) {
     try {
         // Check if message is one-time and if current user is the receiver
-        $check_query = "SELECT id, receiver_id, is_one_time, seen_at, delete_after_seconds, media_url FROM messages WHERE id = :mid";
+        $check_query = "SELECT id, receiver_id, is_one_time, seen_at, delete_after_seconds, media_url, message_text FROM messages WHERE id = :mid";
         $check_stmt = $pdo->prepare($check_query);
         $check_stmt->execute([':mid' => $data->message_id]);
         $message = $check_stmt->fetch(PDO::FETCH_ASSOC);
@@ -39,7 +39,7 @@ if (!empty($data->message_id) && !empty($data->user_id)) {
             exit();
         }
         
-        // If already seen, return success
+        // If already seen, return success but DO NOT return content (security)
         if ($message['seen_at']) {
              http_response_code(200);
              echo json_encode(array("message" => "Already seen.", "seen_at" => $message['seen_at']));
@@ -51,20 +51,18 @@ if (!empty($data->message_id) && !empty($data->user_id)) {
         $update_stmt = $pdo->prepare($update_query);
         $update_stmt->execute([':mid' => $data->message_id]);
 
-        // Delete media file for strict one-time view
-        /*
-        if (!empty($message['media_url'])) {
-            // Assuming media_url is relative to project root or uploads folder
-            // backend/chat/mark_one_time_seen.php -> backend/chat -> backend -> root
-            $file_path = __DIR__ . '/../../' . ltrim($message['media_url'], '/');
-            if (file_exists($file_path)) {
-                unlink($file_path);
-            }
-        }
-        */
-
         http_response_code(200);
-        echo json_encode(array("message" => "Message marked as seen.", "seen_at" => date('Y-m-d H:i:s')));
+        
+        // Return the content involved so client can display it one last time
+        // The client must cache this in local state as next fetch will mask it.
+        echo json_encode(array(
+            "message" => "Message marked as seen.", 
+            "seen_at" => date('Y-m-d H:i:s'),
+            "data" => array(
+                "message_text" => $message['message_text'],
+                "media_url" => $message['media_url']
+            )
+        ));
 
     } catch (PDOException $e) {
         http_response_code(500);

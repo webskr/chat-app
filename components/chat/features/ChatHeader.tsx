@@ -8,7 +8,7 @@ import { Avatar } from '../../../components/Avatar';
 import { getAvatarById } from '../../../constants/Avatars';
 import { formatChatTime } from '../../../utils/time';
 import { OverflowMenu } from '../../../components/OverflowMenu';
-import { ProfileModal } from '../../../components/ProfileModal';
+import { UserProfileViewer } from '../../../components/UserProfileViewer'; // Updated import
 
 import { Config } from '../../../constants/Config';
 
@@ -114,7 +114,7 @@ export const ChatHeader = ({
                 />
             </View>
 
-            <ProfileModal
+            <UserProfileViewer
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
                 user={targetUserProfile || { id, username: otherUsername, avatar_id: avatar_id || '1' }}

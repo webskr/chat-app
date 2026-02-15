@@ -4,6 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
 import { User, BellOff, Trash2, UserMinus, ShieldAlert, Flag, Timer, X, Copy, Trash, MoreVertical, ChevronLeft, MessageSquare, Edit2, Mic, Unlock, Lock, Send, Download } from 'lucide-react-native';
@@ -71,7 +72,8 @@ export default function ChatDetailScreen() {
 
     // OTV Viewer State
     const [otvUrl, setOtvUrl] = useState<string | null>(null);
-    const [otvType, setOtvType] = useState<'image' | 'video'>('image');
+    const [otvText, setOtvText] = useState<string | null>(null);
+    const [otvType, setOtvType] = useState<'image' | 'video' | 'text'>('image');
     const [otvVisible, setOtvVisible] = useState(false);
 
 
@@ -133,6 +135,49 @@ export default function ChatDetailScreen() {
             isMediaSearchingRef.current = false;
         }
     }, [isPanelOpen]);
+
+    // Notification Handler - Suppress while focused
+    useFocusEffect(
+        React.useCallback(() => {
+            // Screen is focused
+            Notifications.setNotificationHandler({
+                handleNotification: async (notification) => {
+                    const data = notification.request.content.data;
+                    // If notification is from CURRENT chat, suppress it
+                    if (String(data?.conversation_id) === String(id)) {
+                        return {
+                            shouldShowAlert: false,
+                            shouldPlaySound: false,
+                            shouldSetBadge: false,
+                            shouldShowBanner: false,
+                            shouldShowList: false
+                        };
+                    }
+                    // Otherwise show it
+                    return {
+                        shouldShowAlert: true,
+                        shouldPlaySound: true,
+                        shouldSetBadge: false,
+                        shouldShowBanner: true,
+                        shouldShowList: true
+                    };
+                },
+            });
+
+            return () => {
+                // Screen is unfocused or unmounted
+                Notifications.setNotificationHandler({
+                    handleNotification: async () => ({
+                        shouldShowAlert: true,
+                        shouldPlaySound: true,
+                        shouldSetBadge: false,
+                        shouldShowBanner: true,
+                        shouldShowList: true
+                    }),
+                });
+            };
+        }, [id])
+    );
 
     // Keyboard Listeners
     useEffect(() => {
@@ -1031,23 +1076,45 @@ export default function ChatDetailScreen() {
     };
 
     const handleViewOneTimeMessage = async (url: string, messageId: number) => {
-        console.log('handleViewOneTimeMessage called:', { url, messageId });
-        // Detect type
-        const type = (/\.(mp4|mov|mkv|webm)$/i.test(url)) ? 'video' : 'image';
-
-        setOtvUrl(url);
-        setOtvType(type);
-        setOtvVisible(true);
-
-        // Optimistic update
-        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'seen' } : m));
-
         try {
-            await fetch(`${Config.API_URL}/chat/mark_one_time_seen.php`, {
+            const response = await fetch(`${Config.API_URL}/chat/mark_one_time_seen.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message_id: messageId, user_id: currentUser?.id })
             });
+            const res = await response.json();
+
+            if (res.data) {
+                const { message_text, media_url } = res.data;
+
+                // Update Local State
+                setMessages(prev => prev.map(m => m.id === messageId ? {
+                    ...m,
+                    status: 'seen',
+                    message_text: message_text || m.message_text,
+                    media_url: media_url || m.media_url
+                } : m));
+
+                // If Media, Show Viewer
+                if (media_url) {
+                    const type = (/\.(mp4|mov|mkv|webm)$/i.test(media_url)) ? 'video' : 'image';
+                    const fullUrl = media_url.startsWith('http') ? media_url : `${Config.API_URL}/${media_url.replace(/^\//, '')}`;
+                    setOtvUrl(fullUrl);
+                    setOtvText(null); // Clear text if media
+                    setOtvType(type);
+                    setOtvVisible(true);
+                } else if (message_text) {
+                    // Text OTV
+                    setOtvUrl(null); // Clear URL if text
+                    setOtvText(message_text);
+                    setOtvType('text');
+                    setOtvVisible(true);
+                }
+            } else {
+                if (res.message === 'Already seen.') {
+                    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'seen' } : m));
+                }
+            }
         } catch (e) {
             console.error('Failed to mark OTV as seen', e);
         }
@@ -1197,7 +1264,13 @@ export default function ChatDetailScreen() {
 
             <LockSetupModal visible={showLockSetup} onClose={() => setShowLockSetup(false)} lockPin={lockPin} setLockPin={setLockPin} onConfirm={handleConfirmLock} />
             <UnlockPromptModal visible={showUnlockPrompt} onClose={() => setShowUnlockPrompt(false)} unlockPin={unlockPin} setUnlockPin={setUnlockPin} onConfirm={handleConfirmUnlock} />
-            <OneTimeViewerModal visible={otvVisible} url={otvUrl} type={otvType} onClose={() => setOtvVisible(false)} />
+            <OneTimeViewerModal
+                visible={otvVisible}
+                url={otvUrl}
+                text={otvText}
+                type={otvType}
+                onClose={() => setOtvVisible(false)}
+            />
             <FullScreenImageModal visible={isFullScreenVisible} imageUri={fullScreenImage} onClose={() => setIsFullScreenVisible(false)} />
             <ImageEditorModal visible={isEditorVisible} imageUri={editorImageUri} onClose={() => setIsEditorVisible(false)} onSend={handleEditorSend} />
             <MediaPreviewModal visible={isPreviewVisible} media={previewMedia} onClose={() => setIsPreviewVisible(false)} onSend={handleMediaPreviewSend} />

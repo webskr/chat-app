@@ -15,7 +15,7 @@ import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { GlassCard } from '../../components/GlassCard';
 import { getAvatarById } from '../../constants/Avatars';
-import { ProfileModal } from '../../components/ProfileModal';
+import { UserProfileViewer } from '../../components/UserProfileViewer';
 import { useUser } from '../../context/UserContext';
 
 import { useFocusEffect } from 'expo-router';
@@ -203,7 +203,7 @@ export default function RequestsScreen() {
                 />
             )}
 
-            <ProfileModal
+            <UserProfileViewer
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
                 user={selectedUser}

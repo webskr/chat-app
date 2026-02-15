@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { ThemedText } from '../../../components/ThemedText';
 import { Colors } from '../../../constants/Colors';
-import { Clock } from 'lucide-react-native';
+import { Clock, EyeOff } from 'lucide-react-native';
 
 interface SlashCommandSuggestionsProps {
     visible: boolean;
@@ -24,6 +24,19 @@ export const SlashCommandSuggestions: React.FC<SlashCommandSuggestionsProps> = (
                 <View style={styles.textContainer}>
                     <ThemedText style={styles.command}>/schedule</ThemedText>
                     <ThemedText style={styles.description}>Schedule a message for later</ThemedText>
+                </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                style={styles.item}
+                onPress={() => onSelect('/otv ')}
+            >
+                <View style={styles.iconContainer}>
+                    <EyeOff size={20} color={Colors.primary} />
+                </View>
+                <View style={styles.textContainer}>
+                    <ThemedText style={styles.command}>/otv</ThemedText>
+                    <ThemedText style={styles.description}>Send a one-time view message</ThemedText>
                 </View>
             </TouchableOpacity>
         </View>

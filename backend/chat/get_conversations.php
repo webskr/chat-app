@@ -26,12 +26,31 @@ if (!empty($user_id)) {
         $deliveryStmt->execute([':me' => $user_id]);
 
         $query = "SELECT c.id, 
-                         CASE 
-                            WHEN (c.user1_id = :me_check1 AND c.last_message_time <= c.user1_cleared_at) THEN NULL
-                            WHEN (c.user2_id = :me_check2 AND c.last_message_time <= c.user2_cleared_at) THEN NULL
-                            ELSE c.last_message 
-                         END as last_message,
-                         c.last_message_time, 
+                         c.user1_id, c.user2_id,
+                         (SELECT message_text FROM messages m WHERE m.conversation_id = c.id 
+                            AND (
+                                (m.sender_id = :me_check1 AND (m.hidden_for_sender = 0 OR m.hidden_for_sender IS NULL))
+                                OR
+                                (m.receiver_id = :me_check2 AND (m.hidden_for_receiver = 0 OR m.hidden_for_receiver IS NULL))
+                            )
+                            ORDER BY m.created_at DESC, m.id DESC LIMIT 1
+                         ) as latest_msg_text,
+                         (SELECT message_type FROM messages m WHERE m.conversation_id = c.id 
+                            AND (
+                                (m.sender_id = :me_check3 AND (m.hidden_for_sender = 0 OR m.hidden_for_sender IS NULL))
+                                OR
+                                (m.receiver_id = :me_check4 AND (m.hidden_for_receiver = 0 OR m.hidden_for_receiver IS NULL))
+                            )
+                            ORDER BY m.created_at DESC, m.id DESC LIMIT 1
+                         ) as latest_msg_type,
+                         (SELECT created_at FROM messages m WHERE m.conversation_id = c.id 
+                            AND (
+                                (m.sender_id = :me_check5 AND (m.hidden_for_sender = 0 OR m.hidden_for_sender IS NULL))
+                                OR
+                                (m.receiver_id = :me_check6 AND (m.hidden_for_receiver = 0 OR m.hidden_for_receiver IS NULL))
+                            )
+                            ORDER BY m.created_at DESC, m.id DESC LIMIT 1
+                         ) as latest_msg_time,
                          u.id as other_user_id, u.username as other_username, u.avatar_id as other_avatar_id, u.avatar_url as other_avatar_url,
                          u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility
                   FROM conversations c
@@ -39,7 +58,7 @@ if (!empty($user_id)) {
                   WHERE (c.user1_id = :uid1 OR c.user2_id = :uid2) 
                   AND ( (c.user1_id != c.user2_id AND u.id != :uid3) OR (c.user1_id = c.user2_id AND u.id = :uid4) )
                   AND u.id NOT IN (SELECT target_id FROM relationships WHERE user_id = :uid5 AND status = 'blocked')
-                  ORDER BY c.last_message_time DESC";
+                  ORDER BY COALESCE(latest_msg_time, c.last_message_time) DESC";
         
         $stmt = $pdo->prepare($query);
         $stmt->execute([
@@ -49,7 +68,11 @@ if (!empty($user_id)) {
             ':uid4' => $user_id, 
             ':uid5' => $user_id,
             ':me_check1' => $user_id,
-            ':me_check2' => $user_id
+            ':me_check2' => $user_id,
+            ':me_check3' => $user_id,
+            ':me_check4' => $user_id,
+            ':me_check5' => $user_id,
+            ':me_check6' => $user_id
         ]);
         
         $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -73,6 +96,26 @@ if (!empty($user_id)) {
                 if ((time() - $last_seen_ts) <= 120) {
                     $conv['is_online'] = true;
                 }
+            }
+
+            // Format Last Message Preview
+            $type = $conv['latest_msg_type'] ?? 'text';
+            $text = $conv['latest_msg_text'] ?? '';
+            
+            if (empty($text) && empty($type) && empty($conv['latest_msg_time'])) {
+                $conv['last_message'] = null;
+                $conv['last_message_time'] = null;
+            } else {
+                if ($type === 'image') $conv['last_message'] = '📷 Image';
+                elseif ($type === 'video') $conv['last_message'] = '🎥 Video';
+                elseif ($type === 'voice') $conv['last_message'] = '🎤 Voice Message';
+                elseif ($type === 'audio') $conv['last_message'] = '🎵 Audio';
+                elseif ($type === 'document') $conv['last_message'] = '📄 Document';
+                elseif ($type === 'gif') $conv['last_message'] = '👾 GIF';
+                elseif ($type === 'sticker') $conv['last_message'] = '🧩 Sticker';
+                else $conv['last_message'] = $text;
+                
+                $conv['last_message_time'] = $conv['latest_msg_time'];
             }
         }
         

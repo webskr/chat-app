@@ -107,16 +107,26 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
 
         // OTV Fields
         $is_one_time = !empty($data->is_one_time) ? 1 : 0;
+
+        // Validate OTV Text Length
+        if ($is_one_time && empty($media_url) && !empty($data->message) && mb_strlen($data->message) > 200) {
+            http_response_code(400);
+            echo json_encode(array("message" => "One-Time View text messages are limited to 200 characters."));
+            exit();
+        }
+
         // Default 5 minutes if not specified, only if is_one_time
         $delete_after_seconds = ($is_one_time && !empty($data->delete_after_seconds)) ? (int)$data->delete_after_seconds : ($is_one_time ? 300 : 0);
 
         // Scheduled Message
         $scheduled_at = !empty($data->scheduled_at) ? $data->scheduled_at : null;
         $status = $scheduled_at ? 'scheduled' : 'sent';
+        // NEW: Set sent_at if sending immediately
+        $sent_at = ($status === 'sent') ? date('Y-m-d H:i:s') : null;
 
         // 2. Insert Message
-        $msg_query = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_url, thumbnail_url, duration, file_size, file_name, mime_type, reply_to_message_id, is_one_time, delete_after_seconds, scheduled_at, status) 
-                      VALUES (:cid, :sid, :rid, :msg, :type, :media, :thumb, :dur, :size, :fname, :mime, :reply_id, :is_ot, :del_sec, :sch_at, :status)";
+        $msg_query = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_url, thumbnail_url, duration, file_size, file_name, mime_type, reply_to_message_id, is_one_time, delete_after_seconds, scheduled_at, status, sent_at) 
+                      VALUES (:cid, :sid, :rid, :msg, :type, :media, :thumb, :dur, :size, :fname, :mime, :reply_id, :is_ot, :del_sec, :sch_at, :status, :sent_at)";
         $msg_stmt = $pdo->prepare($msg_query);
         
         $message_text = !empty($data->message) ? $data->message : '';
@@ -137,8 +147,84 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
             ':is_ot' => $is_one_time,
             ':del_sec' => $delete_after_seconds,
             ':sch_at' => $scheduled_at,
-            ':status' => $status
+            ':status' => $status,
+            ':sent_at' => $sent_at
         ])) {
+            // --- Push Notification Logic ---
+            if ($status === 'sent') { // Only notify if sent immediately (not scheduled)
+                try {
+                    // Check if receiver has a device token and if chat is muted
+                    $notif_query = "
+                        SELECT u.device_token, 
+                               (SELECT COUNT(*) FROM muted_chats WHERE user_id = :rid AND target_id = :sid AND mute_until > NOW()) as is_muted,
+                               u.display_name
+                        FROM users u
+                        WHERE u.id = :rid
+                    ";
+                    $notif_stmt = $pdo->prepare($notif_query);
+                    $notif_stmt->execute([':rid' => $data->receiver_id, ':sid' => $data->sender_id]);
+                    $receiver_info = $notif_stmt->fetch(PDO::FETCH_ASSOC);
+
+                    if ($receiver_info && !empty($receiver_info['device_token']) && $receiver_info['is_muted'] == 0) {
+                        include_once '../includes/push_service.php';
+                        
+                        // Get Sender Name
+                        $sender_name_query = "SELECT display_name FROM users WHERE id = :sid";
+                        $sender_stmt = $pdo->prepare($sender_name_query);
+                        $sender_stmt->execute([':sid' => $data->sender_id]);
+                        $sender_name = $sender_stmt->fetchColumn();
+
+                        $title = $sender_name;
+                        $body = '';
+                        
+                        // Construct Body based on Message Type and OTV
+                        if ($is_one_time) {
+                            $body = "New private message";
+                        } else {
+                            switch ($message_type) {
+                                case 'text':
+                                    $body = mb_substr($message_text, 0, 30) . (mb_strlen($message_text) > 30 ? '...' : '');
+                                    break;
+                                case 'image':
+                                    $body = "📷 Photo";
+                                    break;
+                                case 'video':
+                                    $body = "🎥 Video";
+                                    break;
+                                case 'voice':
+                                    $body = "🎤 Voice Message";
+                                    break;
+                                case 'document':
+                                    $body = "📄 Document";
+                                    break;
+                                case 'gif':
+                                    $body = "👾 GIF";
+                                    break;
+                                case 'sticker':
+                                    $body = "🧩 Sticker";
+                                    break;
+                                default:
+                                    $body = "New message";
+                            }
+                        }
+
+                        // Payload for Deep Linking
+                        $payload = [
+                            'type' => 'new_message',
+                            'conversation_id' => $conv_id,
+                            'sender_id' => $data->sender_id,
+                            'sender_name' => $sender_name,
+                            'message_id' => $pdo->lastInsertId() // Approximate, valid enough for nav
+                        ];
+
+                        sendPushNotification($receiver_info['device_token'], $title, $body, $payload);
+                    }
+                } catch (Exception $e) {
+                    // Ignore notification errors to not fail the message send
+                }
+            }
+            // --- End Push Notification Logic ---
+
             http_response_code(200);
             echo json_encode(array("message" => "Message sent.", "conversation_id" => $conv_id));
         } else {

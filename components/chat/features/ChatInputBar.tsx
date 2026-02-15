@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, StyleSheet, TextInput, TouchableOpacity, Keyboard, Animated, PanResponder, Platform, Dimensions } from 'react-native';
+import { View, StyleSheet, TextInput, TouchableOpacity, Keyboard, Animated, PanResponder, Platform, Dimensions, Alert } from 'react-native';
 import { Smile, X, Paperclip, Send, Check, Mic, ChevronLeft, Trash2, Clock } from 'lucide-react-native';
 import { Colors } from '../../../constants/Colors';
 import { GlassCard } from '../../../components/GlassCard';
@@ -400,9 +400,6 @@ export const ChatInputBar = ({
 
                                         let finalMessage = textWithoutCommand;
                                         if (usedText) {
-                                            // Escape usedText for regex safely just in case, though it's simple usually
-                                            // Simple replace should work since it matches start
-                                            // Handle case-insensitive match for the usedText
                                             const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                                             const usedTextRegex = new RegExp(`^${escapeRegExp(usedText)}\\s*`, 'i');
                                             finalMessage = textWithoutCommand.replace(usedTextRegex, '').trim();
@@ -410,7 +407,16 @@ export const ChatInputBar = ({
 
                                         onRequestSchedule(scheduledTime, finalMessage);
                                     } else {
-                                        handleSend(inputText);
+                                        // Check for /otv command
+                                        let textToSend = inputText;
+                                        let isOneTimeMsg = false;
+
+                                        if (textToSend.trim().toLowerCase().startsWith('/otv ')) {
+                                            isOneTimeMsg = true;
+                                            textToSend = textToSend.replace(/^\/otv\s+/i, '').trim();
+                                        }
+
+                                        handleSend(textToSend, null, false, isOneTimeMsg);
                                     }
                                 }}
                                 disabled={!inputText.trim() || isSending || isUploading || (showScheduleGuidance && !scheduledTime)}
