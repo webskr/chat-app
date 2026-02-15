@@ -18,6 +18,7 @@
     },
     "android": {
       "package": "com.skr.chatapp",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
