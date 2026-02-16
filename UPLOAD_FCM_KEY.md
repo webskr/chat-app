@@ -3,7 +3,7 @@
 I was unable to navigate the interactive `eas credentials` menu automatically. You must upload the Service Account Key manually to enable Push Notifications in your Android Build.
 
 **The Service Account Key file is located at:**
-`c:\xampp\htdocs\chat-app\vegarm-459ba-firebase-adminsdk-fbsvc-41c1e87286.json`
+`c:\xampp\htdocs\chat-app\vegarm-459ba-firebase-adminsdk-fbsvc-50627e0df3.json`
 
 ## Steps to Upload
 
@@ -18,7 +18,7 @@ I was unable to navigate the interactive `eas credentials` menu automatically. Y
 6.  Select **Manage your Google Service Account Key for FCM V1**.
 7.  Select **Upload your own Google Service Account Key**.
 8.  When asked for the path, enter:
-    `vegarm-459ba-firebase-adminsdk-fbsvc-41c1e87286.json`
+    `vegarm-459ba-firebase-adminsdk-fbsvc-50627e0df3.json`
 9.  Confirm the upload.
 
 ## ⚠️ CRITICAL: Security Step ⚠️
@@ -26,7 +26,7 @@ I was unable to navigate the interactive `eas credentials` menu automatically. Y
 **IMMEDIATELY AFTER UPLOADING:**
 Run this command to delete the secret key file:
 ```bash
-del vegarm-459ba-firebase-adminsdk-fbsvc-41c1e87286.json
+del vegarm-459ba-firebase-adminsdk-fbsvc-50627e0df3.json
 ```
 
 **Never commit this file to Git.** (I have already added `*.json` to `.gitignore` to prevent this).

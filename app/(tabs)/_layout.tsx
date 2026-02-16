@@ -1,11 +1,42 @@
-import React from 'react';
+import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { MessageSquareText, Group, Globe2, Settings } from 'lucide-react-native';
 import { Colors } from '../../constants/Colors';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, View, Text } from 'react-native';
+import { useUser } from '../../context/UserContext';
+import { registerForPushNotificationsAsync } from '../../utils/notifications';
+import { Config } from '../../constants/Config';
 
 export default function TabLayout() {
+    const { user } = useUser();
+
+    useEffect(() => {
+        const registerToken = async () => {
+            if (user) {
+                try {
+                    const token = await registerForPushNotificationsAsync();
+                    if (token) {
+                        // Send to backend
+                        await fetch(`${Config.API_URL}/auth/update_token.php`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                user_id: user.id,
+                                token: token
+                            })
+                        });
+                        console.log('Device token registered:', token);
+                    }
+                } catch (err) {
+                    console.log('Error registering token:', err);
+                }
+            }
+        };
+
+        registerToken();
+    }, [user]);
+
     return (
         <Tabs
             screenOptions={{

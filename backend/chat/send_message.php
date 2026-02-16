@@ -169,10 +169,13 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
                         include_once '../includes/push_service.php';
                         
                         // Get Sender Name
-                        $sender_name_query = "SELECT display_name FROM users WHERE id = :sid";
+                        $sender_name_query = "SELECT username, display_name FROM users WHERE id = :sid";
                         $sender_stmt = $pdo->prepare($sender_name_query);
                         $sender_stmt->execute([':sid' => $data->sender_id]);
-                        $sender_name = $sender_stmt->fetchColumn();
+                        $sender_row = $sender_stmt->fetch(PDO::FETCH_ASSOC);
+
+                        // Use display_name if set, otherwise username
+                        $sender_name = !empty($sender_row['display_name']) ? $sender_row['display_name'] : $sender_row['username'];
 
                         $title = $sender_name;
                         $body = '';

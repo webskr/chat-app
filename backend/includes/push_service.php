@@ -12,6 +12,7 @@ function sendPushNotification($to_token, $title, $body, $data = null, $sound = '
         'body' => $body,
         'sound' => $sound,
         'priority' => 'high',
+        'channelId' => 'default',
     ];
 
     if ($data) {

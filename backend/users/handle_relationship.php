@@ -33,6 +33,53 @@ if (!empty($data->user_id) && !empty($data->target_id) && !empty($data->action))
         } elseif ($action == 'unfriend' || $action == 'unblock' || $action == 'decline') {
             // For decline, we delete the request
             // For unfriend/unblock, we delete the relationship
+            
+            if ($action == 'unfriend') {
+                // Cascading Deletion for Unfriend
+                // 1. Get Conversation ID
+                $conv_stmt = $pdo->prepare("SELECT id FROM conversations WHERE (user1_id = :uid AND user2_id = :tid) OR (user1_id = :tid AND user2_id = :uid)");
+                $conv_stmt->execute([':uid' => $user_id, ':tid' => $target_id]);
+                $conversation_id = $conv_stmt->fetchColumn();
+
+                if ($conversation_id) {
+                    // 2. Fetch all media files to delete
+                    $media_stmt = $pdo->prepare("SELECT media_url, thumbnail_url, file_name FROM messages WHERE conversation_id = :cid AND (media_url IS NOT NULL OR thumbnail_url IS NOT NULL)");
+                    $media_stmt->execute([':cid' => $conversation_id]);
+                    $media_files = $media_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                    // 3. Delete files from server
+                    foreach ($media_files as $file) {
+                        // Assuming URLs are relative to domain root, need to resolve to file system path
+                        // API_URL might be http://localhost/chat-app/backend
+                        // File paths in DB might be 'uploads/images/...'
+                        // We need to map this to c:\xampp\htdocs\chat-app\backend\uploads\...
+                        
+                        $base_dir = __DIR__ . '/../'; // Pointing to backend root
+
+                        if (!empty($file['media_url'])) {
+                            $file_path = $base_dir . $file['media_url'];
+                            if (file_exists($file_path)) {
+                                unlink($file_path);
+                            }
+                        }
+                        if (!empty($file['thumbnail_url'])) {
+                            $thumb_path = $base_dir . $file['thumbnail_url'];
+                            if (file_exists($thumb_path)) {
+                                unlink($thumb_path);
+                            }
+                        }
+                    }
+
+                    // 4. Delete Messages (Cascade should handle this if defined in DB, but explicit is safer here if not)
+                    $del_msg_stmt = $pdo->prepare("DELETE FROM messages WHERE conversation_id = :cid");
+                    $del_msg_stmt->execute([':cid' => $conversation_id]);
+
+                    // 5. Delete Conversation
+                    $del_conv_stmt = $pdo->prepare("DELETE FROM conversations WHERE id = :cid");
+                    $del_conv_stmt->execute([':cid' => $conversation_id]);
+                }
+            }
+
             $query = "DELETE FROM relationships WHERE (user_id = :uid AND target_id = :tid) OR (user_id = :tid AND target_id = :uid)";
         } else {
             http_response_code(400);

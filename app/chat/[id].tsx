@@ -111,6 +111,80 @@ export default function ChatDetailScreen() {
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [inputHeight, setInputHeight] = useState(60);
     const [isTyping, setIsTyping] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
+
+    // Fetch initial mute status
+    useEffect(() => {
+        if (!currentUser || !id) return;
+        const checkMuteStatus = async () => {
+            try {
+                const response = await fetch(`${Config.API_URL}/chat/check_mute.php?user_id=${currentUser.id}&target_id=${id}`);
+                const data = await response.json();
+                if (response.ok) {
+                    setIsMuted(data.is_muted);
+                }
+            } catch (e) {
+                console.error("Check mute error", e);
+            }
+        };
+        checkMuteStatus();
+    }, [currentUser, id]);
+
+    const handleMuteToggle = async () => {
+        if (!currentUser) return;
+        const action = isMuted ? 'unmute' : 'mute';
+
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/mute_chat.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: currentUser.id, target_id: id, action: action })
+            });
+            const data = await response.json();
+            if (response.ok && data.success) {
+                setIsMuted(!isMuted);
+                setMenuVisible(false);
+                Alert.alert("Success", data.message);
+            } else {
+                Alert.alert("Error", data.message || "Failed to update mute status.");
+            }
+        } catch (e) {
+            Alert.alert("Error", "Network error.");
+        }
+    };
+
+    const handleUnfriend = () => {
+        Alert.alert(
+            "Unfriend User?",
+            "Are you sure you want to unfriend this user? This will remove them from your friends list and DELETE ALL CHAT HISTORY, IMAGES, AND FILES PERMANENTLY.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Unfriend & Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        if (!currentUser) return;
+                        try {
+                            const response = await fetch(`${Config.API_URL}/users/handle_relationship.php`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ user_id: currentUser.id, target_id: id, action: 'unfriend' })
+                            });
+                            const data = await response.json();
+                            if (response.ok) {
+                                Alert.alert("Unfriended", "User unfriended and data deleted.");
+                                router.replace('/(tabs)/chats');
+                            } else {
+                                Alert.alert("Error", data.message || "Failed to unfriend.");
+                            }
+                        } catch (e) {
+                            Alert.alert("Error", "Network error.");
+                        }
+                    }
+                }
+            ]
+        );
+    };
 
     // Hooks
     const {
@@ -1045,10 +1119,12 @@ export default function ChatDetailScreen() {
     };
 
     const menuItems = [
-        { label: 'View Profile', icon: User, onPress: () => setModalVisible(true) },
+        { label: 'View Profile', icon: User, onPress: () => { setMenuVisible(false); setModalVisible(true); } },
+        { label: isMuted ? 'Unmute Notifications' : 'Mute Notifications', icon: BellOff, onPress: handleMuteToggle },
         { label: isLocked ? 'Unlock Chat' : 'Lock Chat', icon: isLocked ? Unlock : Lock, onPress: () => isLocked ? setShowUnlockPrompt(true) : setShowLockSetup(true) },
         { label: 'Clear Messages', icon: Trash2, onPress: handleClearChat },
         { label: relationshipStatus === 'blocked' ? 'Unblock' : 'Block', icon: ShieldAlert, onPress: handleBlockUser, destructive: true },
+        { label: 'Unfriend', icon: UserMinus, onPress: () => { setMenuVisible(false); handleUnfriend(); }, destructive: true },
     ];
 
     const handleForwardMessage = (msg: any) => {
