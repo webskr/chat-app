@@ -25,6 +25,7 @@ interface User {
     auto_delete_otv?: number | boolean;
     scramble_name?: number | boolean;
     links?: string; // JSON string of { label: string, url: string }[]
+    is_official?: number | boolean;
 }
 
 interface UserContextType {

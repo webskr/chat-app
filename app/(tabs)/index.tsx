@@ -8,14 +8,14 @@ import { Badge } from '../../components/Badge';
 import { GlassCard } from '../../components/GlassCard';
 import { SearchInput } from '../../components/SearchInput';
 import { router } from 'expo-router';
-import { Bookmark, MoreVertical } from 'lucide-react-native';
+import { Bookmark, MoreVertical, BadgeCheck } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
 import { useFocusEffect } from 'expo-router';
 import { formatChatTime } from '../../utils/time';
 import { EmptyState } from '../../components/EmptyState';
-import { MessageSquare } from 'lucide-react-native';
+import { MessageSquare, Megaphone } from 'lucide-react-native';
 
 export default function ChatScreen() {
     const { user, setUnreadCount } = useUser();
@@ -87,7 +87,8 @@ export default function ChatScreen() {
                     id: item.other_user_id.toString(),
                     user: String(item.other_user_id) === String(user?.id) ? 'Note to self' : item.other_username,
                     avatar_id: item.other_avatar_id,
-                    avatar_url: item.other_avatar_url
+                    avatar_url: item.other_avatar_url,
+                    is_official: item.other_is_official
                 }
             })}
         >
@@ -99,9 +100,14 @@ export default function ChatScreen() {
                 />
                 <View style={styles.chatDetails}>
                     <View style={styles.rowTop}>
-                        <ThemedText type="defaultSemiBold" style={styles.username} numberOfLines={1}>
-                            {String(item.other_user_id) === String(user?.id) ? 'Note to self' : item.other_username}
-                        </ThemedText>
+                        <View style={styles.nameBadgeContainer}>
+                            <ThemedText type="defaultSemiBold" style={styles.username} numberOfLines={1}>
+                                {String(item.other_user_id) === String(user?.id) ? 'Note to self' : item.other_username}
+                            </ThemedText>
+                            {item.other_is_official == 1 && (
+                                <BadgeCheck size={16} color={Colors.background} fill={Colors.verifiedBackground} />
+                            )}
+                        </View>
                         <ThemedText style={[styles.time, item.unread_count > 0 && styles.timeActive]}>
                             {formatChatTime(item.last_message_time)}
                         </ThemedText>
@@ -133,9 +139,17 @@ export default function ChatScreen() {
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
                 <ThemedText type="title" style={styles.headerTitle}>Vegarm</ThemedText>
-                <TouchableOpacity onPress={() => {/* More options */ }}>
-                    <MoreVertical size={22} color={Colors.textSecondary} />
-                </TouchableOpacity>
+
+                <View style={{ flexDirection: 'row', gap: 16 }}>
+                    {user?.is_official == 1 && (
+                        <TouchableOpacity onPress={() => router.push('/broadcast/compose')}>
+                            <Megaphone size={22} color={Colors.primary} />
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity onPress={() => {/* More options */ }}>
+                        <MoreVertical size={22} color={Colors.textSecondary} />
+                    </TouchableOpacity>
+                </View>
             </View>
             <View style={styles.searchContainer}>
                 <SearchInput
@@ -218,8 +232,14 @@ const styles = StyleSheet.create({
     },
     username: {
         color: Colors.text,
-        fontSize: 16, // Standard readable size, slightly bold from defaultSemiBold
+        fontSize: 16,
+        marginRight: 4,
+        flexShrink: 1, // Allow text to shrink so badge stays visible
+    },
+    nameBadgeContainer: {
         flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
         marginRight: 8,
     },
     time: {

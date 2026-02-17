@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { ChevronLeft, MoreVertical, Trash2, Share, X, Copy } from 'lucide-react-native';
+import { ChevronLeft, MoreVertical, Trash2, Share, X, Copy, BadgeCheck } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../../constants/Colors';
 import { ThemedText } from '../../../components/ThemedText';
@@ -86,9 +86,14 @@ export const ChatHeader = ({
                         size={40}
                     />
                     <View style={styles.nameContainer}>
-                        <ThemedText type="defaultSemiBold">
-                            {String(id) === String(currentUser?.id) ? 'Note to self' : otherUsername}
-                        </ThemedText>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <ThemedText type="defaultSemiBold">
+                                {String(id) === String(currentUser?.id) ? 'Note to self' : otherUsername}
+                            </ThemedText>
+                            {targetUserProfile?.is_official == 1 && (
+                                <BadgeCheck size={16} color={Colors.background} fill={Colors.verifiedBackground} />
+                            )}
+                        </View>
 
                         <ThemedText type="caption" style={{ color: String(id) === String(currentUser?.id) ? Colors.secondary : (isTyping ? Colors.primary : (targetUserProfile?.last_seen && (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000) ? Colors.online : Colors.textSecondary)) }}>
                             {String(id) === String(currentUser?.id)

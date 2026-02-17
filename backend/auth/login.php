@@ -19,10 +19,11 @@ if (!empty($data->email) && !empty($data->password)) {
     $password = $data->password;
 
     try {
-        $query = "SELECT id, username, display_name, email, password, avatar_id, bio, username_last_updated, global_auto_delete_minutes, last_seen, privacy_last_seen, privacy_read_receipts, privacy_profile_visibility, show_in_world, neon_color FROM users WHERE email = :email LIMIT 0,1";
+        $query = "SELECT id, username, display_name, email, password, avatar_id, bio, username_last_updated, global_auto_delete_minutes, last_seen, privacy_last_seen, privacy_read_receipts, privacy_profile_visibility, show_in_world, neon_color, is_official FROM users WHERE email = :email OR username = :username LIMIT 0,1";
         $stmt = $pdo->prepare($query);
 
         $stmt->bindParam(':email', $email);
+        $stmt->bindParam(':username', $email); // Bind the same input to username parameter
         $stmt->execute();
         $num = $stmt->rowCount();
 
@@ -56,7 +57,8 @@ if (!empty($data->email) && !empty($data->password)) {
                         "privacy_read_receipts" => $row['privacy_read_receipts'],
                         "privacy_profile_visibility" => $row['privacy_profile_visibility'],
                         "show_in_world" => $row['show_in_world'],
-                        "neon_color" => $row['neon_color']
+                        "neon_color" => $row['neon_color'],
+                        "is_official" => $row['is_official']
                     )
                 ));
             } else {

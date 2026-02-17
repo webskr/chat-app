@@ -13,7 +13,7 @@ function processScheduledMessages($pdo) {
                   FROM messages 
                   WHERE status = 'scheduled' 
                   AND scheduled_at <= UTC_TIMESTAMP() 
-                  LIMIT 50 
+                  AND scheduled_at <= UTC_TIMESTAMP() 
                   FOR UPDATE";
 
         $stmt = $pdo->prepare($query);
@@ -26,7 +26,7 @@ function processScheduledMessages($pdo) {
             $ids = array_column($messages, 'id');
             // 2. Update status to 'sent'
             $inQuery = implode(',', array_fill(0, count($ids), '?'));
-            $updateSql = "UPDATE messages SET status = 'sent', sent_at = NOW() WHERE id IN ($inQuery)";
+            $updateSql = "UPDATE messages SET status = 'sent', sent_at = UTC_TIMESTAMP() WHERE id IN ($inQuery)";
             $updateStmt = $pdo->prepare($updateSql);
             $updateStmt->execute($ids);
 

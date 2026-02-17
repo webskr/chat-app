@@ -1,0 +1,88 @@
+2026-02-17 09:46:07 - Received broadcast request. Sender: 9993
+2026-02-17 09:46:07 - Found 12 users to broadcast to.
+2026-02-17 09:46:08 - Broadcast completed. Success count: 12
+2026-02-17 09:50:30 - Received broadcast request. Sender: 9993
+2026-02-17 09:50:30 - Found 12 users to broadcast to.
+2026-02-17 09:50:31 - Broadcast completed. Success count: 12
+2026-02-17 09:57:42 - Received broadcast request. Sender: 9993
+2026-02-17 09:57:51 - Received broadcast request. Sender: 9993
+2026-02-17 09:57:55 - Received broadcast request. Sender: 9993
+2026-02-17 09:59:20 - Received broadcast request. Sender: 9993
+2026-02-17 09:59:21 - Received broadcast request. Sender: 9993
+2026-02-17 09:59:39 - Received broadcast request. Sender: 9993
+2026-02-17 10:01:29 - Received broadcast request. Sender: 9993
+2026-02-17 10:01:42 - Received broadcast request. Sender: 9993
+2026-02-17 10:01:44 - Received broadcast request. Sender: 9993
+2026-02-17 10:03:59 - Received broadcast request. Sender: 9993
+2026-02-17 10:04:00 - Received broadcast request. Sender: 9993
+2026-02-17 10:04:14 - Received broadcast request. Sender: 9993
+2026-02-17 10:04:15 - Received broadcast request. Sender: 9993
+2026-02-17 10:05:00 - Received broadcast request. Sender: 9993
+2026-02-17 10:08:24 - Received broadcast request. Sender: 9993
+2026-02-17 10:08:25 - Received broadcast request. Sender: 9993
+2026-02-17 10:09:53 - Received broadcast request. Sender: 9993
+2026-02-17 10:10:02 - Received broadcast request. Sender: 9993
+2026-02-17 10:10:03 - Received broadcast request. Sender: 9993
+2026-02-17 10:11:39 - Received broadcast request. Sender: 9993
+2026-02-17 10:11:39 - Found 12 users to broadcast to.
+2026-02-17 10:11:41 - Broadcast completed. Success count: 12
+2026-02-17 10:18:45 - Received broadcast request. Data: stdClass Object
+(
+    [sender_id] => 9993
+    [message] => nm
+    [image_path] => 
+    [scheduled_at] => 
+)
+
+2026-02-17 10:18:45 - Sender: 9993
+2026-02-17 10:18:45 - Found 12 users to broadcast to.
+2026-02-17 10:18:45 - Message: nm | Image Path: 
+2026-02-17 10:18:46 - Broadcast completed. Success count: 12
+2026-02-17 11:16:04 - Received broadcast request. Data: stdClass Object
+(
+    [sender_id] => 9993
+    [message] => Test Broadcast with Image 2026-02-17 11:16:04
+    [image_path] => http://localhost/chat-app/backend/uploads/107022026151000056109.png
+)
+
+2026-02-17 11:16:04 - Sender: 9993
+2026-02-17 11:16:04 - Found 12 users to broadcast to.
+2026-02-17 11:16:04 - Message: Test Broadcast with Image 2026-02-17 11:16:04 | Image Path: http://localhost/chat-app/backend/uploads/107022026151000056109.png
+2026-02-17 11:16:06 - Broadcast completed. Success count: 12
+2026-02-17 11:24:52 - Received broadcast request. Data: stdClass Object
+(
+    [sender_id] => 9993
+    [message] => hjkl;
+    [image_path] => uploads/9993170220260Untitleddesign27.png
+    [scheduled_at] => 
+)
+
+2026-02-17 11:24:52 - Sender: 9993
+2026-02-17 11:24:52 - Found 12 users to broadcast to.
+2026-02-17 11:24:52 - Message: hjkl; | Image Path: uploads/9993170220260Untitleddesign27.png
+2026-02-17 11:24:53 - Broadcast completed. Success count: 12
+2026-02-17 13:48:39 - Received broadcast request. Data: stdClass Object
+(
+    [sender_id] => 9993
+    [message] => Test Broadcast from Script 13:48:39
+    [image_path] => 
+    [scheduled_at] => 2026-02-17T12:50:39Z
+)
+
+2026-02-17 13:48:39 - Sender: 9993
+2026-02-17 13:48:39 - Found 12 users to broadcast to.
+2026-02-17 13:48:39 - Message: Test Broadcast from Script 13:48:39 | Image Path: 
+2026-02-17 13:48:39 - Scheduled At (ISO): 2026-02-17T12:50:39Z -> (UTC DB): 2026-02-17 12:50:39
+2026-02-17 13:48:39 - Broadcast completed. Success count: 12
+2026-02-17 16:32:55 - Received broadcast request. Data: stdClass Object
+(
+    [sender_id] => 9993
+    [message] => hi bro new update alive
+    [image_path] => uploads/9993170220260Untitleddesign27.png
+    [scheduled_at] => 
+)
+
+2026-02-17 16:32:55 - Sender: 9993
+2026-02-17 16:32:56 - Found 12 users to broadcast to.
+2026-02-17 16:32:56 - Message: hi bro new update alive | Image Path: uploads/9993170220260Untitleddesign27.png
+2026-02-17 16:32:58 - Broadcast completed. Success count: 12

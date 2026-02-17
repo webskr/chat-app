@@ -29,7 +29,7 @@ try {
 
      $query = "SELECT u.id, u.username, u.display_name, u.scramble_name, u.email, u.avatar_id, u.avatar_url, u.bio, 
                      u.links,
-                     u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.show_in_world, u.neon_color, u.border_color, u.button_color,
+                     u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.show_in_world, u.neon_color, u.border_color, u.button_color, u.is_official,
               (SELECT status FROM relationships WHERE user_id = :uid1 AND target_id = u.id) as sent_status,
               (SELECT status FROM relationships WHERE user_id = u.id AND target_id = :uid2) as received_status
               FROM users u WHERE u.id != :uid3 ORDER BY u.display_name ASC, u.username ASC";

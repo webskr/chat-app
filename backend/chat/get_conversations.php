@@ -53,7 +53,7 @@ if (!empty($user_id)) {
                          ) as latest_msg_time,
                          (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.receiver_id = :me_unread AND m.status != 'seen') as unread_count,
                          u.id as other_user_id, u.username as other_username, u.avatar_id as other_avatar_id, u.avatar_url as other_avatar_url,
-                         u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility
+                         u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.is_official as other_is_official
                   FROM conversations c
                   JOIN users u ON (c.user1_id = u.id OR c.user2_id = u.id)
                   WHERE (c.user1_id = :uid1 OR c.user2_id = :uid2) 

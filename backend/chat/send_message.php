@@ -21,16 +21,22 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
         exit();
     }
     try {
-        // 0. Rate Limiting Check
-        $rate_limit_query = "SELECT COUNT(*) FROM messages 
-                             WHERE sender_id = :sid 
-                             AND created_at > (NOW() - INTERVAL 1 MINUTE)";
-        $rate_stmt = $pdo->prepare($rate_limit_query);
-        $rate_stmt->execute([':sid' => $data->sender_id]);
-        if ($rate_stmt->fetchColumn() >= 20) {
-            http_response_code(429);
-            echo json_encode(array("message" => "Too many messages. Please wait a moment."));
-            exit();
+        // 0. Rate Limiting Check (Skip for Official Accounts)
+        $is_official_stmt = $pdo->prepare("SELECT is_official FROM users WHERE id = :sid");
+        $is_official_stmt->execute([':sid' => $data->sender_id]);
+        $is_official = $is_official_stmt->fetchColumn();
+
+        if (!$is_official) {
+            $rate_limit_query = "SELECT COUNT(*) FROM messages 
+                                 WHERE sender_id = :sid 
+                                 AND created_at > (NOW() - INTERVAL 1 MINUTE)";
+            $rate_stmt = $pdo->prepare($rate_limit_query);
+            $rate_stmt->execute([':sid' => $data->sender_id]);
+            if ($rate_stmt->fetchColumn() >= 20) {
+                http_response_code(429);
+                echo json_encode(array("message" => "Too many messages. Please wait a moment."));
+                exit();
+            }
         }
 
         // 0. Check for Blocked Status

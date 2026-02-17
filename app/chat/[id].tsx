@@ -1404,6 +1404,11 @@ export default function ChatDetailScreen() {
                                     <ThemedText style={styles.unblockText}>Tap to unblock</ThemedText>
                                 </TouchableOpacity>
                             </View>
+                        ) : targetUserProfile?.is_official == 1 ? (
+                            <View style={[styles.blockedFooter, { height: 80, justifyContent: 'center' }]}>
+                                <ThemedText style={{ color: Colors.textSecondary, textAlign: 'center' }}>This is an official system account.</ThemedText>
+                                <ThemedText style={{ color: Colors.textSecondary, textAlign: 'center', fontSize: 12 }}>Relies are disabled.</ThemedText>
+                            </View>
                         ) : (
                             <View style={styles.inputContainer}>
                                 <ReplyPreview replyingToMessage={replyingToMessage} currentUser={currentUser} onCancel={() => setReplyingToMessage(null)} />
