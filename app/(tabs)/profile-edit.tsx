@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert, FlatList, Image } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert, FlatList, Image, Modal } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../constants/Colors';
@@ -15,12 +15,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../../context/UserContext';
 
 export default function ProfileEditScreen() {
-    const { user, updateUserProfile } = useUser();
+    const { user, updateUserProfile, reloadUser } = useUser();
     const [username, setUsername] = useState(user?.username || '');
     const [displayName, setDisplayName] = useState(user?.display_name || '');
     const [bio, setBio] = useState(user?.bio || '');
-    const [website, setWebsite] = useState(user?.website || '');
-    const [websiteLabel, setWebsiteLabel] = useState(user?.website_label || '');
+    const [links, setLinks] = useState<{ label: string, url: string }[]>([]);
+    const [isLinkModalVisible, setIsLinkModalVisible] = useState(false);
+    const [currentLink, setCurrentLink] = useState({ label: '', url: '' });
 
     const [avatarId, setAvatarId] = useState(user?.avatar_id || '1');
     const [customAvatar, setCustomAvatar] = useState<string | null>(user?.avatar_url ? `${Config.API_URL}/${user.avatar_url}` : null);
@@ -35,12 +36,19 @@ export default function ProfileEditScreen() {
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
     useEffect(() => {
+        reloadUser();
+    }, []);
+
+    useEffect(() => {
         if (user) {
             setUsername(user.username);
             setDisplayName(user.display_name || '');
             setBio(user.bio || '');
-            setWebsite(user.website || '');
-            setWebsiteLabel(user.website_label || '');
+            try {
+                setLinks(user.links ? JSON.parse(user.links) : []);
+            } catch (e) {
+                setLinks([]);
+            }
             setAvatarId(user.avatar_id || '1');
             if (user.avatar_url) {
                 setCustomAvatar(`${Config.API_URL}/${user.avatar_url}`);
@@ -163,8 +171,7 @@ export default function ProfileEditScreen() {
                 username: username,
                 display_name: displayName,
                 bio: bio,
-                website: website,
-                website_label: websiteLabel,
+                links: JSON.stringify(links),
                 avatar_id: avatarId
             };
 
@@ -185,8 +192,7 @@ export default function ProfileEditScreen() {
                     username: username,
                     display_name: displayName,
                     bio: bio,
-                    website: website,
-                    website_label: websiteLabel,
+                    links: JSON.stringify(links),
                     avatar_id: avatarId,
                     avatar_url: newAvatarUrl || (avatarId === 'custom' ? user.avatar_url : undefined), // Keep existing if custom and not changed, or new one
                     username_last_updated: data.user?.username_last_updated || user.username_last_updated
@@ -355,33 +361,45 @@ export default function ProfileEditScreen() {
 
                         {/* Links & Socials */}
                         <BlurView intensity={20} tint="dark" style={[styles.glassCard, { marginTop: 20 }]}>
-                            <ThemedText type="subtitle" style={styles.cardTitle}>Links</ThemedText>
-
-                            <ThemedText style={styles.inputLabel}>Link Label</ThemedText>
-                            <View style={styles.inputContainer}>
-                                <Ionicons name="pricetag-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="e.g. My Website, Portfolio"
-                                    placeholderTextColor={Colors.textSecondary}
-                                    value={websiteLabel}
-                                    onChangeText={setWebsiteLabel}
-                                />
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                                <ThemedText type="subtitle" style={{ marginBottom: 0 }}>Links</ThemedText>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        if (links.length >= 5) {
+                                            Alert.alert('Limit Reached', 'You can only add up to 5 links.');
+                                            return;
+                                        }
+                                        setCurrentLink({ label: '', url: '' });
+                                        setIsLinkModalVisible(true);
+                                    }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                        <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
+                                        <ThemedText style={{ color: Colors.primary }}>Add Link</ThemedText>
+                                    </View>
+                                </TouchableOpacity>
                             </View>
 
-                            <ThemedText style={styles.inputLabel}>URL</ThemedText>
-                            <View style={styles.inputContainer}>
-                                <Ionicons name="link-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="https://"
-                                    placeholderTextColor={Colors.textSecondary}
-                                    value={website}
-                                    onChangeText={setWebsite}
-                                    autoCapitalize="none"
-                                    keyboardType="url"
-                                />
-                            </View>
+                            {links.map((link, index) => (
+                                <View key={index} style={styles.linkItem}>
+                                    <View style={{ flex: 1 }}>
+                                        <ThemedText style={styles.linkLabel}>{link.label}</ThemedText>
+                                        <ThemedText style={styles.linkUrl} numberOfLines={1}>{link.url}</ThemedText>
+                                    </View>
+                                    <TouchableOpacity onPress={() => {
+                                        const newLinks = [...links];
+                                        newLinks.splice(index, 1);
+                                        setLinks(newLinks);
+                                    }}>
+                                        <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                            {links.length === 0 && (
+                                <ThemedText style={{ color: Colors.textSecondary, textAlign: 'center', fontStyle: 'italic' }}>
+                                    No links added.
+                                </ThemedText>
+                            )}
                         </BlurView>
 
                         <TouchableOpacity
@@ -454,6 +472,67 @@ export default function ProfileEditScreen() {
                     </ScrollView>
                 </KeyboardAvoidingView>
             </View>
+            {/* Link Editor Modal */}
+            <Modal
+                visible={isLinkModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsLinkModalVisible(false)}
+            >
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                    <View style={styles.modalOverlay}>
+                        <BlurView intensity={20} tint="dark" style={styles.modalContent}>
+                            <ThemedText type="subtitle" style={styles.modalTitle}>Add Link</ThemedText>
+
+                            <ThemedText style={styles.inputLabel}>Label</ThemedText>
+                            <View style={styles.inputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="e.g. Portfolio"
+                                    placeholderTextColor={Colors.textSecondary}
+                                    value={currentLink.label}
+                                    onChangeText={(text) => setCurrentLink({ ...currentLink, label: text })}
+                                />
+                            </View>
+
+                            <ThemedText style={styles.inputLabel}>URL</ThemedText>
+                            <View style={styles.inputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="https://example.com"
+                                    placeholderTextColor={Colors.textSecondary}
+                                    value={currentLink.url}
+                                    onChangeText={(text) => setCurrentLink({ ...currentLink, url: text })}
+                                    autoCapitalize="none"
+                                    keyboardType="url"
+                                />
+                            </View>
+
+                            <View style={styles.modalActions}>
+                                <TouchableOpacity
+                                    style={[styles.modalBtn, { backgroundColor: 'rgba(255,255,255,0.1)' }]}
+                                    onPress={() => setIsLinkModalVisible(false)}
+                                >
+                                    <ThemedText>Cancel</ThemedText>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.modalBtn, { backgroundColor: Colors.primary }]}
+                                    onPress={() => {
+                                        if (!currentLink.label || !currentLink.url) {
+                                            Alert.alert('Error', 'Please fill in both fields');
+                                            return;
+                                        }
+                                        setLinks([...links, currentLink]);
+                                        setIsLinkModalVisible(false);
+                                    }}
+                                >
+                                    <ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>Add</ThemedText>
+                                </TouchableOpacity>
+                            </View>
+                        </BlurView>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -566,5 +645,52 @@ const styles = StyleSheet.create({
         fontSize: 14,
         marginBottom: 8,
         marginLeft: 4,
+    },
+    linkItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 12,
+        marginBottom: 10,
+        gap: 10,
+    },
+    linkLabel: {
+        fontSize: 16,
+        color: '#fff',
+        fontWeight: '600',
+    },
+    linkUrl: {
+        fontSize: 12,
+        color: Colors.textSecondary,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: '#1a1a1a',
+        borderRadius: 25,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: Colors.glassBorder,
+        overflow: 'hidden',
+    },
+    modalTitle: {
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    modalActions: {
+        flexDirection: 'row',
+        gap: 15,
+        marginTop: 10,
+    },
+    modalBtn: {
+        flex: 1,
+        padding: 15,
+        borderRadius: 15,
+        alignItems: 'center',
     },
 });

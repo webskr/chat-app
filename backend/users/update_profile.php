@@ -72,14 +72,11 @@ if (!empty($data->id) && (!empty($data->username) || !empty($data->avatar_id))) 
             $params[':bio'] = trim($data->bio);
         }
 
-        if (isset($data->website)) {
-            $update_fields[] = "website = :website";
-            $params[':website'] = trim($data->website);
-        }
-
-        if (isset($data->website_label)) {
-            $update_fields[] = "website_label = :website_label";
-            $params[':website_label'] = trim($data->website_label);
+        if (isset($data->links)) {
+            $update_fields[] = "links = :links";
+            // Ensure it's stored as a JSON string
+            $linksJson = is_string($data->links) ? $data->links : json_encode($data->links);
+            $params[':links'] = $linksJson;
         }
 
         if (!empty($data->avatar_id)) {
@@ -108,7 +105,7 @@ if (!empty($data->id) && (!empty($data->username) || !empty($data->avatar_id))) 
 
         if ($stmt->execute($params)) {
              // Fetch updated user data to return
-            $fetchStmt = $pdo->prepare("SELECT id, username, display_name, bio, website, website_label, avatar_id, avatar_url, username_last_updated FROM users WHERE id = :id");
+            $fetchStmt = $pdo->prepare("SELECT id, username, display_name, bio, links, avatar_id, avatar_url, username_last_updated FROM users WHERE id = :id");
             $fetchStmt->execute([':id' => $data->id]);
             $updatedUser = $fetchStmt->fetch(PDO::FETCH_ASSOC);
 

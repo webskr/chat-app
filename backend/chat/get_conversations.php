@@ -51,6 +51,7 @@ if (!empty($user_id)) {
                             )
                             ORDER BY m.created_at DESC, m.id DESC LIMIT 1
                          ) as latest_msg_time,
+                         (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.receiver_id = :me_unread AND m.status != 'seen') as unread_count,
                          u.id as other_user_id, u.username as other_username, u.avatar_id as other_avatar_id, u.avatar_url as other_avatar_url,
                          u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility
                   FROM conversations c
@@ -72,7 +73,8 @@ if (!empty($user_id)) {
             ':me_check3' => $user_id,
             ':me_check4' => $user_id,
             ':me_check5' => $user_id,
-            ':me_check6' => $user_id
+            ':me_check6' => $user_id,
+            ':me_unread' => $user_id
         ]);
         
         $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);

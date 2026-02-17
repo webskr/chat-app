@@ -19,7 +19,8 @@ import {
     UserPlus,
     Sliders,
     ChevronDown,
-    Check
+    Check,
+    MessageSquarePlus
 } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
 import { router, useFocusEffect } from 'expo-router';
@@ -49,7 +50,8 @@ const SECTIONS = [
     {
         title: 'Support',
         items: [
-            { id: 'help', icon: CircleHelp, label: 'Help & Support', type: 'link' },
+            { id: 'feedback', icon: MessageSquarePlus, label: 'Feedback & Support', type: 'link' },
+
         ],
     },
 ];
@@ -153,8 +155,10 @@ export default function SettingsScreen() {
                                             if (item.id === 'profile') router.push('/(tabs)/profile-edit');
                                             if (item.id === 'invite') router.push('/invite');
                                             if (item.id === 'controls') router.push('/settings/controls');
+                                            if (item.id === 'privacy') router.push('/settings/privacy');
                                             if (item.id === 'appearance') router.push('/appearance');
                                             if (item.id === 'blocked') router.push('/settings/blocked');
+                                            if (item.id === 'feedback') router.push('/settings/feedback');
                                         }}
                                     >
                                         <View style={styles.settingLeft}>

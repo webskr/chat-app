@@ -24,8 +24,7 @@ interface User {
     button_color?: string;
     auto_delete_otv?: number | boolean;
     scramble_name?: number | boolean;
-    website?: string;
-    website_label?: string;
+    links?: string; // JSON string of { label: string, url: string }[]
 }
 
 interface UserContextType {
@@ -34,6 +33,8 @@ interface UserContextType {
     updateUserProfile: (data: Partial<User>) => Promise<void>;
     reloadUser: () => Promise<void>;
     isLoading: boolean;
+    unreadCount: number;
+    setUnreadCount: (count: number) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -60,7 +61,25 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     };
 
     const reloadUser = async () => {
+        // First load from local storage to be quick
         await loadUser();
+
+        // Then fetch fresh data if we have a user
+        try {
+            const currentUserStr = await AsyncStorage.getItem('user');
+            if (currentUserStr) {
+                const currentUser = JSON.parse(currentUserStr);
+                const response = await fetch(`${Config.API_URL}/users/get_user.php?user_id=${currentUser.id}`);
+                if (response.ok) {
+                    const freshUser = await response.json();
+                    if (freshUser && freshUser.id) {
+                        await setUser(freshUser);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error reloading user from server:', error);
+        }
     };
 
     const setUser = async (newUser: User | null) => {
@@ -98,8 +117,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         await setUser(updatedUser);
     };
 
+    const [unreadCount, setUnreadCount] = useState(0);
+
     return (
-        <UserContext.Provider value={{ user, setUser, updateUserProfile, reloadUser, isLoading }}>
+        <UserContext.Provider value={{ user, setUser, updateUserProfile, reloadUser, isLoading, unreadCount, setUnreadCount }}>
             {children}
         </UserContext.Provider>
     );

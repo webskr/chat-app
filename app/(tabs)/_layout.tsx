@@ -9,7 +9,7 @@ import { registerForPushNotificationsAsync } from '../../utils/notifications';
 import { Config } from '../../constants/Config';
 
 export default function TabLayout() {
-    const { user } = useUser();
+    const { user, unreadCount } = useUser();
 
     useEffect(() => {
         const registerToken = async () => {
@@ -60,7 +60,7 @@ export default function TabLayout() {
                             {/* Badge logic could go here if global state available, but usually handled in badge prop */}
                         </View>
                     ),
-                    tabBarBadge: 45, // Example badge count from reference, or dynamic
+                    tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
                     tabBarBadgeStyle: styles.badge,
                 }}
             />

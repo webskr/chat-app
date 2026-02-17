@@ -13,6 +13,7 @@ function sendPushNotification($to_token, $title, $body, $data = null, $sound = '
         'sound' => $sound,
         'priority' => 'high',
         'channelId' => 'default',
+        'color' => '#000000', // Tint color for the small icon
     ];
 
     if ($data) {

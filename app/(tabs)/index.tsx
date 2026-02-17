@@ -18,7 +18,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { MessageSquare } from 'lucide-react-native';
 
 export default function ChatScreen() {
-    const { user } = useUser();
+    const { user, setUnreadCount } = useUser();
     const [chats, setChats] = React.useState<any[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [searchQuery, setSearchQuery] = React.useState('');
@@ -31,13 +31,15 @@ export default function ChatScreen() {
             const data = await response.json();
             if (response.ok) {
                 setChats(data);
+                const totalUnread = data.reduce((sum: number, chat: any) => sum + (Number(chat.unread_count) || 0), 0);
+                setUnreadCount(totalUnread);
             }
         } catch (error) {
             console.error('Error fetching conversations:', error);
         } finally {
             setIsLoading(false);
         }
-    }, [user]);
+    }, [user, setUnreadCount]);
 
     useFocusEffect(
         React.useCallback(() => {

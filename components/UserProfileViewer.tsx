@@ -7,7 +7,6 @@ import {
     Dimensions,
     Animated,
     ScrollView,
-    PanResponder,
     Image,
     Alert
 } from 'react-native';
@@ -17,8 +16,6 @@ import { Avatar } from './Avatar';
 import {
     X,
     MessageCircle,
-    Phone,
-    Video,
     Bell,
     BellOff,
     Ban,
@@ -26,7 +23,8 @@ import {
     ChevronDown,
     MapPin,
     Link as LinkIcon,
-    Image as ImageIcon
+    Lock,
+    UserMinus,
 } from 'lucide-react-native';
 import { getAvatarById } from '../constants/Avatars';
 import { BlurView } from 'expo-blur';
@@ -101,19 +99,7 @@ export function UserProfileViewer({
         ]).start(() => onClose());
     };
 
-    const panResponder = useRef(
-        PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: (_, gestureState) => {
-                return gestureState.dy > 10; // Only capture downward swipes
-            },
-            onPanResponderRelease: (_, gestureState) => {
-                if (gestureState.dy > 100) {
-                    handleClose();
-                }
-            },
-        })
-    ).current;
+
 
 
     if (!user) return null;
@@ -140,8 +126,9 @@ export function UserProfileViewer({
             if (response.ok) {
                 if (action === 'block') Alert.alert('Blocked', `${user.username} has been blocked.`);
                 if (action === 'report') Alert.alert('Reported', 'User has been reported.');
+                if (action === 'unfriend') Alert.alert('Unfriended', `${user.username} has been unfriended.`);
                 if (onActionComplete) onActionComplete();
-                if (action === 'block') handleClose();
+                if (action === 'block' || action === 'unfriend') handleClose();
             }
         } catch (error) {
             console.error('Action failed:', error);
@@ -185,27 +172,18 @@ export function UserProfileViewer({
                         styles.modalContent,
                         { transform: [{ translateY: slideAnim }] }
                     ]}
-                    {...panResponder.panHandlers}
                 >
                     {/* Status Bar Spacer */}
-                    <View style={styles.dragIndicator} />
+                    <View style={{ height: 20 }} />
 
                     <ScrollView
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={styles.scrollContent}
                     >
                         {/* Header Actions */}
-                        <View style={styles.headerRow}>
-                            <TouchableOpacity onPress={handleClose} style={styles.iconBtn}>
-                                <ChevronDown size={28} color="#fff" />
-                            </TouchableOpacity>
-                            {/* Can add share/more options here */}
-                            {!isSelf && (
-                                <TouchableOpacity onPress={() => handleAction('report')} style={styles.iconBtn}>
-                                    <MoreVerticalIcon />
-                                </TouchableOpacity>
-                            )}
-                        </View>
+                        <TouchableOpacity onPress={handleClose} style={styles.iconBtn}>
+                            <ChevronDown size={28} color="#fff" />
+                        </TouchableOpacity>
 
                         {/* HERO SECTION */}
                         <View style={styles.hero}>
@@ -234,10 +212,10 @@ export function UserProfileViewer({
                         {/* ACTION ROW */}
                         {!isSelf && (
                             <View style={styles.actionRow}>
-                                <ActionButton icon={MessageCircle} label="Message" onPress={handleMessage} primary />
-                                <ActionButton icon={Phone} label="Call" onPress={() => Alert.alert('Coming Soon', 'Voice calls are coming soon!')} />
-                                <ActionButton icon={Video} label="Video" onPress={() => Alert.alert('Coming Soon', 'Video calls are coming soon!')} />
-                                <ActionButton icon={Bell} label="Mute" onPress={() => { }} />
+                                {/* <ActionButton icon={MessageCircle} label="Message" onPress={handleMessage} primary />
+                                <ActionButton icon={Lock} label="Chat Lock" onPress={() => Alert.alert('Chat Lock', 'Chat lock enabled')} />
+                                <ActionButton icon={UserMinus} label="Unfriend" onPress={() => handleAction('unfriend')} />
+                                <ActionButton icon={Bell} label="Mute" onPress={() => { }} /> */}
                             </View>
                         )}
 
@@ -255,22 +233,33 @@ export function UserProfileViewer({
                             ) : null}
                         </View>
 
-                        <View style={styles.section}>
-                            <View style={styles.sectionHeader}>
-                                <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Media</ThemedText>
-                                <TouchableOpacity>
-                                    <ThemedText style={styles.seeAll}>See All</ThemedText>
-                                </TouchableOpacity>
+                        {user.links && user.links !== '[]' && (
+                            <View style={styles.section}>
+                                <View style={styles.sectionHeader}>
+                                    <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Links</ThemedText>
+                                </View>
+                                {(() => {
+                                    try {
+                                        const links = typeof user.links === 'string' ? JSON.parse(user.links) : user.links;
+                                        if (!Array.isArray(links)) return null;
+                                        return links.map((link: any, index: number) => (
+                                            <TouchableOpacity
+                                                key={index}
+                                                style={[styles.linkRow, { marginBottom: 8 }]}
+                                                onPress={() => Alert.alert('Open Link', `Opening ${link.url}`)}
+                                            >
+                                                <LinkIcon size={20} color={Colors.primary} />
+                                                <ThemedText style={styles.linkText} numberOfLines={1}>
+                                                    {link.label || link.url}
+                                                </ThemedText>
+                                            </TouchableOpacity>
+                                        ));
+                                    } catch (e) {
+                                        return null;
+                                    }
+                                })()}
                             </View>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaRow}>
-                                {/* Placeholder Media Grid */}
-                                {[1, 2, 3, 4].map((i) => (
-                                    <View key={i} style={styles.mediaPlaceholder}>
-                                        <ImageIcon size={24} color="rgba(255,255,255,0.2)" />
-                                    </View>
-                                ))}
-                            </ScrollView>
-                        </View>
+                        )}
 
                         {/* FOOTER ACTIONS */}
                         {!isSelf && (
@@ -294,7 +283,7 @@ export function UserProfileViewer({
                     </ScrollView>
                 </Animated.View>
             </View>
-        </Modal>
+        </Modal >
     );
 }
 
@@ -307,13 +296,7 @@ const ActionButton = ({ icon: Icon, label, onPress, primary }: any) => (
     </TouchableOpacity>
 );
 
-const MoreVerticalIcon = () => (
-    <View style={{ gap: 3 }}>
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff' }} />
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff' }} />
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#fff' }} />
-    </View>
-);
+
 
 const styles = StyleSheet.create({
     container: {
@@ -331,14 +314,7 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 30,
         overflow: 'hidden',
     },
-    dragIndicator: {
-        width: 40,
-        height: 5,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        borderRadius: 3,
-        alignSelf: 'center',
-        marginTop: 12,
-    },
+
     scrollContent: {
         paddingTop: 10,
         paddingHorizontal: 20,
@@ -458,23 +434,18 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#fff',
     },
-    seeAll: {
-        color: Colors.primary,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    mediaRow: {
+    linkRow: {
         flexDirection: 'row',
-        marginHorizontal: -4,
-    },
-    mediaPlaceholder: {
-        width: 80,
-        height: 80,
-        borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        marginHorizontal: 4,
-        justifyContent: 'center',
         alignItems: 'center',
+        gap: 12,
+        padding: 12,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 12,
+    },
+    linkText: {
+        fontSize: 16,
+        color: Colors.primary,
+        flex: 1,
     },
     footer: {
         gap: 16,

@@ -58,4 +58,32 @@ export const styles = StyleSheet.create({
         fontSize: 16,
         color: Colors.textSecondary,
     },
+    blockedFooter: {
+        padding: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.surface,
+        borderTopWidth: 1,
+        borderTopColor: Colors.glassBorder,
+        gap: 12,
+        paddingBottom: 40,
+    },
+    blockedText: {
+        fontSize: 16,
+        color: Colors.textSecondary,
+        textAlign: 'center',
+    },
+    unblockButton: {
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 24,
+        backgroundColor: Colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    unblockText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
 });

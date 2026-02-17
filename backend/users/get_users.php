@@ -28,7 +28,7 @@ try {
     $iCanSeeLastSeen = $myPrivacy ? (bool)$myPrivacy['privacy_last_seen'] : true;
 
      $query = "SELECT u.id, u.username, u.display_name, u.scramble_name, u.email, u.avatar_id, u.avatar_url, u.bio, 
-                     u.website, u.website_label,
+                     u.links,
                      u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.show_in_world, u.neon_color, u.border_color, u.button_color,
               (SELECT status FROM relationships WHERE user_id = :uid1 AND target_id = u.id) as sent_status,
               (SELECT status FROM relationships WHERE user_id = u.id AND target_id = :uid2) as received_status
@@ -75,11 +75,12 @@ try {
         }
 
         // Profile Visibility Privacy Rules:
-        // If private, only friends (accepted) can see bio and avatar.
+        // If private, only friends (accepted) can see bio. 
+        // UPDATED: Avatars are now ALWAYS visible per user request.
         if (isset($user['privacy_profile_visibility']) && $user['privacy_profile_visibility'] === 'private' && $user['relationship_status'] !== 'accepted') {
             $user['bio'] = null;
-            $user['avatar_id'] = 'default'; // Or a specific private avatar
-            $user['avatar_url'] = null;
+            // $user['avatar_id'] = 'default'; // Custom: Always show avatar
+            // $user['avatar_url'] = null;     // Custom: Always show avatar
         }
 
         // Check if scrambling is needed

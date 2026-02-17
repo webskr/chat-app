@@ -68,13 +68,20 @@ export default function LoginScreen() {
                 style={styles.keyboardView}
             >
                 <ScrollView contentContainerStyle={styles.scrollContent}>
-                    <View style={styles.header}>
-                        <View style={styles.logoContainer}>
-                            <Ionicons name="chatbubbles" size={60} color={Colors.primary} />
+                    <LinearGradient
+                        colors={[Colors.primary, 'transparent']}
+                        style={styles.headerGradient}
+                        start={{ x: 0.5, y: 0 }}
+                        end={{ x: 0.5, y: 1 }}
+                    >
+                        <View style={styles.headerContent}>
+                            <View style={styles.logoContainer}>
+                                <Ionicons name="chatbubbles" size={60} color={Colors.white} />
+                            </View>
+                            <Text style={styles.title}>Welcome Back</Text>
+                            <Text style={styles.subtitle}>Login to your account</Text>
                         </View>
-                        <Text style={styles.title}>Welcome Back</Text>
-                        <Text style={styles.subtitle}>Login to your account</Text>
-                    </View>
+                    </LinearGradient>
 
                     <BlurView intensity={20} tint="dark" style={styles.glassCard}>
                         <View style={styles.inputContainer}>
@@ -151,33 +158,42 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
-        justifyContent: 'center',
-        padding: 20,
     },
-    header: {
+    headerGradient: {
+        width: '100%',
+        paddingTop: 80,
+        paddingBottom: 40,
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
+        marginBottom: 30,
+        overflow: 'hidden',
+    },
+    headerContent: {
         alignItems: 'center',
-        marginBottom: 40,
     },
     logoContainer: {
         width: 100,
         height: 100,
         borderRadius: 50,
-        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 20,
         borderWidth: 1,
-        borderColor: 'rgba(99, 102, 241, 0.2)',
+        borderColor: 'rgba(255, 255, 255, 0.3)',
     },
     title: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: Colors.text,
+        color: Colors.white,
         marginBottom: 10,
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 4,
     },
     subtitle: {
         fontSize: 16,
-        color: Colors.textSecondary,
+        color: 'rgba(255, 255, 255, 0.8)',
     },
     glassCard: {
         padding: 30,
@@ -185,6 +201,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.glassBorder,
         overflow: 'hidden',
+        marginHorizontal: 20,
     },
     inputContainer: {
         flexDirection: 'row',

@@ -94,10 +94,20 @@ export default function SignupScreen() {
                         <Ionicons name="arrow-back" size={24} color={Colors.text} />
                     </TouchableOpacity>
 
-                    <View style={styles.header}>
-                        <Text style={styles.title}>Create Account</Text>
-                        <Text style={styles.subtitle}>Join our community today</Text>
-                    </View>
+                    <LinearGradient
+                        colors={[Colors.primary, 'transparent']}
+                        style={styles.headerGradient}
+                        start={{ x: 0.5, y: 0 }}
+                        end={{ x: 0.5, y: 1 }}
+                    >
+                        <View style={styles.headerContent}>
+                            <View style={styles.logoContainer}>
+                                <Ionicons name="person-add" size={50} color={Colors.white} />
+                            </View>
+                            <Text style={styles.title}>Create Account</Text>
+                            <Text style={styles.subtitle}>Join our community today</Text>
+                        </View>
+                    </LinearGradient>
 
                     <BlurView intensity={20} tint="dark" style={styles.glassCard}>
                         <View style={styles.inputContainer}>
@@ -194,8 +204,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
-        justifyContent: 'center',
-        padding: 20,
+        paddingBottom: 40,
     },
     backButton: {
         position: 'absolute',
@@ -205,24 +214,45 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: 'rgba(0, 0, 0, 0.2)',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    header: {
-        alignItems: 'center',
+    headerGradient: {
+        width: '100%',
+        paddingTop: 80,
+        paddingBottom: 40,
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
         marginBottom: 30,
-        marginTop: 60,
+        overflow: 'hidden',
+    },
+    headerContent: {
+        alignItems: 'center',
+    },
+    logoContainer: {
+        width: 90,
+        height: 90,
+        borderRadius: 45,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
     },
     title: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: Colors.text,
+        color: Colors.white,
         marginBottom: 10,
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 4,
     },
     subtitle: {
         fontSize: 16,
-        color: Colors.textSecondary,
+        color: 'rgba(255, 255, 255, 0.8)',
     },
     glassCard: {
         padding: 25,
@@ -230,6 +260,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.glassBorder,
         overflow: 'hidden',
+        marginHorizontal: 20,
     },
     inputContainer: {
         flexDirection: 'row',

@@ -31,12 +31,8 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.ACCESS_MEDIA_LOCATION",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.READ_MEDIA_AUDIO",
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -62,15 +58,15 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
-          "color": "#ffffff"
+          "icon": "./assets/notification-icon.png",
+          "color": "#000000"
         }
       ]
     ],
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "a577d34c-aee7-46d8-9df6-ffee5d2d947a"
+        "projectId": "d0ccff4c-00b1-44ce-8d3a-a951fdb64fb2"
       }
     }
   }
