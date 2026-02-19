@@ -406,9 +406,12 @@ export default function ChatDetailScreen() {
 
             if (response.ok) {
                 setMessages(data);
-                if (AppState.currentState === 'active' && !isGroup) {
-                    const hasUnseen = data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
-                    if (hasUnseen) updateMessageStatus('seen');
+                if (AppState.currentState === 'active') {
+                    // For groups, we always want to update read status if we are active and have messages
+                    // For 1-on-1, check if there are unseen messages
+                    const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
+
+                    if (shouldMarkRead) updateMessageStatus('seen');
                 }
             }
         } catch (error: any) {
@@ -417,14 +420,35 @@ export default function ChatDetailScreen() {
     };
 
     const updateMessageStatus = async (status: 'delivered' | 'seen') => {
-        if (!currentUser || isGroup) return;
-        try {
-            await fetch(`${Config.API_URL}/chat/update_status.php`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id, sender_id: id, status: status })
-            });
-        } catch (error) { console.error('Error updating status:', error); }
+        if (!currentUser) return;
+        // Logic: if we are active in this chat, we mark as read (seen).
+        // 'delivered' is handled by Mark Delivered globally or when fetching list.
+        // Here we specifically want to mark as READ/SEEN when chat is open.
+
+        if (status === 'seen') {
+            try {
+                await fetch(`${Config.API_URL}/chat/mark_read.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: currentUser.id,
+                        target_id: id,
+                        is_group: isGroup
+                    })
+                });
+            } catch (error) { console.error('Error marking read:', error); }
+        } else if (!isGroup) {
+            // Keep legacy delivered update for 1-on-1 if needed, strictly for "delivered" status updates 
+            // but fetchConversations usually handles delivered. 
+            // If we really need to mark delivered explicitly here:
+            try {
+                await fetch(`${Config.API_URL}/chat/update_status.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: currentUser.id, sender_id: id, status: status })
+                });
+            } catch (error) { console.error('Error updating status:', error); }
+        }
     };
 
     const fetchRelationshipStatus = async (signal?: AbortSignal) => {
@@ -506,9 +530,9 @@ export default function ChatDetailScreen() {
                         const data = await msgsRes.json();
                         setMessages(data);
                         // Mark seen if active
-                        if (AppState.currentState === 'active' && !isGroup) {
-                            const hasUnseen = data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
-                            if (hasUnseen) updateMessageStatus('seen');
+                        if (AppState.currentState === 'active') {
+                            const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
+                            if (shouldMarkRead) updateMessageStatus('seen');
                         }
                     }
 

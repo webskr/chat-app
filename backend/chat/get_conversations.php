@@ -71,7 +71,7 @@ if (!empty($user_id)) {
                          ) as latest_is_one_time,
                          (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id 
                             AND m.receiver_id = :me_unread 
-                            AND m.status != 'read'
+                            AND m.status != 'seen' AND m.status != 'read'
                          ) as unread_count_raw,
                          u.id as other_user_id, u.username as other_username, u.avatar_id as other_avatar_id, u.avatar_url as other_avatar_url,
                          u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.is_official as other_is_official,
@@ -93,6 +93,7 @@ if (!empty($user_id)) {
                         (SELECT is_one_time FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) as latest_is_one_time,
                         (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id 
                            AND m.sender_id != :me_group_unread
+                           AND m.created_at > COALESCE((SELECT last_read_at FROM group_members gm3 WHERE gm3.group_id = c.group_id AND gm3.user_id = :me_group_read_check), '1970-01-01')
                            AND m.created_at > (SELECT joined_at FROM group_members gm2 WHERE gm2.group_id = c.group_id AND gm2.user_id = :me_group_member_check)
                         ) as unread_count_raw,
                         0 as other_user_id, g.name as other_username, 0 as other_avatar_id, g.icon_path as other_avatar_url,
@@ -118,6 +119,7 @@ if (!empty($user_id)) {
             ':uid3' => $user_id, ':uid4' => $user_id, 
             ':uid5' => $user_id,
             ':me_group_unread' => $user_id,
+            ':me_group_read_check' => $user_id,
             ':me_group_member_check' => $user_id,
             ':uid_group' => $user_id
         ]);
