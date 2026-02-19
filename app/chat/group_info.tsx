@@ -1,0 +1,659 @@
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, FlatList, TextInput, Switch, Modal, Pressable } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { UserPlus, LogOut, Trash2, Camera, Shield, User, MessageSquare, Flag, Lock, Clock, Settings, MoreVertical, Edit2 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { Colors } from '../../constants/Colors';
+import { ThemedText } from '../../components/ThemedText';
+import { Avatar } from '../../components/Avatar';
+import { GlassCard } from '../../components/GlassCard';
+import { Config } from '../../constants/Config';
+import { useUser } from '../../context/UserContext';
+import { getAvatarById } from '../../constants/Avatars';
+import { GroupDefaultIcon } from '../../components/icons/GroupDefaultIcon';
+
+export default function GroupInfoScreen() {
+    const { id } = useLocalSearchParams<{ id: string }>();
+    const { user } = useUser();
+    const [group, setGroup] = useState<any>(null);
+    const [members, setMembers] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState(false);
+
+    // UI States
+    const [showAllMembers, setShowAllMembers] = useState(false);
+    const [menuVisible, setMenuVisible] = useState(false);
+    const [chatLocked, setChatLocked] = useState(false); // Mock state for now
+
+    const [activeTab, setActiveTab] = useState<'members' | 'settings'>('members');
+
+    useEffect(() => {
+        fetchGroupDetails();
+    }, [id]);
+
+    const fetchGroupDetails = async () => {
+        if (!user || !id) return;
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/get_group_details.php?group_id=${id}&user_id=${user.id}`);
+            const data = await response.json();
+            if (response.ok) {
+                setGroup(data);
+                setMembers(data.members);
+            } else {
+                Alert.alert("Error", data.message);
+                router.back();
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAction = async (action: string, targetId?: number) => {
+        if (!user || !group) return;
+        setActionLoading(true);
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/group_actions.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action,
+                    group_id: group.id,
+                    user_id: user.id,
+                    target_id: targetId
+                })
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                if (action === 'leave_group' || action === 'delete_group') {
+                    router.replace('/(tabs)/chats');
+                } else {
+                    Alert.alert("Success", data.message);
+                    fetchGroupDetails(); // Refresh
+                }
+            } else {
+                Alert.alert("Error", data.message);
+            }
+
+        } catch (error) {
+            console.error(error);
+            Alert.alert("Error", "Network error.");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleReportGroup = () => {
+        Alert.alert(
+            "Report Group",
+            "Why are you reporting this group?",
+            [
+                { text: "Cancel", style: "cancel" },
+                { text: "Spam", onPress: () => submitGroupReport('spam') },
+                { text: "Inappropriate Content", onPress: () => submitGroupReport('inappropriate') },
+                { text: "Harassment", onPress: () => submitGroupReport('harassment') }
+            ]
+        );
+    };
+
+    const submitGroupReport = async (reason: string) => {
+        if (!user || !group) return;
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/report_group.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reporter_id: user.id, group_id: group.id, reason: reason })
+            });
+            const data = await response.json();
+            Alert.alert(response.ok ? "Reported" : "Error", data.message || "Failed to report.");
+        } catch (e) {
+            Alert.alert("Error", "Network error.");
+        }
+    };
+
+    const handleClearChat = async () => {
+        if (!group) return;
+
+        const options: any[] = [
+            { text: "Cancel", style: "cancel" },
+            {
+                text: "Clear for me",
+                onPress: () => clearChatSelf()
+            }
+        ];
+
+        if (group.my_role === 'owner') {
+            options.push({
+                text: "Clear for everyone",
+                style: 'destructive',
+                onPress: () => confirmClearEveryone()
+            });
+        }
+
+        Alert.alert(
+            "Clear Chat",
+            "Do you want to clear chat history?",
+            options
+        );
+    };
+
+    const clearChatSelf = async () => {
+        if (!user || !group) return;
+        setActionLoading(true);
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/group_actions.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: user.id, group_id: group.id, action: 'clear_chat_self' })
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                Alert.alert("Success", "Chat cleared for you.");
+            } else {
+                Alert.alert("Error", data.message || "Failed to clear chat.");
+            }
+        } catch (e) { Alert.alert("Error", "Network error"); }
+        finally { setActionLoading(false); }
+    };
+
+    const confirmClearEveryone = () => {
+        Alert.alert(
+            "Clear Everyone",
+            "This will delete messages for ALL participants. This cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Clear Everywhere",
+                    style: 'destructive',
+                    onPress: async () => {
+                        if (!user || !group) return;
+                        setActionLoading(true);
+                        try {
+                            const response = await fetch(`${Config.API_URL}/chat/clear_msgs.php`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ user_id: user.id, group_id: group.id })
+                            });
+                            const data = await response.json();
+                            if (response.ok) {
+                                Alert.alert("Success", "Chat cleared for everyone.");
+                            } else {
+                                Alert.alert("Error", data.message || "Failed to clear.");
+                            }
+                        } catch (e) { console.error("Clear error", e); }
+                        finally { setActionLoading(false); }
+                    }
+                }
+            ]
+        );
+    };
+
+    const confirmLeave = () => {
+        Alert.alert("Leave Group", "Are you sure you want to leave this group?", [
+            { text: "Cancel", style: "cancel" },
+            { text: "Leave", style: "destructive", onPress: () => handleAction('leave_group') }
+        ]);
+    };
+
+    const confirmDelete = () => {
+        Alert.alert("Delete Group", "Are you sure? This will delete the group for everyone and cannot be undone.", [
+            { text: "Cancel", style: "cancel" },
+            { text: "Delete", style: "destructive", onPress: () => handleAction('delete_group') }
+        ]);
+    };
+
+    // --- Menu Handlers ---
+    const onAddMember = () => {
+        setMenuVisible(false);
+        router.push({ pathname: '/chat/add_members', params: { groupId: id } });
+    };
+
+    const onEditGroup = () => {
+        setMenuVisible(false);
+        // Navigate to edit group screen (to be implemented or reused)
+        Alert.alert("Edit Group", "Feature coming soon.");
+    };
+
+    const onGroupPermissions = () => {
+        setMenuVisible(false);
+        router.push({ pathname: '/chat/group_permissions', params: { groupId: id } });
+    };
+
+
+    const renderMember = ({ item }: { item: any }) => (
+        <View style={styles.memberRow}>
+            <Avatar
+                source={item.avatar_url ? `${Config.API_URL}/${item.avatar_url}` : getAvatarById(item.avatar_id)}
+                size={40}
+            />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+                <ThemedText type="defaultSemiBold">{item.username}</ThemedText>
+                <ThemedText style={{
+                    fontSize: 12,
+                    color: item.role === 'owner' ? Colors.error : (item.role === 'admin' ? '#FF9500' : Colors.textSecondary)
+                }}>
+                    {item.role === 'owner' ? 'Group Owner' : item.role === 'admin' ? 'Admin' : 'Member'}
+                </ThemedText>
+            </View>
+
+            {/* Admin Actions */}
+            {(group?.my_role === 'owner' || group?.my_role === 'admin') && item.id !== user?.id && item.role !== 'owner' && (
+                <TouchableOpacity
+                    onPress={() => {
+                        const options: any[] = [
+                            { text: "Cancel", style: "cancel" },
+                            { text: "Remove", style: "destructive", onPress: () => handleAction('remove_member', item.id) }
+                        ];
+
+                        if (group?.my_role === 'owner') {
+                            if (item.role === 'member') {
+                                options.push({
+                                    text: "Make Group Admin",
+                                    onPress: () => handleAction('promote_admin', item.id)
+                                });
+                            } else if (item.role === 'admin') {
+                                options.push({
+                                    text: "Dismiss as Admin",
+                                    style: "destructive",
+                                    onPress: () => handleAction('demote_admin', item.id)
+                                });
+                            }
+                        }
+
+                        Alert.alert("Manage Member", `Manage ${item.username}?`, options);
+                    }}
+                    style={{ padding: 8 }}
+                >
+                    <MoreVertical size={20} color={Colors.textSecondary} />
+                </TouchableOpacity>
+            )}
+        </View>
+    );
+
+    const renderSettingRow = (icon: any, title: string, subtitle?: string, trailing?: React.ReactNode, onPress?: () => void) => (
+        <TouchableOpacity style={styles.settingRow} onPress={onPress} disabled={!onPress}>
+            <View style={styles.settingIcon}>
+                {icon}
+            </View>
+            <View style={{ flex: 1 }}>
+                <ThemedText type="defaultSemiBold" style={{ fontSize: 16 }}>{title}</ThemedText>
+                {subtitle && <ThemedText style={{ fontSize: 12, color: Colors.textSecondary, marginTop: 2 }}>{subtitle}</ThemedText>}
+            </View>
+            {trailing}
+        </TouchableOpacity>
+    );
+
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 50 }} />
+            </SafeAreaView>
+        );
+    }
+
+    const isOwner = group?.my_role === 'owner';
+
+    return (
+        <SafeAreaView style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
+                    <Ionicons name="arrow-back" size={24} color={Colors.text} />
+                </TouchableOpacity>
+                <ThemedText type="subtitle" style={styles.headerTitle}></ThemedText>
+                <TouchableOpacity onPress={() => setMenuVisible(true)} style={{ padding: 4 }}>
+                    <MoreVertical size={24} color={Colors.text} />
+                </TouchableOpacity>
+            </View>
+
+            {/* Menu Modal */}
+            <Modal
+                transparent
+                visible={menuVisible}
+                animationType="fade"
+                onRequestClose={() => setMenuVisible(false)}
+            >
+                <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
+                    <View style={styles.menuContainer}>
+                        {((group?.my_role === 'owner' || group?.my_role === 'admin') || (group?.allow_member_add_members)) && (
+                            <TouchableOpacity style={styles.menuItem} onPress={onAddMember}>
+                                <ThemedText>Add members</ThemedText>
+                            </TouchableOpacity>
+                        )}
+
+                        {isOwner && (
+                            <>
+                                <TouchableOpacity style={styles.menuItem} onPress={onEditGroup}>
+                                    <ThemedText>Change group name</ThemedText>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.menuItem} onPress={onGroupPermissions}>
+                                    <ThemedText>Group permissions</ThemedText>
+                                </TouchableOpacity>
+                            </>
+                        )}
+                    </View>
+                </Pressable>
+            </Modal>
+
+            <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+                {/* Group Details */}
+                <View style={styles.groupHeader}>
+                    <Avatar
+                        source={group?.icon_path ? `${Config.API_URL}/${group.icon_path}` : undefined}
+                        size={100}
+                        style={{ marginBottom: 16 }}
+                        fallbackComponent={<GroupDefaultIcon size={100} />}
+                    />
+                    <ThemedText type="title" style={{ fontSize: 24 }}>{group?.name}</ThemedText>
+                    <ThemedText style={styles.memberCount}>Group • {group?.member_count} members</ThemedText>
+                </View>
+
+                {/* Tab Selector */}
+                <View style={styles.tabContainer}>
+                    <TouchableOpacity
+                        style={[styles.tabButton, activeTab === 'members' && styles.activeTabButton]}
+                        onPress={() => setActiveTab('members')}
+                    >
+                        <ThemedText style={[styles.tabText, activeTab === 'members' && styles.activeTabText]}>Members</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.tabButton, activeTab === 'settings' && styles.activeTabButton]}
+                        onPress={() => setActiveTab('settings')}
+                    >
+                        <ThemedText style={[styles.tabText, activeTab === 'settings' && styles.activeTabText]}>Settings</ThemedText>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Tab Content */}
+                {activeTab === 'members' ? (
+                    /* --- MEMBERS TAB --- */
+                    <View style={styles.section}>
+                        <GlassCard>
+                            {/* "Add Members" Row */}
+                            {(group?.my_role === 'owner' || group?.allow_member_add_members) && (
+                                <TouchableOpacity style={styles.memberRow} onPress={() => router.push({ pathname: '/chat/add_members', params: { groupId: id } })}>
+                                    <View style={[styles.iconCircle, { backgroundColor: Colors.primary, width: 40, height: 40, borderRadius: 20 }]}>
+                                        <UserPlus size={20} color={'white'} />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <ThemedText type="defaultSemiBold">Add members</ThemedText>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+                            {(group?.my_role === 'owner' || group?.allow_member_add_members) && <View style={styles.divider} />}
+
+                            {/* Full Member List */}
+                            {members.map((member, index) => (
+                                <View key={member.id}>
+                                    {renderMember({ item: member })}
+                                    {index < members.length - 1 && (
+                                        <View style={styles.divider} />
+                                    )}
+                                </View>
+                            ))}
+                        </GlassCard>
+                    </View>
+                ) : (
+                    /* --- SETTINGS TAB --- */
+                    <>
+                        {/* Description */}
+                        {group?.description ? (
+                            <View style={styles.section}>
+                                <GlassCard>
+                                    <View style={{ padding: 16 }}>
+                                        <ThemedText type="defaultSemiBold" style={{ marginBottom: 4 }}>Description</ThemedText>
+                                        <ThemedText style={{ color: Colors.textSecondary, fontSize: 14 }}>{group.description}</ThemedText>
+                                        <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center' }}>
+                                            <ThemedText style={{ color: Colors.textSecondary, fontSize: 12 }}>Created by {group.creator_name || 'Owner'}, {new Date(group.created_at).toLocaleDateString()}</ThemedText>
+                                        </View>
+                                    </View>
+                                </GlassCard>
+                            </View>
+                        ) : null}
+
+                        {/* Settings Section */}
+                        <View style={styles.section}>
+                            <GlassCard>
+                                {/* Notifications (Mock) */}
+                                {renderSettingRow(
+                                    <Ionicons name="notifications-outline" size={22} color={Colors.text} />,
+                                    "Notifications",
+                                    "All",
+                                    null,
+                                    () => { }
+                                )}
+                                <View style={styles.divider} />
+
+                                {/* Encryption */}
+                                {renderSettingRow(
+                                    <Lock size={22} color={Colors.text} />,
+                                    "Encryption",
+                                    "Messages and calls are end-to-end encrypted.",
+                                    null,
+                                    () => Alert.alert("Encryption", "Your messages are secured with end-to-end encryption.")
+                                )}
+                                <View style={styles.divider} />
+
+                                {/* Disappearing Messages (Owner only) */}
+                                {isOwner && (
+                                    <>
+                                        {renderSettingRow(
+                                            <Clock size={22} color={Colors.text} />,
+                                            "Disappearing messages",
+                                            "Off",
+                                            null,
+                                            () => Alert.alert("Disappearing Messages", "Feature coming soon.")
+                                        )}
+                                        <View style={styles.divider} />
+                                    </>
+                                )}
+
+                                {/* Chat Lock */}
+                                {renderSettingRow(
+                                    <Shield size={22} color={Colors.text} />,
+                                    "Chat lock",
+                                    "Lock and hide this chat on this device.",
+                                    <Switch
+                                        value={chatLocked}
+                                        onValueChange={setChatLocked}
+                                        trackColor={{ false: '#767577', true: Colors.primary }}
+                                        thumbColor={'#f4f3f4'}
+                                    />
+                                )}
+
+                                {/* Security / Advanced Privacy */}
+                                <View style={styles.divider} />
+                                {renderSettingRow(
+                                    <Shield size={22} color={Colors.text} />,
+                                    "Advanced chat privacy",
+                                    "Off",
+                                    null,
+                                    () => { } // Info page
+                                )}
+                            </GlassCard>
+                        </View>
+
+                        {/* Danger Zone: Clear/Report/Exit */}
+                        <View style={styles.section}>
+                            <GlassCard>
+                                <TouchableOpacity style={styles.dangerRow} onPress={handleReportGroup}>
+                                    <Flag size={22} color={Colors.error} />
+                                    <ThemedText style={[styles.dangerText, { color: Colors.error }]}>Report Group</ThemedText>
+                                </TouchableOpacity>
+                                <View style={styles.divider} />
+
+                                <TouchableOpacity style={styles.dangerRow} onPress={handleClearChat}>
+                                    <MessageSquare size={22} color={Colors.error} />
+                                    <ThemedText style={[styles.dangerText, { color: Colors.error }]}>Clear Chat</ThemedText>
+                                </TouchableOpacity>
+                                <View style={styles.divider} />
+
+                                <TouchableOpacity style={styles.dangerRow} onPress={confirmLeave}>
+                                    <LogOut size={22} color={Colors.error} />
+                                    <ThemedText style={styles.dangerText}>Exit Group</ThemedText>
+                                </TouchableOpacity>
+
+                                {isOwner && (
+                                    <>
+                                        <View style={styles.divider} />
+                                        <TouchableOpacity style={styles.dangerRow} onPress={confirmDelete}>
+                                            <Trash2 size={22} color={Colors.error} />
+                                            <ThemedText style={styles.dangerText}>Delete Group</ThemedText>
+                                        </TouchableOpacity>
+                                    </>
+                                )}
+                            </GlassCard>
+                        </View>
+                    </>
+                )}
+
+            </ScrollView>
+        </SafeAreaView>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: Colors.background,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+    },
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: Colors.text,
+    },
+    groupHeader: {
+        alignItems: 'center',
+        paddingVertical: 20,
+    },
+    description: {
+        color: Colors.textSecondary,
+        textAlign: 'center',
+        marginTop: 8,
+        paddingHorizontal: 40,
+    },
+    memberCount: {
+        color: Colors.textSecondary,
+        marginTop: 4,
+        fontSize: 14,
+    },
+    actionRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginBottom: 20,
+        gap: 20,
+    },
+    actionButton: {
+        alignItems: 'center',
+        gap: 8,
+    },
+    iconCircle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: Colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    actionText: {
+        fontSize: 12,
+        color: Colors.primary,
+    },
+    section: {
+        marginBottom: 20,
+        paddingHorizontal: 16,
+    },
+    memberRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+    },
+    divider: {
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: '#333',
+        marginLeft: 52,
+    },
+    dangerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        gap: 12,
+    },
+    dangerText: {
+        color: Colors.error,
+        fontWeight: '600',
+        fontSize: 16,
+    },
+    settingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 12,
+    },
+    settingIcon: {
+        width: 32,
+        marginRight: 12,
+        alignItems: 'center',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'transparent', // Or semi-transparent if desired, but menu usually pops over
+    },
+    menuContainer: {
+        position: 'absolute',
+        top: 60,
+        right: 16,
+        backgroundColor: '#1E1E1E', // Dark menu
+        borderRadius: 8,
+        padding: 8,
+        minWidth: 180,
+        elevation: 5,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+    },
+    menuItem: {
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+    },
+    // Tab Styles
+    tabContainer: {
+        flexDirection: 'row',
+        marginBottom: 20,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#333',
+    },
+    tabButton: {
+        flex: 1,
+        paddingVertical: 12,
+        alignItems: 'center',
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
+    },
+    activeTabButton: {
+        borderBottomColor: Colors.primary,
+    },
+    tabText: {
+        fontSize: 16,
+        color: Colors.textSecondary,
+        fontWeight: '600',
+    },
+    activeTabText: {
+        color: Colors.primary,
+    }
+});

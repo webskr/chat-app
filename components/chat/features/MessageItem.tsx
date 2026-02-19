@@ -28,6 +28,7 @@ export const MessageItem = React.memo(({
     currentUser,
     id,
     otherUsername,
+    isGroupChat,
     targetUserProfile,
     onSwipe,
     onLongPress,
@@ -43,7 +44,8 @@ export const MessageItem = React.memo(({
     isSelected,
     selectionMode,
     onSelect,
-    selectedCount
+    selectedCount,
+    groupMembers
 }: any) => {
     const swipeableRef = useRef<any>(null);
 
@@ -128,6 +130,22 @@ export const MessageItem = React.memo(({
                     </View>
                 )}
                 <View style={[styles.bubbleWrapper, isMe ? styles.myBubbleWrapper : styles.friendBubbleWrapper]}>
+                    {!isMe && isGroupChat && !isSelfChat && (
+                        <ThemedText style={{
+                            fontSize: 12,
+                            color: (() => {
+                                const sender = groupMembers?.find((m: any) => String(m.id) === String(item.sender_id) || String(m.user_id) === String(item.sender_id));
+                                if (sender?.role === 'owner') return '#FF3B30'; // Red
+                                if (sender?.role === 'admin') return '#FF9500'; // Orange
+                                return Colors.text; // Default (remove green)
+                            })(),
+                            marginLeft: 12,
+                            marginBottom: 2,
+                            fontWeight: 'bold'
+                        }}>
+                            {item.sender_name || 'Unknown'}
+                        </ThemedText>
+                    )}
                     <Pressable
                         onLongPress={handleLongPress}
                         onPress={handlePress}
@@ -317,11 +335,27 @@ export const MessageItem = React.memo(({
                                                 </ThemedText>
                                             );
                                         }
-                                        return (
-                                            <ThemedText key={i} style={[styles.messageText, item.is_deleted && { fontStyle: 'italic', opacity: 0.7 }]}>
-                                                {part}
-                                            </ThemedText>
-                                        );
+
+                                        // Mention Parsing
+                                        const mentionParts = part.split(/(@[a-zA-Z0-9_]+)/g);
+                                        return mentionParts.map((subPart, j) => {
+                                            if (subPart.startsWith('@') && groupMembers) {
+                                                const username = subPart.slice(1);
+                                                const isMember = groupMembers.some((m: any) => m.username.toLowerCase() === username.toLowerCase());
+                                                if (isMember) {
+                                                    return (
+                                                        <ThemedText key={`${i}-${j}`} style={[styles.messageText, { fontWeight: 'bold', color: isMe ? '#fff' : Colors.primary }]}>
+                                                            {subPart}
+                                                        </ThemedText>
+                                                    );
+                                                }
+                                            }
+                                            return (
+                                                <ThemedText key={`${i}-${j}`} style={[styles.messageText, item.is_deleted && { fontStyle: 'italic', opacity: 0.7 }]}>
+                                                    {subPart}
+                                                </ThemedText>
+                                            );
+                                        });
                                     })}
                                 </View>
                                 {!item.is_deleted && extractFirstUrl(item.message_text) && (

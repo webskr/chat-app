@@ -13,17 +13,31 @@ include_once '../includes/db_connection.php';
 
 $data = json_decode(file_get_contents("php://input"));
 
-if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->message) || !empty($data->image_path) || !empty($data->audio_url) || !empty($data->video_url) || !empty($data->file_url) || !empty($data->gif_url) || !empty($data->sticker_url))) {
+// Validation: Must have sender. Must have receiver OR group_id.
+if (empty($data->sender_id) || (empty($data->receiver_id) && empty($data->group_id))) {
+    http_response_code(400);
+    echo json_encode(array("message" => "Incomplete data. Sender and (Receiver or Group) required."));
+    exit();
+}
+
+$sender_id = $data->sender_id;
+$receiver_id = !empty($data->receiver_id) ? $data->receiver_id : null;
+$group_id = !empty($data->group_id) ? $data->group_id : null;
+$is_group = !empty($group_id);
+
+if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_url) || !empty($data->video_url) || !empty($data->file_url) || !empty($data->gif_url) || !empty($data->sticker_url))) {
+    
     // 0. Validate Message Length
     if (!empty($data->message) && mb_strlen($data->message) > 5000) {
         http_response_code(400);
         echo json_encode(array("message" => "Message is too long (max 5000 characters)."));
         exit();
     }
+
     try {
-        // 0. Rate Limiting Check (Skip for Official Accounts)
+        // 0. Rate Limiting (Skip for Official)
         $is_official_stmt = $pdo->prepare("SELECT is_official FROM users WHERE id = :sid");
-        $is_official_stmt->execute([':sid' => $data->sender_id]);
+        $is_official_stmt->execute([':sid' => $sender_id]);
         $is_official = $is_official_stmt->fetchColumn();
 
         if (!$is_official) {
@@ -31,7 +45,7 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
                                  WHERE sender_id = :sid 
                                  AND created_at > (NOW() - INTERVAL 1 MINUTE)";
             $rate_stmt = $pdo->prepare($rate_limit_query);
-            $rate_stmt->execute([':sid' => $data->sender_id]);
+            $rate_stmt->execute([':sid' => $sender_id]);
             if ($rate_stmt->fetchColumn() >= 20) {
                 http_response_code(429);
                 echo json_encode(array("message" => "Too many messages. Please wait a moment."));
@@ -39,43 +53,93 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
             }
         }
 
-        // 0. Check for Blocked Status
-        $block_check = "SELECT COUNT(*) FROM relationships 
-                        WHERE status = 'blocked' 
-                        AND (
-                            (user_id = :sid AND target_id = :rid) 
-                            OR 
-                            (user_id = :rid AND target_id = :sid)
-                        )";
-        $block_stmt = $pdo->prepare($block_check);
-        $block_stmt->execute([':sid' => $data->sender_id, ':rid' => $data->receiver_id]);
-        if ($block_stmt->fetchColumn() > 0) {
-            http_response_code(403);
-            echo json_encode(array("message" => "You cannot send messages to this user."));
-            exit();
+        $conv_id = null;
+
+        if ($is_group) {
+            // --- GROUP LOGIC ---
+            
+            // 1. Verify Sender Membership
+            $mem_stmt = $pdo->prepare("SELECT status FROM group_members WHERE group_id = :gid AND user_id = :uid");
+            $mem_stmt->execute([':gid' => $group_id, ':uid' => $sender_id]);
+            $member_status = $mem_stmt->fetchColumn();
+
+            if (!$member_status || $member_status !== 'active') {
+                http_response_code(403);
+                echo json_encode(array("message" => "You are not a member of this group."));
+                exit();
+            }
+
+            // Check Send Permission
+            $role_stmt = $pdo->prepare("SELECT role FROM group_members WHERE group_id = :gid AND user_id = :uid");
+            $role_stmt->execute([':gid' => $group_id, ':uid' => $sender_id]);
+            $sender_role = $role_stmt->fetchColumn();
+
+            if ($sender_role !== 'owner' && $sender_role !== 'admin') {
+                 $permStmt = $pdo->prepare("SELECT allow_member_send_messages FROM groups WHERE id = :gid");
+                 $permStmt->execute([':gid' => $group_id]);
+                 if (!$permStmt->fetchColumn()) {
+                     http_response_code(403); echo json_encode(["message" => "Only admins can send messages."]); exit();
+                 }
+            }
+
+            // 2. Get Conversation ID
+            $conv_stmt = $pdo->prepare("SELECT id FROM conversations WHERE group_id = :gid AND is_group = 1");
+            $conv_stmt->execute([':gid' => $group_id]);
+            $conv_id = $conv_stmt->fetchColumn();
+
+            if (!$conv_id) {
+                 http_response_code(404);
+                 echo json_encode(array("message" => "Group conversation not found."));
+                 exit();
+            }
+
+            // Update last message in conversation
+             $msg_content = !empty($data->message) ? $data->message : 'Media'; // Simplified for preview
+             $upd_conv = $pdo->prepare("UPDATE conversations SET last_message = :msg, last_message_time = NOW() WHERE id = :cid");
+             $upd_conv->execute([':msg' => $msg_content, ':cid' => $conv_id]);
+
+        } else {
+            // --- 1-ON-1 LOGIC ---
+            
+            // 0. Check Blocked
+            $block_check = "SELECT COUNT(*) FROM relationships 
+                            WHERE status = 'blocked' 
+                            AND (
+                                (user_id = :sid AND target_id = :rid) 
+                                OR 
+                                (user_id = :rid AND target_id = :sid)
+                            )";
+            $block_stmt = $pdo->prepare($block_check);
+            $block_stmt->execute([':sid' => $sender_id, ':rid' => $receiver_id]);
+            if ($block_stmt->fetchColumn() > 0) {
+                http_response_code(403);
+                echo json_encode(array("message" => "You cannot send messages to this user."));
+                exit();
+            }
+
+            // Ensure user1 < user2
+            $user1_id = min((int)$sender_id, (int)$receiver_id);
+            $user2_id = max((int)$sender_id, (int)$receiver_id);
+
+            $msg_content = !empty($data->message) ? $data->message : 'Media';
+
+            // 1. Get or Create Conversation
+            $conv_query = "INSERT INTO conversations (user1_id, user2_id, last_message, is_group) 
+                           VALUES (:u1, :u2, :msg, 0) 
+                           ON DUPLICATE KEY UPDATE last_message = :msg, last_message_time = CURRENT_TIMESTAMP";
+            $conv_stmt = $pdo->prepare($conv_query);
+            $conv_stmt->execute([':u1' => $user1_id, ':u2' => $user2_id, ':msg' => $msg_content]);
+
+            // Get ID
+            $get_conv = "SELECT id FROM conversations WHERE user1_id = :u1 AND user2_id = :u2 AND is_group = 0";
+            $get_stmt = $pdo->prepare($get_conv);
+            $get_stmt->execute([':u1' => $user1_id, ':u2' => $user2_id]);
+            $conv_id = $get_stmt->fetchColumn();
         }
 
-        // Ensure user1_id < user2_id for unique conversation key
-        $user1_id = min((int)$data->sender_id, (int)$data->receiver_id);
-        $user2_id = max((int)$data->sender_id, (int)$data->receiver_id);
-
-        $msg_content = !empty($data->message) ? $data->message : (!empty($data->audio_url) ? '🎤 Voice Message' : (!empty($data->video_url) ? '🎥 Video' : (!empty($data->file_url) ? '📄 Document' : (!empty($data->gif_url) ? '👾 GIF' : (!empty($data->sticker_url) ? '🧩 Sticker' : '📷 Image')))));
-
-        // 1. Get or Create Conversation
-        $conv_query = "INSERT INTO conversations (user1_id, user2_id, last_message) 
-                       VALUES (:u1, :u2, :msg) 
-                       ON DUPLICATE KEY UPDATE last_message = :msg, last_message_time = CURRENT_TIMESTAMP";
-        $conv_stmt = $pdo->prepare($conv_query);
-        $conv_stmt->execute([':u1' => $user1_id, ':u2' => $user2_id, ':msg' => $msg_content]);
-
-        // Get conversation ID
-        $get_conv = "SELECT id FROM conversations WHERE user1_id = :u1 AND user2_id = :u2";
-        $get_stmt = $pdo->prepare($get_conv);
-        $get_stmt->execute([':u1' => $user1_id, ':u2' => $user2_id]);
-        $conv = $get_stmt->fetch(PDO::FETCH_ASSOC);
-        $conv_id = $conv['id'];
-
-        // Determine type and media
+        // --- COMMON MESSAGE INSERTION ---
+        
+        $message_text = !empty($data->message) ? $data->message : '';
         $message_type = 'text';
         $media_url = null;
         $thumbnail_url = null;
@@ -111,36 +175,24 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
         $mime_type = !empty($data->mime_type) ? $data->mime_type : null;
         $reply_to_message_id = !empty($data->reply_to_message_id) ? (int)$data->reply_to_message_id : null;
 
-        // OTV Fields
         $is_one_time = !empty($data->is_one_time) ? 1 : 0;
-
-        // Validate OTV Text Length
-        if ($is_one_time && empty($media_url) && !empty($data->message) && mb_strlen($data->message) > 200) {
-            http_response_code(400);
-            echo json_encode(array("message" => "One-Time View text messages are limited to 200 characters."));
-            exit();
+        if ($is_one_time && empty($media_url) && !empty($message_text) && mb_strlen($message_text) > 200) {
+             http_response_code(400); echo json_encode(["message" => "OTV text limit 200 chars."]); exit();
         }
-
-        // Default 5 minutes if not specified, only if is_one_time
         $delete_after_seconds = ($is_one_time && !empty($data->delete_after_seconds)) ? (int)$data->delete_after_seconds : ($is_one_time ? 300 : 0);
 
-        // Scheduled Message
         $scheduled_at = !empty($data->scheduled_at) ? $data->scheduled_at : null;
         $status = $scheduled_at ? 'scheduled' : 'sent';
-        // NEW: Set sent_at if sending immediately
         $sent_at = ($status === 'sent') ? date('Y-m-d H:i:s') : null;
 
-        // 2. Insert Message
         $msg_query = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_url, thumbnail_url, duration, file_size, file_name, mime_type, reply_to_message_id, is_one_time, delete_after_seconds, scheduled_at, status, sent_at) 
                       VALUES (:cid, :sid, :rid, :msg, :type, :media, :thumb, :dur, :size, :fname, :mime, :reply_id, :is_ot, :del_sec, :sch_at, :status, :sent_at)";
         $msg_stmt = $pdo->prepare($msg_query);
         
-        $message_text = !empty($data->message) ? $data->message : '';
-
         if ($msg_stmt->execute([
             ':cid' => $conv_id, 
-            ':sid' => $data->sender_id, 
-            ':rid' => $data->receiver_id, 
+            ':sid' => $sender_id, 
+            ':rid' => $receiver_id, // NULL for groups
             ':msg' => $message_text,
             ':type' => $message_type,
             ':media' => $media_url,
@@ -156,95 +208,151 @@ if (!empty($data->sender_id) && !empty($data->receiver_id) && (!empty($data->mes
             ':status' => $status,
             ':sent_at' => $sent_at
         ])) {
-            // --- Push Notification Logic ---
-            if ($status === 'sent') { // Only notify if sent immediately (not scheduled)
-                try {
-                    // Check if receiver has a device token and if chat is muted
-                    $notif_query = "
-                        SELECT u.device_token, 
-                               (SELECT COUNT(*) FROM muted_chats WHERE user_id = :rid AND target_id = :sid AND mute_until > NOW()) as is_muted,
-                               u.display_name
-                        FROM users u
-                        WHERE u.id = :rid
+            $message_id = $pdo->lastInsertId();
+
+            // --- NOTIFICATION LOGIC ---
+            if ($status === 'sent') {
+                include_once __DIR__ . '/../includes/push_service.php';
+
+                // Get Sender Name
+                $sender_stmt = $pdo->prepare("SELECT username, display_name FROM users WHERE id = :sid");
+                $sender_stmt->execute([':sid' => $sender_id]);
+                $sender_row = $sender_stmt->fetch(PDO::FETCH_ASSOC);
+                $sender_name = !empty($sender_row['display_name']) ? $sender_row['display_name'] : $sender_row['username'];
+
+                $body = "New message";
+                if ($is_one_time) { $body = "New private message"; }
+                elseif ($message_type == 'text') { $body = mb_substr($message_text, 0, 30) . (mb_strlen($message_text) > 30 ? '...' : ''); }
+                else { $body = ucfirst($message_type); }
+
+                if ($is_group) {
+                    // Group Notifications
+                    // Get Group Name
+                    $g_stmt = $pdo->prepare("SELECT name FROM groups WHERE id = :gid");
+                    $g_stmt->execute([':gid' => $group_id]);
+                    $group_name = $g_stmt->fetchColumn();
+                    $title = $group_name . ": " . $sender_name;
+
+                    // ... (Mentions Logic)
+                    // Extract mentions from text (server-side validation)
+                    // Pattern: @username
+                    $mentions = [];
+                    if (preg_match_all('/@([a-zA-Z0-9_]+)/', $message_text, $matches)) {
+                        $potential_usernames = array_unique($matches[1]);
+                        if (!empty($potential_usernames)) {
+                            // Verify these usernames exist and are in the group
+                            $placeholders = str_repeat('?,', count($potential_usernames) - 1) . '?';
+                            $mention_query = "
+                                SELECT u.id, u.username, u.device_token 
+                                FROM users u
+                                JOIN group_members gm ON u.id = gm.user_id
+                                WHERE gm.group_id = ? 
+                                AND u.username IN ($placeholders)
+                            ";
+                            $params = array_merge([$group_id], $potential_usernames);
+                            $mention_stmt = $pdo->prepare($mention_query);
+                            $mention_stmt->execute($params);
+                            $valid_mentions = $mention_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                            // Insert into message_mentions
+                            $mention_insert = $pdo->prepare("INSERT INTO message_mentions (message_id, user_id, group_id) VALUES (?, ?, ?)");
+                            foreach ($valid_mentions as $vm) {
+                                // Don't mention yourself
+                                if ($vm['id'] == $sender_id) continue;
+                                
+                                $mention_insert->execute([$message_id, $vm['id'], $group_id]);
+                                $mentions[$vm['id']] = true; // Mark as mentioned for notification logic
+                            }
+                        }
+                    }
+
+                    // Get Recipients (Active Members != Sender)
+                    $recipients_query = "
+                        SELECT u.id, u.device_token
+                        FROM group_members gm
+                        JOIN users u ON gm.user_id = u.id
+                        WHERE gm.group_id = :gid 
+                        AND gm.user_id != :sid 
+                        AND gm.status = 'active'
+                        AND u.device_token IS NOT NULL
                     ";
-                    $notif_stmt = $pdo->prepare($notif_query);
-                    $notif_stmt->execute([':rid' => $data->receiver_id, ':sid' => $data->sender_id]);
-                    $receiver_info = $notif_stmt->fetch(PDO::FETCH_ASSOC);
+                    $rec_stmt = $pdo->prepare($recipients_query);
+                    $rec_stmt->execute([':gid' => $group_id, ':sid' => $sender_id]);
+                    $recipients = $rec_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-                    if ($receiver_info && !empty($receiver_info['device_token']) && $receiver_info['is_muted'] == 0) {
-                        include_once '../includes/push_service.php';
-                        
-                        // Get Sender Name
-                        $sender_name_query = "SELECT username, display_name FROM users WHERE id = :sid";
-                        $sender_stmt = $pdo->prepare($sender_name_query);
-                        $sender_stmt->execute([':sid' => $data->sender_id]);
-                        $sender_row = $sender_stmt->fetch(PDO::FETCH_ASSOC);
+                    foreach ($recipients as $rec) {
+                        $shouldNotify = true;
+                        $isMentioned = isset($mentions[$rec['id']]);
 
-                        // Use display_name if set, otherwise username
-                        $sender_name = !empty($sender_row['display_name']) ? $sender_row['display_name'] : $sender_row['username'];
+                        // Check Mute Status
+                        // Optimized: We could do this in the main query, but keeping PHP logic for now for readability of "Overriding"
+                        $mute_check = $pdo->prepare("SELECT COUNT(*) FROM muted_chats WHERE user_id = :uid AND target_id = :gid AND mute_until > NOW()");
+                        $mute_check->execute([':uid' => $rec['id'], ':gid' => $group_id]); 
+                        $is_muted = $mute_check->fetchColumn() > 0;
 
-                        $title = $sender_name;
-                        $body = '';
-                        
-                        // Construct Body based on Message Type and OTV
-                        if ($is_one_time) {
-                            $body = "New private message";
-                        } else {
-                            switch ($message_type) {
-                                case 'text':
-                                    $body = mb_substr($message_text, 0, 30) . (mb_strlen($message_text) > 30 ? '...' : '');
-                                    break;
-                                case 'image':
-                                    $body = "📷 Photo";
-                                    break;
-                                case 'video':
-                                    $body = "🎥 Video";
-                                    break;
-                                case 'voice':
-                                    $body = "🎤 Voice Message";
-                                    break;
-                                case 'document':
-                                    $body = "📄 Document";
-                                    break;
-                                case 'gif':
-                                    $body = "👾 GIF";
-                                    break;
-                                case 'sticker':
-                                    $body = "🧩 Sticker";
-                                    break;
-                                default:
-                                    $body = "New message";
+                        if ($is_muted) {
+                            if ($isMentioned) {
+                                // OVERRIDE MUTE because user is mentioned
+                                $shouldNotify = true;
+                            } else {
+                                $shouldNotify = false;
                             }
                         }
 
-                        // Payload for Deep Linking
+                        if ($shouldNotify) {
+                            $payload = [
+                                'type' => 'new_group_message', // Distinct type
+                                'conversation_id' => $conv_id,
+                                'group_id' => $group_id,
+                                'sender_id' => $sender_id,
+                                'sender_name' => $sender_name,
+                                'group_name' => $group_name,
+                                'message_id' => $message_id,
+                                'is_mention' => $isMentioned // Flag for client
+                            ];
+                            
+                            // Custom body for mentions
+                            $notificationBody = $body;
+                            if ($isMentioned) {
+                                $notificationBody = "You were mentioned: " . $body;
+                            }
+
+                            sendPushNotification($rec['device_token'], $title, $notificationBody, $payload);
+                        }
+                    }
+
+                } else {
+                    // 1-on-1 Notifications
+                    // ... (Existing Logic)
+                    // Check Mute
+                    $notif_query = "SELECT u.device_token, (SELECT COUNT(*) FROM muted_chats WHERE user_id = :rid AND target_id = :sid AND mute_until > NOW()) as is_muted FROM users u WHERE u.id = :rid";
+                    $notif_stmt = $pdo->prepare($notif_query);
+                    $notif_stmt->execute([':rid' => $receiver_id, ':sid' => $sender_id]);
+                    $receiver_info = $notif_stmt->fetch(PDO::FETCH_ASSOC);
+
+                    if ($receiver_info && !empty($receiver_info['device_token']) && $receiver_info['is_muted'] == 0) {
+                        $title = $sender_name;
                         $payload = [
                             'type' => 'new_message',
                             'conversation_id' => $conv_id,
-                            'sender_id' => $data->sender_id,
+                            'sender_id' => $sender_id, // For navigation to profile/chat
                             'sender_name' => $sender_name,
-                            'message_id' => $pdo->lastInsertId() // Approximate, valid enough for nav
+                            'message_id' => $message_id
                         ];
-
                         sendPushNotification($receiver_info['device_token'], $title, $body, $payload);
                     }
-                } catch (Exception $e) {
-                    // Ignore notification errors to not fail the message send
                 }
             }
-            // --- End Push Notification Logic ---
 
             http_response_code(200);
             echo json_encode(array("message" => "Message sent.", "conversation_id" => $conv_id));
         } else {
-            http_response_code(503);
-            echo json_encode(array("message" => "Unable to send message."));
+            http_response_code(503); echo json_encode(array("message" => "Unable to send message."));
         }
+
     } catch (PDOException $e) {
-        http_response_code(500);
-        echo json_encode(array("message" => "Database error: " . $e->getMessage()));
+        http_response_code(500); echo json_encode(array("message" => "Database error: " . $e->getMessage()));
     }
 } else {
-    http_response_code(400);
-    echo json_encode(array("message" => "Incomplete data."));
+    http_response_code(400); echo json_encode(array("message" => "Incomplete data."));
 }

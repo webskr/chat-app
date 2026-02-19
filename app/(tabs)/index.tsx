@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, FlatList, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
@@ -16,6 +16,7 @@ import { useFocusEffect } from 'expo-router';
 import { formatChatTime } from '../../utils/time';
 import { EmptyState } from '../../components/EmptyState';
 import { MessageSquare, Megaphone } from 'lucide-react-native';
+import { GroupDefaultIcon } from '../../components/icons/GroupDefaultIcon';
 
 export default function ChatScreen() {
     const { user, setUnreadCount } = useUser();
@@ -31,7 +32,8 @@ export default function ChatScreen() {
             const data = await response.json();
             if (response.ok) {
                 setChats(data);
-                const totalUnread = data.reduce((sum: number, chat: any) => sum + (Number(chat.unread_count) || 0), 0);
+                const totalUnread = data.reduce((sum: number, chat: any) => sum + (Number(chat.unread_count) || Number(chat.unread_count_raw) || 0), 0);
+                console.log('Index: fetchConversations totalUnread:', totalUnread, 'Detail:', data.map((c: any) => `${c.id}:${c.unread_count || c.unread_count_raw}`));
                 setUnreadCount(totalUnread);
             }
         } catch (error) {
@@ -70,70 +72,96 @@ export default function ChatScreen() {
     };
 
     const filteredChats = React.useMemo(() => {
-        return chats.filter(chat =>
-            chat.other_username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (chat.last_message && chat.last_message.toLowerCase().includes(searchQuery.toLowerCase()))
-        );
+        return chats.filter(chat => {
+            const nameMatch = chat.other_username && chat.other_username.toLowerCase().includes(searchQuery.toLowerCase());
+            const msgMatch = chat.last_message && chat.last_message.toLowerCase().includes(searchQuery.toLowerCase());
+            return nameMatch || msgMatch;
+        });
     }, [chats, searchQuery]);
 
 
-    const renderItem = ({ item }: { item: any }) => (
-        <TouchableOpacity
-            style={styles.chatItem}
-            activeOpacity={0.7}
-            onPress={() => router.push({
-                pathname: '/chat/[id]',
-                params: {
-                    id: item.other_user_id.toString(),
-                    user: String(item.other_user_id) === String(user?.id) ? 'Note to self' : item.other_username,
-                    avatar_id: item.other_avatar_id,
-                    avatar_url: item.other_avatar_url,
-                    is_official: item.other_is_official
-                }
-            })}
-        >
-            <View style={styles.chatRow}>
-                <Avatar
-                    source={item.other_avatar_url ? `${Config.API_URL}/${item.other_avatar_url}` : getAvatarById(item.other_avatar_id)}
-                    online={item.is_online}
-                    size={50}
-                />
-                <View style={styles.chatDetails}>
-                    <View style={styles.rowTop}>
-                        <View style={styles.nameBadgeContainer}>
-                            <ThemedText type="defaultSemiBold" style={styles.username} numberOfLines={1}>
-                                {String(item.other_user_id) === String(user?.id) ? 'Note to self' : item.other_username}
+    const renderItem = ({ item }: { item: any }) => {
+        const isGroup = item.is_group == 1;
+        const displayName = (isGroup ? item.group_name : (String(item.other_user_id) === String(user?.id) ? 'Note to self' : item.other_username)) || 'Unknown';
+        const displayAvatar = isGroup ? item.group_icon : item.other_avatar_url; // Group icon is path, user avatar_url is path
+        // For groups, other_avatar_id is 0. 
+        // Logic for Avatar component: 
+        // source={uri} or id={id}
+        // If isGroup, we use source with full URL if icon exists, else default group icon? 
+        // Let's assume passed to Avatar component.
+
+        return (
+            <TouchableOpacity
+                style={styles.chatItem}
+                activeOpacity={0.7}
+                onPress={() => router.push({
+                    pathname: '/chat/[id]',
+                    params: {
+                        id: isGroup ? item.group_id.toString() : item.other_user_id.toString(),
+                        user: displayName,
+                        avatar_id: item.other_avatar_id,
+                        avatar_url: displayAvatar,
+                        is_official: item.other_is_official,
+                        is_group: isGroup ? '1' : '0'
+                    }
+                })}
+            >
+                <View style={styles.chatRow}>
+                    <Avatar
+                        source={displayAvatar ? `${Config.API_URL}/${displayAvatar}` : (isGroup ? undefined : getAvatarById(item.other_avatar_id))}
+                        online={!isGroup && item.is_online}
+                        size={50}
+                        fallbackComponent={isGroup ? <GroupDefaultIcon size={50} /> : undefined}
+                    />
+                    <View style={styles.chatDetails}>
+                        <View style={styles.rowTop}>
+                            <View style={styles.nameBadgeContainer}>
+                                <ThemedText type="defaultSemiBold" style={styles.username} numberOfLines={1}>
+                                    {displayName}
+                                </ThemedText>
+                                {!isGroup && item.other_is_official == 1 && (
+                                    <BadgeCheck size={16} color={Colors.background} fill={Colors.verifiedBackground} />
+                                )}
+                            </View>
+                            <ThemedText style={[styles.time, (item.unread_count > 0 || (item.unread_count_raw > 0)) && styles.timeActive]}>
+                                {formatChatTime(item.last_message_time)}
                             </ThemedText>
-                            {item.other_is_official == 1 && (
-                                <BadgeCheck size={16} color={Colors.background} fill={Colors.verifiedBackground} />
+                        </View>
+                        <View style={styles.rowBottom}>
+                            <ThemedText
+                                numberOfLines={1}
+                                style={styles.lastMessage}
+                            >
+                                {/* Draft: prefix could be handled here if needed */}
+                                {item.last_message || 'No messages yet'}
+                            </ThemedText>
+
+                            {(item.unread_count > 0 || (item.unread_count_raw > 0)) && (
+                                <View style={styles.badgeContainer}>
+                                    <ThemedText style={styles.badgeText}>
+                                        {item.unread_count || item.unread_count_raw}
+                                    </ThemedText>
+                                </View>
                             )}
                         </View>
-                        <ThemedText style={[styles.time, item.unread_count > 0 && styles.timeActive]}>
-                            {formatChatTime(item.last_message_time)}
-                        </ThemedText>
-                    </View>
-                    <View style={styles.rowBottom}>
-                        <ThemedText
-                            numberOfLines={1}
-                            style={styles.lastMessage}
-                        >
-                            {/* Draft: prefix could be handled here if needed */}
-                            {item.last_message || 'No messages yet'}
-                        </ThemedText>
-
-                        {item.unread_count > 0 && (
-                            <View style={styles.badgeContainer}>
-                                <ThemedText style={styles.badgeText}>
-                                    {item.unread_count}
-                                </ThemedText>
-                            </View>
-                        )}
                     </View>
                 </View>
-            </View>
-            <View style={styles.divider} />
-        </TouchableOpacity>
-    );
+                <View style={styles.divider} />
+            </TouchableOpacity>
+        );
+    };
+
+    const [menuVisible, setMenuVisible] = React.useState(false);
+
+    const onNewGroup = () => {
+        setMenuVisible(false);
+        router.push('/chat/create_group');
+    };
+
+    const onSettings = () => {
+        setMenuVisible(false);
+        router.push('/(tabs)/settings'); // Assuming settings.tsx is a tab or reachable
+    };
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -141,16 +169,38 @@ export default function ChatScreen() {
                 <ThemedText type="title" style={styles.headerTitle}>Vegarm</ThemedText>
 
                 <View style={{ flexDirection: 'row', gap: 16 }}>
+                    {/* Independent Create Group button REMOVED */}
+
                     {user?.is_official == 1 && (
                         <TouchableOpacity onPress={() => router.push('/broadcast/compose')}>
                             <Megaphone size={22} color={Colors.primary} />
                         </TouchableOpacity>
                     )}
-                    <TouchableOpacity onPress={() => {/* More options */ }}>
+                    <TouchableOpacity onPress={() => setMenuVisible(true)}>
                         <MoreVertical size={22} color={Colors.textSecondary} />
                     </TouchableOpacity>
                 </View>
             </View>
+
+            {/* Menu Modal */}
+            <Modal
+                transparent
+                visible={menuVisible}
+                animationType="fade"
+                onRequestClose={() => setMenuVisible(false)}
+            >
+                <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
+                    <View style={styles.menuContainer}>
+                        <TouchableOpacity style={styles.menuItem} onPress={onNewGroup}>
+                            <ThemedText>New group</ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.menuItem} onPress={onSettings}>
+                            <ThemedText>Settings</ThemedText>
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Modal>
+
             <View style={styles.searchContainer}>
                 <SearchInput
                     value={searchQuery}
@@ -280,4 +330,27 @@ const styles = StyleSheet.create({
         marginLeft: 80, // 16(pad) + 50(avatar) + 14(gap)
         opacity: 0.3,
     },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'transparent',
+    },
+    menuContainer: {
+        position: 'absolute',
+        top: 50,
+        right: 10,
+        backgroundColor: '#1E1E1E', // Dark menu
+        borderRadius: 8,
+        padding: 4,
+        minWidth: 150,
+        elevation: 5,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        zIndex: 1000,
+    },
+    menuItem: {
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+    }
 });

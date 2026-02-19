@@ -10,7 +10,7 @@ export const Config = {
 
     // Your local Machine IP (Updated: 2026-02-01)
     // If this changes, run 'ipconfig' in terminal to find the new IPv4 Address.
-    IP_ADDRESS: '10.61.238.5',
+    IP_ADDRESS: '10.64.147.5',
 
     // Android Emulator special alias (10.0.2.2 = localhost of host machine)
     // Use this if the IP method doesn't work on Android Emulator

@@ -5,11 +5,12 @@ import { Colors } from '../../../constants/Colors';
 import { Clock, EyeOff } from 'lucide-react-native';
 
 interface SlashCommandSuggestionsProps {
-    visible: boolean;
+    visible?: boolean;
     onSelect: (command: string) => void;
+    onClose?: () => void;
 }
 
-export const SlashCommandSuggestions: React.FC<SlashCommandSuggestionsProps> = ({ visible, onSelect }) => {
+export const SlashCommandSuggestions: React.FC<SlashCommandSuggestionsProps> = ({ visible = true, onSelect, onClose }) => {
     if (!visible) return null;
 
     return (

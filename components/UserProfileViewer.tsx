@@ -264,12 +264,14 @@ export function UserProfileViewer({
                         {/* FOOTER ACTIONS */}
                         {!isSelf && (
                             <View style={styles.footer}>
-                                <TouchableOpacity style={styles.footerBtn} onPress={() => handleAction('block')}>
-                                    <Ban size={20} color="#FF6B6B" />
-                                    <ThemedText style={[styles.footerBtnText, { color: '#FF6B6B' }]}>
-                                        Block {user.username}
-                                    </ThemedText>
-                                </TouchableOpacity>
+                                {user.is_official != 1 && (
+                                    <TouchableOpacity style={styles.footerBtn} onPress={() => handleAction('block')}>
+                                        <Ban size={20} color="#FF6B6B" />
+                                        <ThemedText style={[styles.footerBtnText, { color: '#FF6B6B' }]}>
+                                            Block {user.username}
+                                        </ThemedText>
+                                    </TouchableOpacity>
+                                )}
                                 <TouchableOpacity style={styles.footerBtn} onPress={() => handleAction('report')}>
                                     <Flag size={20} color="#FF6B6B" />
                                     <ThemedText style={[styles.footerBtnText, { color: '#FF6B6B' }]}>

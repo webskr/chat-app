@@ -25,13 +25,17 @@ if (!empty($user_id)) {
         $deliveryStmt = $pdo->prepare($deliveryQuery);
         $deliveryStmt->execute([':me' => $user_id]);
 
-        $query = "SELECT c.id, 
+        // 1. Fetch 1-on-1 Conversations
+        $oneOnOneQuery = "SELECT c.id, 
                          c.user1_id, c.user2_id,
+                         c.is_group, c.group_id,
                          (SELECT message_text FROM messages m WHERE m.conversation_id = c.id 
                             AND (
                                 (m.sender_id = :me_check1 AND (m.hidden_for_sender = 0 OR m.hidden_for_sender IS NULL))
                                 OR
                                 (m.receiver_id = :me_check2 AND (m.hidden_for_receiver = 0 OR m.hidden_for_receiver IS NULL))
+                                OR
+                                (m.receiver_id IS NULL) -- Handle group messages (receiver_id is NULL)
                             )
                             ORDER BY m.created_at DESC, m.id DESC LIMIT 1
                          ) as latest_msg_text,
@@ -40,6 +44,8 @@ if (!empty($user_id)) {
                                 (m.sender_id = :me_check3 AND (m.hidden_for_sender = 0 OR m.hidden_for_sender IS NULL))
                                 OR
                                 (m.receiver_id = :me_check4 AND (m.hidden_for_receiver = 0 OR m.hidden_for_receiver IS NULL))
+                                OR
+                                (m.receiver_id IS NULL)
                             )
                             ORDER BY m.created_at DESC, m.id DESC LIMIT 1
                          ) as latest_msg_type,
@@ -48,33 +54,72 @@ if (!empty($user_id)) {
                                 (m.sender_id = :me_check5 AND (m.hidden_for_sender = 0 OR m.hidden_for_sender IS NULL))
                                 OR
                                 (m.receiver_id = :me_check6 AND (m.hidden_for_receiver = 0 OR m.hidden_for_receiver IS NULL))
+                                OR
+                                (m.receiver_id IS NULL)
                             )
                             ORDER BY m.created_at DESC, m.id DESC LIMIT 1
                          ) as latest_msg_time,
-                         (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.receiver_id = :me_unread AND m.status != 'seen') as unread_count,
+                         (SELECT is_one_time FROM messages m WHERE m.conversation_id = c.id 
+                            AND (
+                                (m.sender_id = :me_check7 AND (m.hidden_for_sender = 0 OR m.hidden_for_sender IS NULL))
+                                OR
+                                (m.receiver_id = :me_check8 AND (m.hidden_for_receiver = 0 OR m.hidden_for_receiver IS NULL))
+                                OR
+                                (m.receiver_id IS NULL)
+                            )
+                            ORDER BY m.created_at DESC, m.id DESC LIMIT 1
+                         ) as latest_is_one_time,
+                         (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id 
+                            AND m.receiver_id = :me_unread 
+                            AND m.status != 'read'
+                         ) as unread_count_raw,
                          u.id as other_user_id, u.username as other_username, u.avatar_id as other_avatar_id, u.avatar_url as other_avatar_url,
-                         u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.is_official as other_is_official
+                         u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.is_official as other_is_official,
+                         NULL as group_name, NULL as group_icon
                   FROM conversations c
                   JOIN users u ON (c.user1_id = u.id OR c.user2_id = u.id)
                   WHERE (c.user1_id = :uid1 OR c.user2_id = :uid2) 
                   AND ( (c.user1_id != c.user2_id AND u.id != :uid3) OR (c.user1_id = c.user2_id AND u.id = :uid4) )
                   AND u.id NOT IN (SELECT target_id FROM relationships WHERE user_id = :uid5 AND status = 'blocked')
-                  ORDER BY COALESCE(latest_msg_time, c.last_message_time) DESC";
+                  AND (c.is_group = 0 OR c.is_group IS NULL)";
+
+        // 2. Fetch Group Conversations
+        $groupQuery = "SELECT c.id,
+                        NULL as user1_id, NULL as user2_id,
+                        c.is_group, c.group_id,
+                        (SELECT message_text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) as latest_msg_text,
+                        (SELECT message_type FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) as latest_msg_type,
+                        (SELECT created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) as latest_msg_time,
+                        (SELECT is_one_time FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) as latest_is_one_time,
+                        (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id 
+                           AND m.sender_id != :me_group_unread
+                           AND m.created_at > (SELECT joined_at FROM group_members gm2 WHERE gm2.group_id = c.group_id AND gm2.user_id = :me_group_member_check)
+                        ) as unread_count_raw,
+                        0 as other_user_id, g.name as other_username, 0 as other_avatar_id, g.icon_path as other_avatar_url,
+                        NULL as last_seen, 0 as privacy_last_seen, 'nobody' as privacy_profile_visibility, 0 as other_is_official,
+                        g.name as group_name, g.icon_path as group_icon
+                 FROM conversations c
+                 JOIN group_members gm ON c.group_id = gm.group_id
+                 JOIN groups g ON c.group_id = g.id
+                 WHERE gm.user_id = :uid_group
+                 AND c.is_group = 1";
+
+        // Combine Queries
+        $finalQuery = "($oneOnOneQuery) UNION ($groupQuery) ORDER BY COALESCE(latest_msg_time, '1970-01-01') DESC";
         
-        $stmt = $pdo->prepare($query);
+        $stmt = $pdo->prepare($finalQuery);
         $stmt->execute([
-            ':uid1' => $user_id, 
-            ':uid2' => $user_id, 
-            ':uid3' => $user_id, 
-            ':uid4' => $user_id, 
+            ':me_check1' => $user_id, ':me_check2' => $user_id,
+            ':me_check3' => $user_id, ':me_check4' => $user_id,
+            ':me_check5' => $user_id, ':me_check6' => $user_id,
+            ':me_check7' => $user_id, ':me_check8' => $user_id,
+            ':me_unread' => $user_id,
+            ':uid1' => $user_id, ':uid2' => $user_id, 
+            ':uid3' => $user_id, ':uid4' => $user_id, 
             ':uid5' => $user_id,
-            ':me_check1' => $user_id,
-            ':me_check2' => $user_id,
-            ':me_check3' => $user_id,
-            ':me_check4' => $user_id,
-            ':me_check5' => $user_id,
-            ':me_check6' => $user_id,
-            ':me_unread' => $user_id
+            ':me_group_unread' => $user_id,
+            ':me_group_member_check' => $user_id,
+            ':uid_group' => $user_id
         ]);
         
         $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -103,12 +148,15 @@ if (!empty($user_id)) {
             // Format Last Message Preview
             $type = $conv['latest_msg_type'] ?? 'text';
             $text = $conv['latest_msg_text'] ?? '';
+            $isOneTime = !empty($conv['latest_is_one_time']) && $conv['latest_is_one_time'] == 1;
             
             if (empty($text) && empty($type) && empty($conv['latest_msg_time'])) {
                 $conv['last_message'] = null;
                 $conv['last_message_time'] = null;
             } else {
-                if ($type === 'image') $conv['last_message'] = '📷 Image';
+                if ($isOneTime) {
+                    $conv['last_message'] = '🔒 One-Time Message';
+                } elseif ($type === 'image') $conv['last_message'] = '📷 Image';
                 elseif ($type === 'video') $conv['last_message'] = '🎥 Video';
                 elseif ($type === 'voice') $conv['last_message'] = '🎤 Voice Message';
                 elseif ($type === 'audio') $conv['last_message'] = '🎵 Audio';

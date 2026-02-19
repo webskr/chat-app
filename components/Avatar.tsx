@@ -3,21 +3,28 @@ import { View, Image, StyleSheet, ImageSourcePropType, ViewStyle, StyleProp } fr
 import { Colors } from '../constants/Colors';
 
 interface AvatarProps {
-    source: ImageSourcePropType | string;
+    source?: ImageSourcePropType | string | null;
     size?: number;
     online?: boolean;
     style?: StyleProp<ViewStyle>;
+    fallbackComponent?: React.ReactNode;
 }
 
-export const Avatar = ({ source, size = 48, online, style }: AvatarProps) => {
+export const Avatar = ({ source, size = 48, online, style, fallbackComponent }: AvatarProps) => {
     const imageSource = typeof source === 'string' ? { uri: source } : source;
 
     return (
         <View style={[styles.container, { width: size, height: size }, style]}>
-            <Image
-                source={imageSource}
-                style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
-            />
+            {imageSource ? (
+                <Image
+                    source={imageSource}
+                    style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
+                />
+            ) : fallbackComponent ? (
+                <View style={[styles.image, { width: size, height: size, borderRadius: size / 2, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }]}>
+                    {fallbackComponent}
+                </View>
+            ) : null}
             {!!online && (
                 <View style={[
                     styles.statusParams,

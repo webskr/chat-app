@@ -5,14 +5,13 @@ import { Colors } from '../../../constants/Colors';
 import { Info, AlertCircle } from 'lucide-react-native';
 
 interface InlineScheduleGuidanceProps {
-    visible: boolean;
-    isValid: boolean;
-    parseError?: string;
-    parsedTime?: Date | null;
+    date: Date | null;
+    error: string | null;
 }
 
-export const InlineScheduleGuidance: React.FC<InlineScheduleGuidanceProps> = ({ visible, isValid, parseError, parsedTime }) => {
-    if (!visible) return null;
+export const InlineScheduleGuidance: React.FC<InlineScheduleGuidanceProps> = ({ date, error }) => {
+    // Determine validity based on the provided date and error props
+    const isValid = !!date && !error;
 
     return (
         <View style={styles.container}>
@@ -28,13 +27,13 @@ export const InlineScheduleGuidance: React.FC<InlineScheduleGuidanceProps> = ({ 
             </View>
 
             <View style={styles.content}>
-                {isValid && parsedTime ? (
+                {isValid && date ? (
                     <ThemedText style={styles.preview}>
-                        Sending at: <ThemedText style={styles.timeHighlight}>{parsedTime.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</ThemedText>
+                        Sending at: <ThemedText style={styles.timeHighlight}>{date.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</ThemedText>
                     </ThemedText>
                 ) : (
                     <ThemedText style={styles.helper}>
-                        {parseError || "Try: 5pm, tomorrow 9am, or in 10 minutes"}
+                        {error || "Try: 5pm, tomorrow 9am, or in 10 minutes"}
                     </ThemedText>
                 )}
 

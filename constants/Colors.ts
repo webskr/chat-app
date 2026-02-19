@@ -31,5 +31,6 @@ export const Colors = {
   tabActiveText: '#25D366',  // Green Text for Active Tab
   tabInactiveText: '#94A3B8', // Grey Text for Inactive Tab
   error: '#EF4444',          // Red for destructive actions
+  success: '#00C851',        // Green for success/admin
 };
 

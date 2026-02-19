@@ -5,6 +5,7 @@ import { Colors } from '../../../constants/Colors';
 import { GlassCard } from '../../../components/GlassCard';
 import { ThemedText } from '../../../components/ThemedText';
 import { SlashCommandSuggestions } from './SlashCommandSuggestions';
+import { MentionSuggestions } from './MentionSuggestions'; // Import Mentions
 import { InlineScheduleGuidance } from './InlineScheduleGuidance';
 import { parseNaturalLanguageTime } from '../../../utils/timeParser';
 
@@ -33,16 +34,31 @@ export const ChatInputBar = ({
     isUploading,
     isSending,
     inputRef,
+    inputHeight,
     setInputHeight,
     keyboardHeight,
-    onRequestSchedule, // New prop
+    onRequestSchedule,
+    isGroup,
+    userRole,
+    permissions,
+    groupMembers = [] // New prop: List of group members
 }: any) => {
+
+
 
     // Schedule Logic State
     const [showSlashSuggestions, setShowSlashSuggestions] = useState(false);
     const [showScheduleGuidance, setShowScheduleGuidance] = useState(false);
     const [scheduledTime, setScheduledTime] = useState<Date | null>(null);
     const [scheduleError, setScheduleError] = useState<string | null>(null);
+    const [scheduleUsedText, setScheduleUsedText] = useState<string>('');
+
+    // Mention Logic State
+    const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+    const [mentionFilter, setMentionFilter] = useState('');
+    const [cursorPosition, setCursorPosition] = useState(0);
+
+
 
     const handleTextChange = (text: string) => {
         handleTyping(text);
@@ -51,24 +67,46 @@ export const ChatInputBar = ({
         if (text === '/') {
             setShowSlashSuggestions(true);
             setShowScheduleGuidance(false);
+            setShowMentionSuggestions(false);
         } else if (text.startsWith('/schedule')) {
             setShowSlashSuggestions(false);
             setShowScheduleGuidance(true);
+            setShowMentionSuggestions(false);
 
             const timePart = text.replace('/schedule', '').trim();
             if (timePart) {
-                const { date, error } = parseNaturalLanguageTime(timePart);
+                const { date, error, usedText } = parseNaturalLanguageTime(timePart);
                 setScheduledTime(date);
                 setScheduleError(error || null);
+                setScheduleUsedText(usedText || '');
             } else {
                 setScheduledTime(null);
                 setScheduleError(null);
+                setScheduleUsedText('');
             }
         } else {
             setShowSlashSuggestions(false);
             setShowScheduleGuidance(false);
             setScheduledTime(null);
             setScheduleError(null);
+            setScheduleUsedText('');
+
+            // Mention Detection
+            const lastAtSymbol = text.lastIndexOf('@');
+            if (isGroup && lastAtSymbol !== -1 && lastAtSymbol >= cursorPosition - 20) { // Simple proximity check
+                // Check if the @ is at the start or preceded by a space
+                const charBefore = lastAtSymbol > 0 ? text[lastAtSymbol - 1] : ' ';
+                if (charBefore === ' ' || charBefore === '\n') {
+                    const query = text.slice(lastAtSymbol + 1);
+                    // Check if query contains space (end of mention)
+                    if (!query.includes(' ')) {
+                        setMentionFilter(query);
+                        setShowMentionSuggestions(true);
+                        return;
+                    }
+                }
+            }
+            setShowMentionSuggestions(false);
         }
     };
 
@@ -76,51 +114,46 @@ export const ChatInputBar = ({
         handleTextChange(cmd);
     };
 
+    const handleSelectMention = (username: string) => {
+        const lastAtSymbol = inputText.lastIndexOf('@');
+        if (lastAtSymbol !== -1) {
+            const newText = inputText.slice(0, lastAtSymbol) + '@' + username + ' ';
+            handleTyping(newText);
+            setShowMentionSuggestions(false);
+        }
+    };
+
     const handleSendWithSchedule = () => {
-        if (scheduledTime && !scheduleError && inputText.replace('/schedule', '').trim()) {
-            const cleanText = inputText.replace(/^\/schedule\s+.*?\s+/, '').trim() || inputText.replace('/schedule', '').trim();
-            // We need to extract the message content logic better
-            // Pattern: /schedule [time] [message]
-            // We don't strictly separate them in parser, parser just grabs time.
-            // Let's rely on the parser to be robust or just pass the whole text minus command to parent?
-            // Actually, the requirements say: "/schedule 5pm Hello" -> Message is "Hello"
-            // My parser is simple.
-            // Let's improve extraction:
-            // The parser `parseNaturalLanguageTime` takes "5pm Hello"? 
-            // Currently my parser might get confused by extra text.
-            // Let's refine the usage here.
+        // ONE-TIME VIEW COMMAND
+        if (inputText.startsWith('/otv')) {
+            const content = inputText.replace('/otv', '').trim();
+            if (content) {
+                // Send as One-Time View
+                // handleSend signature: (text, imagePath, isRetry, isOneTime, scheduledAt)
+                handleSend(content, null, false, true);
+            }
+            return;
+        }
 
-            // Re-parsing strategy for message extraction:
-            // We need to split time and message.
-            // "5pm Hello" -> Time: 5pm, Msg: Hello
-            // "tomorrow 9am Meeting" -> Time: tomorrow 9am, Msg: Meeting
+        // SCHEDULE COMMAND
+        if (scheduledTime && !scheduleError && inputText.startsWith('/schedule')) {
+            // Extract message content by removing command and time
+            // We know 'usedText' matches the time part.
+            // But we need to be careful matching it in the full string if we didn't save it perfectly.
+            // Using scheduleUsedText which we saved during parsing.
 
-            // Since the parser is basic, let's assume the time is at the start.
-            // But `parseNaturalLanguageTime` creates a Date. It doesn't return "rest of string".
-            // That is a limitation.
+            const timePart = inputText.replace('/schedule', '').trim();
+            // Remove the used time text from the timePart to get the message
+            // This is a bit tricky if usedText is not unique, but usually sufficient.
 
-            // For now, let's just pass the raw input text to `onRequestSchedule` and let parent or a helper handle extraction?
-            // Or better: Let's assume the user MUST confirm the message in the modal, 
-            // so we can pass the whole text to the modal and let the user edit it? 
-            // OR simple regex: split by first space after time?
-            // It's hard to know where time ends. "tomorrow 9am".
+            let messageContent = timePart;
+            if (scheduleUsedText) {
+                messageContent = timePart.replace(scheduleUsedText, '').trim();
+            }
 
-            // Quick fix: The `scheduledTime` state is already set by `handleTextChange` calling parser.
-            // Does the parser handle trailing text?
-            // "5pm Hello" -> `parseNaturalLanguageTime` might return Valid Date if it matches "5pm".
-            // My parser uses regex `^...$`. It expects EXACT match for "in X mins".
-            // But for "today..." it does `startsWith`.
-            // For time `match`, it checks `^...$`.
-            // So "5pm Hello" will FAIL my parser.
-
-            // PROPOSED FIX: Update `handleTextChange` to try to identify the time part.
-            // OR update parser to be more loose.
-            // Let's update `onRequestSchedule` blindly with current parsed time.
-            // BUT wait, if parser failed on "5pm Hello", `scheduledTime` is NULL.
-            // So the user can't send.
-
-            // I need to update `utils/timeParser.ts` to support extracting time from start of string.
-            // This is safer.
+            onRequestSchedule(scheduledTime, messageContent); // Pass args to handler
+        } else {
+            handleSend(inputText);
         }
     };
 
@@ -269,196 +302,110 @@ export const ChatInputBar = ({
         return date.toISOString().substr(14, 5);
     };
 
+    const canSendMessage = !isGroup || (userRole === 'owner' || userRole === 'admin' || permissions.allow_member_send_messages);
+
     return (
         <View style={styles.inputArea}>
-            {/* Suggested Commands */}
-            <SlashCommandSuggestions
-                visible={showSlashSuggestions}
-                onSelect={handleSelectCommand}
-            />
-
-            {/* Inline Guidance */}
-            <InlineScheduleGuidance
-                visible={showScheduleGuidance}
-                isValid={!!scheduledTime && !scheduleError}
-                parseError={scheduleError || undefined}
-                parsedTime={scheduledTime}
-            />
-
-            <GlassCard
-                style={styles.inputWrapper}
-                contentContainerStyle={styles.inputContent}
-                intensity={30}
-            >
-                {isRecording ? (
-                    <View style={styles.recordingContainer}>
-                        <TouchableOpacity onPress={cancelRecording} style={styles.deleteButton}>
-                            <Trash2 size={24} color={Colors.textSecondary} />
-                        </TouchableOpacity>
-
-                        <View style={styles.recordingInfo}>
-                            <View style={[styles.recordingDot, isRecordingLocked && { backgroundColor: Colors.primary }]} />
-                            <ThemedText style={styles.timerText}>{formatDuration(recordingDuration)}</ThemedText>
-                            {/* Simple Visual Waveform */}
-                            <View style={styles.waveformContainer}>
-                                {[1, 2, 3, 4, 5].map((i) => (
-                                    <Animated.View
-                                        key={i}
-                                        style={[
-                                            styles.waveformBar,
-                                            {
-                                                height: 10 + Math.random() * 10,
-                                                opacity: waveformAnim.interpolate({
-                                                    inputRange: [0, 1],
-                                                    outputRange: [0.3, 1]
-                                                }),
-                                                backgroundColor: isRecordingLocked ? Colors.primary : Colors.textSecondary
-                                            }
-                                        ]}
-                                    />
-                                ))}
-                            </View>
-                        </View>
-
-                        {!isRecordingLocked && (
-                            <Animated.View style={[styles.slideCancelContainer, { opacity: cancelOpacity }]}>
-                                <ChevronLeft size={16} color={Colors.textSecondary} />
-                                <ThemedText style={styles.slideCancelText}>Slide to cancel</ThemedText>
-                            </Animated.View>
-                        )}
-
-                        <Animated.View
-                            style={{
-                                transform: [
-                                    { translateX: micTranslateX },
-                                    { scale: micScale }
-                                ]
-                            }}
-                            {...panResponder.panHandlers}
-                        >
-                            <View style={[styles.micButton, { backgroundColor: isRecordingLocked ? Colors.primary : Colors.error }]}>
-                                {isRecordingLocked ? (
-                                    <Send size={24} color="#FFF" />
-                                ) : (
-                                    <Mic size={24} color="#FFF" />
-                                )}
-                            </View>
-                        </Animated.View>
-                    </View>
-                ) : (
-                    <>
-                        {editingMessage ? (
-                            <TouchableOpacity style={styles.iconButton} onPress={handleCancelEdit}>
-                                <X size={22} color={Colors.error || '#FF3B30'} />
-                            </TouchableOpacity>
-                        ) : (
-                            <TouchableOpacity style={styles.iconButton} onPress={handleEmojiToggle} disabled={isUploading}>
-                                <Smile size={24} color={Colors.textSecondary} />
-                            </TouchableOpacity>
-                        )}
-
-                        <TextInput
-                            ref={inputRef}
-                            style={styles.input}
-                            placeholder={editingMessage ? "Edit message..." : "Type something..."}
-                            placeholderTextColor={Colors.textSecondary}
-                            value={inputText}
-                            onChangeText={handleTextChange}
-                            multiline
-                            maxLength={5000}
-                            onFocus={() => {
-                                setIsPanelOpen(false);
-                                setIsAttachmentPanelOpen(false);
-                            }}
+            {!canSendMessage ? (
+                <GlassCard style={{ padding: 12, alignItems: 'center' }}>
+                    <ThemedText style={{ color: Colors.textSecondary, textAlign: 'center' }}>
+                        Only admins can send messages in this group.
+                    </ThemedText>
+                </GlassCard>
+            ) : (
+                <>
+                    {showSlashSuggestions && (
+                        <SlashCommandSuggestions
+                            onSelect={handleSelectCommand}
+                            onClose={() => setShowSlashSuggestions(false)}
                         />
+                    )}
+                    {showScheduleGuidance && (
+                        <InlineScheduleGuidance
+                            date={scheduledTime}
+                            error={scheduleError}
+                        />
+                    )}
+                    {showMentionSuggestions && (
+                        <MentionSuggestions
+                            members={groupMembers}
+                            filter={mentionFilter}
+                            onSelect={handleSelectMention}
+                            onClose={() => setShowMentionSuggestions(false)}
+                        />
+                    )}
 
-                        {!editingMessage && (
-                            <TouchableOpacity
-                                style={styles.iconButton}
-                                onPress={handleAttachmentToggle}
-                                disabled={isUploading}
-                            >
-                                <Paperclip size={22} color={isAttachmentPanelOpen ? Colors.primary : Colors.textSecondary} />
-                            </TouchableOpacity>
+                    <View style={styles.inputWrapper}>
+                        {recordingStatus === 'recording' ? (
+                            <View style={styles.recordingContainer}>
+                                <View style={styles.recordingInfo}>
+                                    <View style={styles.recordingDot} />
+                                    <ThemedText style={styles.timerText}>{formatDuration(recordingDuration)}</ThemedText>
+                                    <View style={styles.waveformContainer}>
+                                        <Animated.View style={[styles.waveformBar, { height: 16, opacity: waveformAnim }]} />
+                                        <Animated.View style={[styles.waveformBar, { height: 24, opacity: waveformAnim }]} />
+                                        <Animated.View style={[styles.waveformBar, { height: 12, opacity: waveformAnim }]} />
+                                        <Animated.View style={[styles.waveformBar, { height: 20, opacity: waveformAnim }]} />
+                                    </View>
+                                </View>
+                                <View style={styles.slideCancelContainer}>
+                                    <ChevronLeft size={16} color={Colors.textSecondary} />
+                                    <Animated.Text style={[styles.slideCancelText, { opacity: cancelOpacity }]}>Slide to cancel</Animated.Text>
+                                </View>
+                            </View>
+                        ) : (
+                            <View style={styles.inputContent}>
+                                <TouchableOpacity onPress={handleEmojiToggle} style={styles.iconButton}>
+                                    <View style={styles.micIconContainer}>
+                                        <Smile size={22} color={panelActiveTab === 'emoji' && isPanelOpen ? Colors.primary : Colors.text} />
+                                    </View>
+                                </TouchableOpacity>
+
+                                <TextInput
+                                    ref={inputRef}
+                                    style={[styles.input, { height: Math.max(40, Math.min(40, inputHeight)) }]}
+                                    value={inputText}
+                                    onChangeText={handleTextChange}
+                                    onSelectionChange={(e) => setCursorPosition(e.nativeEvent.selection.start)}
+                                    placeholder="Message..."
+                                    placeholderTextColor={Colors.textSecondary}
+                                    multiline
+                                    onContentSizeChange={(e) => setInputHeight(e.nativeEvent.contentSize.height)}
+                                    onFocus={() => { setIsPanelOpen(false); setIsAttachmentPanelOpen(false); }}
+                                />
+
+                                <TouchableOpacity onPress={handleAttachmentToggle} style={styles.iconButton}>
+                                    <View style={styles.micIconContainer}>
+                                        <Paperclip size={22} color={isAttachmentPanelOpen ? Colors.primary : Colors.text} />
+                                    </View>
+                                </TouchableOpacity>
+                            </View>
                         )}
 
-                        <View style={styles.verticalDivider} />
+                        {recordingStatus !== 'recording' && <View style={styles.verticalDivider} />}
 
-                        {isInputAreaActive ? (
+                        {isInputAreaActive || (recordingStatus === 'recording' && isRecordingLocked) ? (
                             <TouchableOpacity
+                                onPress={recordingStatus === 'recording' ? stopRecording : handleSendWithSchedule}
                                 style={styles.iconButton}
-                                onPress={() => {
-                                    if (editingMessage) {
-                                        handleSaveEdit();
-                                    } else if (scheduledTime && !scheduleError) {
-                                        // Extract message content safely
-                                        const scheduleCommandRegex = /^\/schedule\s+/i;
-                                        const textWithoutCommand = inputText.replace(scheduleCommandRegex, '').trim();
-
-                                        // Re-parse to get the exact used time string
-                                        const { usedText } = parseNaturalLanguageTime(textWithoutCommand);
-
-                                        let finalMessage = textWithoutCommand;
-                                        if (usedText) {
-                                            const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                                            const usedTextRegex = new RegExp(`^${escapeRegExp(usedText)}\\s*`, 'i');
-                                            finalMessage = textWithoutCommand.replace(usedTextRegex, '').trim();
-                                        }
-
-                                        onRequestSchedule(scheduledTime, finalMessage);
-                                    } else {
-                                        // Check for /otv command
-                                        let textToSend = inputText;
-                                        let isOneTimeMsg = false;
-
-                                        if (textToSend.trim().toLowerCase().startsWith('/otv ')) {
-                                            isOneTimeMsg = true;
-                                            textToSend = textToSend.replace(/^\/otv\s+/i, '').trim();
-                                        }
-
-                                        handleSend(textToSend, null, false, isOneTimeMsg);
-                                    }
-                                }}
-                                disabled={!inputText.trim() || isSending || isUploading || (showScheduleGuidance && !scheduledTime)}
                             >
-                                {editingMessage ? (
-                                    <View style={styles.sendIconContainer}>
-                                        <Check
-                                            size={22}
-                                            color={(inputText.trim()) ? Colors.primary : Colors.textSecondary}
-                                        />
-                                    </View>
-                                ) : (
-                                    <View style={styles.sendIconContainer}>
-                                        <Send
-                                            size={22}
-                                            color={(inputText.trim() && !isSending && !isUploading) ? (scheduledTime ? Colors.primary : Colors.primary) : Colors.textSecondary}
-                                            fill={(inputText.trim() && !isSending && !isUploading) ? (scheduledTime ? 'transparent' : Colors.primary) : 'transparent'}
-                                        />
-                                        {scheduledTime && (
-                                            <View style={{ position: 'absolute', bottom: -2, right: -2 }}>
-                                                <Clock size={10} color={Colors.primary} />
-                                            </View>
-                                        )}
-                                    </View>
-                                )}
+                                <View style={styles.micIconContainer}>
+                                    <Send size={22} color={Colors.primary} />
+                                </View>
                             </TouchableOpacity>
                         ) : (
-                            <View
-                                style={styles.micButtonWrapper}
+                            <Animated.View
+                                style={[styles.iconButton, { transform: [{ scale: micScale }, { translateX: micTranslateX }] }]}
                                 {...panResponder.panHandlers}
                             >
                                 <View style={styles.micIconContainer}>
-                                    <Mic
-                                        size={22}
-                                        color={Colors.textSecondary}
-                                    />
+                                    <Mic size={22} color={Colors.text} />
                                 </View>
-                            </View>
+                            </Animated.View>
                         )}
-                    </>
-                )}
-            </GlassCard>
+                    </View>
+                </>
+            )}
         </View>
     );
 };
@@ -466,22 +413,27 @@ export const ChatInputBar = ({
 const styles = StyleSheet.create({
     inputArea: {
         paddingHorizontal: 16,
-        paddingTop: 6,
-        paddingBottom: 6,
+        paddingTop: 8,
+        paddingBottom: 8,
+        backgroundColor: Colors.background, // Ensure background matches
     },
     inputWrapper: {
-        borderRadius: 24,
+        borderRadius: 24, // Keep rounded
         overflow: 'hidden',
         backgroundColor: Colors.surface,
         borderWidth: 1,
         borderColor: Colors.glassBorder,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 2, // Reduced wrapper padding
     },
     inputContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 6,
-        paddingVertical: 6,
-        minHeight: 50,
+        paddingHorizontal: 4,
+        paddingVertical: 2, // Reduced content padding
+        minHeight: 40, // Reduced minHeight from 50
+        flex: 1,
     },
     recordingContainer: {
         flexDirection: 'row',
@@ -489,10 +441,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         flex: 1,
         paddingHorizontal: 10,
-    },
-    deleteButton: {
-        padding: 8,
-        marginRight: 8,
+        height: 40, // Match new minHeight
     },
     recordingInfo: {
         flexDirection: 'row',
@@ -500,83 +449,62 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     recordingDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
+        width: 8, // Slightly smaller dot
+        height: 8,
+        borderRadius: 4,
         backgroundColor: Colors.error,
         marginRight: 4,
     },
     timerText: {
-        fontSize: 16,
+        fontSize: 14, // Slightly smaller text
         fontWeight: '600',
         color: Colors.text,
-        minWidth: 50,
+        minWidth: 45,
     },
     waveformContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 3,
-        height: 24,
+        gap: 2, // tighter gap
+        height: 20, // smaller waveform
         marginLeft: 8,
     },
     waveformBar: {
-        width: 3,
+        width: 2, // thinner bars
         backgroundColor: Colors.textSecondary,
-        borderRadius: 2,
+        borderRadius: 1,
     },
     slideCancelContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginRight: 20,
+        marginRight: 10,
     },
     slideCancelText: {
-        fontSize: 14,
+        fontSize: 12,
         color: Colors.textSecondary,
         marginLeft: 4,
     },
-    micButtonWrapper: {
-        padding: 4,
-    },
-    micButton: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4,
-    },
     iconButton: {
-        padding: 6,
+        padding: 4, // Reduced button padding
     },
     input: {
         flex: 1,
         color: Colors.text,
         fontSize: 16,
-        maxHeight: 100,
+        maxHeight: 80, // Reduced max height slightly
         paddingVertical: 0,
         paddingHorizontal: 8,
         textAlignVertical: 'center',
     },
     verticalDivider: {
         width: 1,
-        height: 24,
+        height: 20, // Match new height scale
         backgroundColor: Colors.glassBorder,
-        marginHorizontal: 4,
-    },
-    sendIconContainer: {
-        width: 30,
-        height: 30,
-        justifyContent: 'center',
-        alignItems: 'center'
+        marginHorizontal: 2, // Tighter margin
     },
     micIconContainer: {
-        width: 30,
-        height: 30,
-        borderRadius: 20,
+        width: 32, // Slightly smaller touch target visual
+        height: 32,
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: 'transparent',

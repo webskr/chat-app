@@ -1,0 +1,134 @@
+Request for User ID: 1
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 5
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 5
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 5
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+Request for User ID: 1
+DB Error: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'chat_app.message_status' doesn't exist
+DB Error: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+EXCEPTION: SQLSTATE[HY093]: Invalid parameter number: number of bound variables does not match number of tokens
+--- START Request User: 5 ---
+User ID provided, starting try block.
+Fetched 4 rows.
+JSON Encoded successfully. Length: 2109
+JSON Encoded successfully. Length: 2109

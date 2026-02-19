@@ -11,11 +11,14 @@ import { Config } from '../../constants/Config';
 export default function TabLayout() {
     const { user, unreadCount } = useUser();
 
+    // console.log('TabLayout: unreadCount', unreadCount);
+
     useEffect(() => {
         const registerToken = async () => {
             if (user) {
                 try {
-                    const token = await registerForPushNotificationsAsync();
+                    const registerForPushNotificationsAsyncModule = require('../../utils/notifications');
+                    const token = await registerForPushNotificationsAsyncModule.registerForPushNotificationsAsync();
                     if (token) {
                         // Send to backend
                         await fetch(`${Config.API_URL}/auth/update_token.php`, {
@@ -55,13 +58,21 @@ export default function TabLayout() {
                 options={{
                     title: 'Chats',
                     tabBarIcon: ({ color, focused }) => (
-                        <View>
-                            <MessageSquareText size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
-                            {/* Badge logic could go here if global state available, but usually handled in badge prop */}
-                        </View>
+                        <MessageSquareText size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
                     ),
-                    tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-                    tabBarBadgeStyle: styles.badge,
+                    // Use a space to force the badge to render, then style it as a dot
+                    tabBarBadge: unreadCount > 0 ? '' : undefined,
+                    tabBarBadgeStyle: {
+                        backgroundColor: Colors.online, // Use bright green for visibility
+                        minWidth: 12,
+                        height: 12,
+                        maxHeight: 12,
+                        maxWidth: 12,
+                        borderRadius: 6,
+                        borderWidth: 1.5,
+                        borderColor: Colors.background, // Add border to make it pop
+                        marginTop: 4,
+                    },
                 }}
             />
             <Tabs.Screen

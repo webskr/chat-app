@@ -15,7 +15,7 @@ $data = json_decode(file_get_contents("php://input"), true);
 
 if (
     (empty($data['user_id']) && empty($data['sender_id'])) ||
-    (empty($data['target_id']) && empty($data['receiver_id']))
+    (empty($data['target_id']) && empty($data['receiver_id']) && empty($data['group_id']))
 ) {
     http_response_code(400);
     echo json_encode(["message" => "Incomplete data"]);
@@ -28,18 +28,38 @@ $target_id = isset($data['target_id']) ? (int)$data['target_id'] : (int)$data['r
 try {
     $pdo->beginTransaction();
 
-    // 1️⃣ Find conversation
-    $find = $pdo->prepare("
-        SELECT id
-        FROM conversations
-        WHERE (user1_id = :u1 AND user2_id = :u2)
-           OR (user1_id = :u2 AND user2_id = :u1)
-        LIMIT 1
-    ");
+    if (!empty($data['group_id'])) {
+        $group_id = (int)$data['group_id'];
+        
+        // Check Ownership
+        $check = $pdo->prepare("SELECT role FROM group_members WHERE group_id = :gid AND user_id = :uid");
+        $check->execute([':gid' => $group_id, ':uid' => $user_id]);
+        $role = $check->fetchColumn();
+        
+        if ($role !== 'owner') {
+             http_response_code(403);
+             echo json_encode(["message" => "Only the group owner can clear chat for everyone."]);
+             exit;
+        }
 
-    $find->execute([':u1' => $user_id, ':u2' => $target_id]);
-    $conversation = $find->fetch(PDO::FETCH_ASSOC);
+        // Find conversation
+        $find = $pdo->prepare("SELECT id FROM conversations WHERE group_id = :gid");
+        $find->execute([':gid' => $group_id]);
+        $conversation = $find->fetch(PDO::FETCH_ASSOC);
 
+    } else {
+        // 1-on-1 Logic
+        $find = $pdo->prepare("
+            SELECT id
+            FROM conversations
+            WHERE (user1_id = :u1 AND user2_id = :u2)
+               OR (user1_id = :u2 AND user2_id = :u1)
+            LIMIT 1
+        ");
+        $find->execute([':u1' => $user_id, ':u2' => $target_id]);
+        $conversation = $find->fetch(PDO::FETCH_ASSOC);
+    }
+    
     if (!$conversation) {
         $pdo->rollBack();
         http_response_code(404);

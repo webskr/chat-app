@@ -9,6 +9,7 @@ import { getAvatarById } from '../../../constants/Avatars';
 import { formatChatTime } from '../../../utils/time';
 import { OverflowMenu } from '../../../components/OverflowMenu';
 import { UserProfileViewer } from '../../../components/UserProfileViewer'; // Updated import
+import { GroupDefaultIcon } from '../../../components/icons/GroupDefaultIcon';
 
 import { Config } from '../../../constants/Config';
 
@@ -17,6 +18,7 @@ export const ChatHeader = ({
     otherUsername,
     avatar_id,
     avatar_url, // Added prop
+    isGroup,
     currentUser,
     targetUserProfile,
     isTyping,
@@ -78,12 +80,14 @@ export const ChatHeader = ({
                     <Avatar
                         source={
                             (String(id) === String(currentUser?.id) && currentUser?.avatar_url) ? `${Config.API_URL}/${currentUser.avatar_url}` :
-                                (targetUserProfile?.avatar_url) ? `${Config.API_URL}/${targetUserProfile.avatar_url}` :
-                                    (avatar_url) ? `${Config.API_URL}/${avatar_url}` :
-                                        getAvatarById(targetUserProfile?.avatar_id || avatar_id || id)
+                                (isGroup) ? (avatar_url ? `${Config.API_URL}/${avatar_url}` : undefined) :
+                                    (targetUserProfile?.avatar_url) ? `${Config.API_URL}/${targetUserProfile.avatar_url}` :
+                                        (avatar_url) ? `${Config.API_URL}/${avatar_url}` :
+                                            getAvatarById(targetUserProfile?.avatar_id || avatar_id || id)
                         }
-                        online={!!targetUserProfile?.last_seen && (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000)}
+                        online={!isGroup && !!targetUserProfile?.last_seen && (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000)}
                         size={40}
+                        fallbackComponent={isGroup ? <GroupDefaultIcon size={40} /> : undefined}
                     />
                     <View style={styles.nameContainer}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -100,11 +104,13 @@ export const ChatHeader = ({
                                 ? 'Personal Space'
                                 : isTyping
                                     ? 'Typing...'
-                                    : targetUserProfile?.last_seen
-                                        ? (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000
-                                            ? 'Online'
-                                            : `Last seen ${formatChatTime(targetUserProfile.last_seen)}`)
-                                        : 'Recently active'}
+                                    : isGroup
+                                        ? 'Tap for group info'
+                                        : targetUserProfile?.last_seen
+                                            ? (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000
+                                                ? 'Online'
+                                                : `Last seen ${formatChatTime(targetUserProfile.last_seen)}`)
+                                            : 'Recently active'}
                         </ThemedText>
                     </View>
                 </TouchableOpacity>
