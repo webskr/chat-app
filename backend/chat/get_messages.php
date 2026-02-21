@@ -236,8 +236,8 @@ try {
                     $msg['status'] = 'seen'; // Override status for this user
                 }
             } else {
-                // 1-on-1: strictly rely on status or seen_at
-                if ($msg['status'] === 'seen' || $msg['seen_at']) {
+                // 1-on-1: strictly rely on status or read_at
+                if ($msg['status'] === 'seen' || !empty($msg['read_at'])) {
                     $already_viewed = true;
                 }
             }

@@ -33,7 +33,7 @@ export default function ChatScreen() {
             if (response.ok) {
                 setChats(data);
                 const totalUnread = data.reduce((sum: number, chat: any) => sum + (Number(chat.unread_count) || Number(chat.unread_count_raw) || 0), 0);
-                console.log('Index: fetchConversations totalUnread:', totalUnread, 'Detail:', data.map((c: any) => `${c.id}:${c.unread_count || c.unread_count_raw}`));
+                // console.log('Index: fetchConversations totalUnread:', totalUnread, 'Detail:', data.map((c: any) => `${c.id}:${c.unread_count || c.unread_count_raw}`));
                 setUnreadCount(totalUnread);
             }
         } catch (error) {

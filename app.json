@@ -49,7 +49,6 @@
           "photosPermission": "Allow Vegarm to access your photos",
           "savePhotosPermission": "Allow Vegarm to save photos",
           "isAccessMediaLocationEnabled": true,
-          "audioPermission": "Allow Vegarm to access your audio",
           "videoPermission": "Allow Vegarm to access your videos"
         }
       ],

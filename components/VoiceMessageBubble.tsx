@@ -35,8 +35,9 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({ audioUrl
 
     const loadSound = async () => {
         setIsLoading(true);
+        let cleanUrl = '';
         try {
-            const cleanUrl = audioUrl.startsWith('http') ? audioUrl : `${Config.API_URL}/${audioUrl.replace(/^\//, '')}`;
+            cleanUrl = audioUrl.startsWith('http') ? audioUrl : `${Config.API_URL}/${audioUrl.replace(/^\//, '')}`;
             console.log('Loading sound:', cleanUrl);
 
             const { sound: newSound, status } = await Audio.Sound.createAsync(
@@ -50,8 +51,12 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({ audioUrl
             if (status.isLoaded && status.durationMillis) {
                 setCurrentDuration(status.durationMillis);
             }
-        } catch (error) {
-            console.error('Error loading sound:', error);
+        } catch (error: any) {
+            if (error?.message?.includes('404')) {
+                console.log(`Voice message not found on server (404): ${cleanUrl || audioUrl}`);
+            } else {
+                console.error('Error loading sound:', error);
+            }
             // alert('Could not play audio'); // Optional
         } finally {
             setIsLoading(false);

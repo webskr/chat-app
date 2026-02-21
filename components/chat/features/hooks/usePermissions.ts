@@ -25,7 +25,7 @@ export function usePermissions() {
             // 2. Microphone (for voice messages)
             try {
                 const { status: audioStatus } = await Audio.requestPermissionsAsync();
-                if (audioStatus !== 'granted') console.log('Audio permission not granted');
+                // if (audioStatus !== 'granted') console.log('Audio permission not granted');
             } catch (e) {
                 // This is expected to fail in Expo Go if AUDIO is not in THEIR manifest
                 console.log('Audio permission request failed (expected in Expo Go):', e);
