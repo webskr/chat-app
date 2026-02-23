@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, View, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform, Image } from 'react-native';
 import { X, Download, Share2 } from 'lucide-react-native';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { Colors } from '../constants/Colors';
 import { ThemedText } from './ThemedText';

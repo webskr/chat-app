@@ -39,6 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 
-# Secrets
+# Backend (PHP) - Exclude from Expo/EAS hashing
+backend/
+
 # Secrets
 vegarm-*.json

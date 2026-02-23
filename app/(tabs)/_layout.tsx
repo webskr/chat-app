@@ -5,7 +5,7 @@ import { Colors } from '../../constants/Colors';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, View, Text } from 'react-native';
 import { useUser } from '../../context/UserContext';
-import { registerForPushNotificationsAsync } from '../../utils/notifications';
+import { registerForPushNotificationsAsync } from '~/utils/notifications';
 import { Config } from '../../constants/Config';
 
 export default function TabLayout() {
@@ -92,7 +92,7 @@ export default function TabLayout() {
             />
 
             <Tabs.Screen
-                name="settings" // Mapped to Calls
+                name="settings-tab" // Rename to settings-tab to avoid conflict with /settings folder
                 options={{
                     title: 'Settings',
                     tabBarIcon: ({ color, focused }) => <Settings size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,

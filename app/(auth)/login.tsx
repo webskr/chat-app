@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Config } from '../../constants/Config';
 import { useUser } from '../../context/UserContext';
+import { E2EEService } from '../utils/crypto';
+import { LocalDatabaseService } from '../utils/LocalDatabaseService';
 
 export default function LoginScreen() {
     const { setUser } = useUser();
@@ -36,11 +38,65 @@ export default function LoginScreen() {
 
             const data = await response.json();
 
+            // ... inside handleLogin ...
             if (response.ok) {
                 await setUser(data.user);
                 setIsLoading(false);
                 setIsSuccess(true);
                 setLastError('');
+
+                // --- E2EE KEY INITIALIZATION ---
+                try {
+                    // Check if device already has keys for this user
+                    const existingKey = await E2EEService.loadPrivateKey(data.user.id);
+                    if (!existingKey) {
+                        console.log("Generating new E2EE keys for device...");
+                        const identityKeyPair = E2EEService.generateKeyPair();
+                        const signedPreKeyPair = E2EEService.generateKeyPair(); // Simplified for now
+
+                        // Generate a batch of One-Time Pre-Keys
+                        const oneTimePreKeys = [];
+                        for (let i = 0; i < 50; i++) {
+                            const otk = E2EEService.generateKeyPair();
+                            oneTimePreKeys.push({
+                                key_id: i,
+                                public_key: otk.publicKey,
+                                private_key: otk.privateKey // We would typically save these securely too
+                            });
+                        }
+
+                        await E2EEService.savePrivateKey(data.user.id, identityKeyPair);
+
+
+                        // ... other imports ...
+
+                        // Upload public keys to server
+                        await fetch(`${Config.API_URL}/chat/upload_keys.php`, {
+                            // ... existing key upload logic ...
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                user_id: data.user.id,
+                                identity_key_public: identityKeyPair.publicKey,
+                                signed_pre_key_public: signedPreKeyPair.publicKey,
+                                signed_pre_key_signature: "mock_signature",
+                                one_time_pre_keys: oneTimePreKeys.map(k => ({ key_id: k.key_id, public_key: k.public_key }))
+                            })
+                        });
+                        console.log("E2EE Keys uploaded successfully.");
+                    }
+                } catch (cryptoErr) {
+                    console.error("Failed to initialize E2EE keys:", cryptoErr);
+                }
+                // --- END E2EE SETUP ---
+
+                // --- LOCAL DB INIT ---
+                try {
+                    console.log("Initializing secure local database...");
+                    await LocalDatabaseService.initDB(data.token || data.user.id.toString());
+                } catch (dbErr) {
+                    console.error("Failed to initialize local DB:", dbErr);
+                }
 
                 // Redirect after a short delay so they can see the success message
                 setTimeout(() => {

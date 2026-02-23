@@ -1,0 +1,11 @@
+{
+    "name": "vegarm-media",
+    "platforms": [
+        "android"
+    ],
+    "android": {
+        "modules": [
+            "expo.modules.vegarmmedia.VegarmMediaModule"
+        ]
+    }
+}

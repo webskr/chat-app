@@ -81,8 +81,21 @@ if (!empty($data->sender_id) && (!empty($data->message) || !empty($data->image_p
         // 4. Send Message Loop
         $pdo->beginTransaction();
 
-        $msgSql = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_url, scheduled_at, status, sent_at) 
-                   VALUES (:cid, :sid, :rid, :msg, :type, :media, :sch_at, :status, :sent_at)";
+        // --- MEDIA SEPARATION LOGIC ---
+        $media_id = null;
+        if (!empty($media_url)) {
+            $media_stmt = $pdo->prepare("INSERT INTO media (file_path, file_type, mime_type, file_name) VALUES (:fp, :ft, :mime, :fname)");
+            $media_stmt->execute([
+                ':fp' => $media_url,
+                ':ft' => $message_type,
+                ':mime' => 'image/jpeg', // Defaulting to generic image for broadcast if unknown
+                ':fname' => basename($media_url)
+            ]);
+            $media_id = $pdo->lastInsertId();
+        }
+
+        $msgSql = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_id, scheduled_at, status, sent_at) 
+                   VALUES (:cid, :sid, :rid, :msg, :type, :mid, :sch_at, :status, :sent_at)";
         $msgStmt = $pdo->prepare($msgSql);
 
         $convSql = "INSERT INTO conversations (user1_id, user2_id, last_message, last_message_time) 
@@ -126,7 +139,7 @@ if (!empty($data->sender_id) && (!empty($data->message) || !empty($data->image_p
                 ':rid' => $receiver_id,
                 ':msg' => $message_text,
                 ':type' => $message_type,
-                ':media' => $media_url,
+                ':mid' => $media_id,
                 ':sch_at' => $scheduled_at,
                 ':status' => $status,
                 ':sent_at' => $sent_at

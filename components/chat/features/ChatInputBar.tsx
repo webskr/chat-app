@@ -129,8 +129,8 @@ export const ChatInputBar = ({
             const content = inputText.replace('/otv', '').trim();
             if (content) {
                 // Send as One-Time View
-                // handleSend signature: (text, imagePath, isRetry, isOneTime, scheduledAt)
-                handleSend(content, null, false, true);
+                // handleSend signature: (text, mediaPath, mediaType, isRetry, isOneTime, scheduledAt)
+                handleSend(content, null, 'text', false, true);
             }
             return;
         }

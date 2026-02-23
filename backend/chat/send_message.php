@@ -185,22 +185,33 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
         $status = $scheduled_at ? 'scheduled' : 'sent';
         $sent_at = ($status === 'sent') ? date('Y-m-d H:i:s') : null;
 
-        $msg_query = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_url, thumbnail_url, duration, file_size, file_name, mime_type, reply_to_message_id, is_one_time, delete_after_seconds, scheduled_at, status, sent_at) 
-                      VALUES (:cid, :sid, :rid, :msg, :type, :media, :thumb, :dur, :size, :fname, :mime, :reply_id, :is_ot, :del_sec, :sch_at, :status, :sent_at)";
+        $msg_query = "INSERT INTO messages (conversation_id, sender_id, receiver_id, message_text, message_type, media_id, reply_to_message_id, is_one_time, delete_after_seconds, scheduled_at, status, sent_at) 
+                      VALUES (:cid, :sid, :rid, :msg, :type, :mid, :reply_id, :is_ot, :del_sec, :sch_at, :status, :sent_at)";
         $msg_stmt = $pdo->prepare($msg_query);
         
+        // --- MEDIA SEPARATION LOGIC ---
+        $media_id = null;
+        if (!empty($media_url)) {
+            $media_stmt = $pdo->prepare("INSERT INTO media (file_path, file_type, mime_type, file_size, duration, thumbnail_url, file_name, expires_at) VALUES (:fp, :ft, :mime, :fsize, :dur, :thumb, :fname, DATE_ADD(NOW(), INTERVAL 7 DAY))");
+            $media_stmt->execute([
+                ':fp' => $media_url,
+                ':ft' => $message_type,
+                ':mime' => $mime_type,
+                ':fsize' => $file_size,
+                ':dur' => $duration,
+                ':thumb' => $thumbnail_url,
+                ':fname' => !empty($file_name) ? $file_name : basename($media_url)
+            ]);
+            $media_id = $pdo->lastInsertId();
+        }
+
         if ($msg_stmt->execute([
             ':cid' => $conv_id, 
             ':sid' => $sender_id, 
             ':rid' => $receiver_id, // NULL for groups
             ':msg' => $message_text,
             ':type' => $message_type,
-            ':media' => $media_url,
-            ':thumb' => $thumbnail_url,
-            ':dur' => $duration,
-            ':size' => $file_size,
-            ':fname' => $file_name,
-            ':mime' => $mime_type,
+            ':mid' => $media_id,
             ':reply_id' => $reply_to_message_id,
             ':is_ot' => $is_one_time,
             ':del_sec' => $delete_after_seconds,
@@ -209,6 +220,40 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
             ':sent_at' => $sent_at
         ])) {
             $message_id = $pdo->lastInsertId();
+
+            // --- MEDIA TRACKING INITIALIZATION ---
+            if ($media_id) {
+                try {
+                    $tracking_stmt = $pdo->prepare("INSERT INTO media_tracking (media_id, message_id, sender_id, receiver_id, status) VALUES (:mid, :msgid, :sid, :rid, 'pending')");
+                    
+                    if ($is_group) {
+                        // Get all active group members except sender
+                        $members_stmt = $pdo->prepare("SELECT user_id FROM group_members WHERE group_id = :gid AND user_id != :sid AND status = 'active'");
+                        $members_stmt->execute([':gid' => $group_id, ':sid' => $sender_id]);
+                        $members = $members_stmt->fetchAll(PDO::FETCH_COLUMN);
+                        
+                        foreach ($members as $member_id) {
+                            $tracking_stmt->execute([
+                                ':mid' => $media_id,
+                                ':msgid' => $message_id,
+                                ':sid' => $sender_id,
+                                ':rid' => $member_id
+                            ]);
+                        }
+                    } else {
+                        // 1-on-1
+                        $tracking_stmt->execute([
+                            ':mid' => $media_id,
+                            ':msgid' => $message_id,
+                            ':sid' => $sender_id,
+                            ':rid' => $receiver_id
+                        ]);
+                    }
+                } catch (Exception $trackErr) {
+                    error_log("Media tracking init failed: " . $trackErr->getMessage());
+                    // Non-fatal for message delivery
+                }
+            }
 
             // --- NOTIFICATION LOGIC ---
             if ($status === 'sent') {
@@ -220,10 +265,9 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
                 $sender_row = $sender_stmt->fetch(PDO::FETCH_ASSOC);
                 $sender_name = !empty($sender_row['display_name']) ? $sender_row['display_name'] : $sender_row['username'];
 
-                $body = "New message";
+                $body = "New secure message";
                 if ($is_one_time) { $body = "New private message"; }
-                elseif ($message_type == 'text') { $body = mb_substr($message_text, 0, 30) . (mb_strlen($message_text) > 30 ? '...' : ''); }
-                else { $body = ucfirst($message_type); }
+                elseif ($message_type != 'text') { $body = ucfirst($message_type); }
 
                 if ($is_group) {
                     // Group Notifications

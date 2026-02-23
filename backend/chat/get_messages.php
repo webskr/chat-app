@@ -20,6 +20,7 @@ processScheduledMessages($pdo);
 $me       = isset($_GET['sender_id']) ? (int)$_GET['sender_id'] : null;
 $other_id = isset($_GET['receiver_id']) ? (int)$_GET['receiver_id'] : null;
 $group_id = isset($_GET['group_id']) ? (int)$_GET['group_id'] : null;
+$after_id = isset($_GET['after_id']) ? (int)$_GET['after_id'] : 0;
 
 if (!$me || (!$other_id && !$group_id)) {
     http_response_code(400);
@@ -144,13 +145,14 @@ try {
             m.sender_id, 
             m.receiver_id, 
             m.message_text, 
-            m.media_url,
-            m.thumbnail_url,
-            m.file_size,
-            m.duration,
+            COALESCE(md.file_path, m.media_url) AS media_url,
+            COALESCE(md.thumbnail_url, m.thumbnail_url) AS thumbnail_url,
+            COALESCE(md.file_size, m.file_size) AS file_size,
+            COALESCE(md.duration, m.duration) AS duration,
             m.message_type,
-            m.file_name,
-            m.mime_type,
+            COALESCE(md.file_name, m.file_name) AS file_name,
+            COALESCE(md.mime_type, m.mime_type) AS mime_type,
+            COALESCE(md.is_deleted_from_server, 0) AS is_deleted_from_server,
             m.status, 
             m.is_deleted,
             m.is_one_time,
@@ -165,16 +167,18 @@ try {
             rm.sender_id AS reply_sender_id,
             ru.username AS reply_username,
             rm.message_text AS reply_text,
-            rm.media_url AS reply_media_url,
+            COALESCE(rmd.file_path, rm.media_url) AS reply_media_url,
             rm.message_type AS reply_type,
             u.username AS sender_name,
             u.avatar_id AS sender_avatar_id,
             u.avatar_url AS sender_avatar_url,
             COALESCE(ur.privacy_read_receipts, 1) AS receiver_read_receipts
         FROM messages m
+        LEFT JOIN media md ON m.media_id = md.id
         JOIN users u ON u.id = m.sender_id
         LEFT JOIN users ur ON ur.id = m.receiver_id
         LEFT JOIN messages rm ON rm.id = m.reply_to_message_id
+        LEFT JOIN media rmd ON rm.media_id = rmd.id
         LEFT JOIN users ru ON ru.id = rm.sender_id
         WHERE m.conversation_id = :cid
           AND (:clearedAt IS NULL OR m.created_at > :clearedAt)
@@ -186,6 +190,7 @@ try {
                 AND m.hidden_for_receiver = 0
             ) 
           )
+          AND m.id > :after_id
           AND m.status != 'scheduled'
         ORDER BY m.created_at ASC
     ";
@@ -197,7 +202,8 @@ try {
         ':groupClearedAt' => $groupClearedAt,
         ':me'        => $me,
         ':me2'       => $me,
-        ':is_group'  => $group_id ? 1 : 0
+        ':is_group'  => $group_id ? 1 : 0,
+        ':after_id'  => $after_id
     ]);
 
     $messages = $msgStmt->fetchAll(PDO::FETCH_ASSOC);

@@ -70,12 +70,10 @@ if (!empty($data->sender_id) && !empty($data->receiver_ids) && !empty($data->mes
             // 3. Insert new forwarded message
             $ins_msg = "INSERT INTO messages (
                 conversation_id, sender_id, receiver_id, message_text, message_type, 
-                media_url, thumbnail_url, duration, file_size, file_name, mime_type, 
-                is_forwarded, forwarded_from_message_id
+                media_id, is_forwarded, forwarded_from_message_id
             ) VALUES (
                 :cid, :sid, :rid, :txt, :type, 
-                :media, :thumb, :dur, :size, :fname, :mime, 
-                1, :orig_id
+                :media_id, 1, :orig_id
             )";
             
             $ins_stmt = $pdo->prepare($ins_msg);
@@ -85,18 +83,26 @@ if (!empty($data->sender_id) && !empty($data->receiver_ids) && !empty($data->mes
                 ':rid' => $receiver_id,
                 ':txt' => $orig['message_text'],
                 ':type' => $orig['message_type'],
-                ':media' => $orig['media_url'],
-                ':thumb' => $orig['thumbnail_url'],
-                ':dur' => $orig['duration'],
-                ':size' => $orig['file_size'],
-                ':fname' => $orig['file_name'],
-                ':mime' => $orig['mime_type'],
+                ':media_id' => $orig['media_id'],
                 ':orig_id' => $data->message_id
             ]);
             
+            $new_message_id = $pdo->lastInsertId();
+            
+            // 3.1 Initialize Media Tracking
+            if ($orig['media_id']) {
+                $tracking_stmt = $pdo->prepare("INSERT INTO media_tracking (media_id, message_id, sender_id, receiver_id, status) VALUES (:mid, :msgid, :sid, :rid, 'pending')");
+                $tracking_stmt->execute([
+                    ':mid' => $orig['media_id'],
+                    ':msgid' => $new_message_id,
+                    ':sid' => $data->sender_id,
+                    ':rid' => $receiver_id
+                ]);
+            }
+
             $results[] = [
                 "receiver_id" => $receiver_id,
-                "message_id" => $pdo->lastInsertId()
+                "message_id" => $new_message_id
             ];
         }
 

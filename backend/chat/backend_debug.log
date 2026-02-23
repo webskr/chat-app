@@ -8556,3 +8556,15 @@
 2026-02-21 12:32:26 - Extension: png
 2026-02-21 12:32:26 - Generated Filename: 12102202651000057303.png
 2026-02-21 12:32:26 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12102202651000057303.png
+2026-02-21 16:05:56 - REQUEST RECEIVED
+2026-02-21 16:47:24 - REQUEST RECEIVED
+2026-02-21 16:49:53 - REQUEST RECEIVED
+2026-02-21 16:49:53 - ERROR: No 'image' file in request
+2026-02-21 16:49:53 - REQUEST RECEIVED
+2026-02-21 16:49:53 - ERROR: No 'image' file in request
+2026-02-21 17:02:01 - REQUEST RECEIVED
+2026-02-21 17:02:01 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-02-21 17:02:01 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12102202651000057316.png
+2026-02-21 17:19:43 - REQUEST RECEIVED
+2026-02-21 17:19:43 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
+2026-02-21 17:19:43 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/52102202611000060327.jpg

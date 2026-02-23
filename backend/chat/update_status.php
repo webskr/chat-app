@@ -31,38 +31,15 @@ if (!empty($data->user_id) && !empty($data->sender_id) && !empty($data->status))
 
         $updatedCount = 0;
 
-        if ($status === 'delivered') {
-            // Update messages sent by them to me, which are currently 'sent'
-            // to 'delivered'.
-            $query = "UPDATE messages 
-                      SET status = 'delivered', delivered_at = NOW() 
+        if ($status === 'delivered' || $status === 'seen') {
+            // Ephemeral Storage Policy: "delivered -> delete immediately"
+            // Both 'delivered' and 'seen' indicate the message successfully reached the recipient.
+            // Therefore, we securely purge it from the server queue.
+            
+            $query = "DELETE FROM messages 
                       WHERE receiver_id = :me 
-                      AND sender_id = :them 
-                      AND status = 'sent'";
-            $stmt = $pdo->prepare($query);
-            $stmt->execute([':me' => $user_id, ':them' => $sender_id]);
-            $updatedCount = $stmt->rowCount();
-
-        } elseif ($status === 'seen') {
-            // Update messages sent by them to me, which are 'sent' or 'delivered' -> 'seen'
-            // Logic: 
-            // 1. Mark 'sent' as 'delivered' (implicitly) AND 'seen'.
-            // 2. Mark 'delivered' as 'seen'.
-            // Actually, just set status='seen', read_at=NOW(). 
-            // We should also ensure delivered_at is set if it was null?
+                      AND sender_id = :them";
             
-            // First, ensure all un-delivered are marked delivered (sanity check) or just overwrite.
-            // If I see it, it is delivered.
-            // Let's just update all < 'seen' to 'seen'.
-            
-            $query = "UPDATE messages 
-                      SET status = 'seen',
-                  read_at = NOW(),
-                  delivered_at = COALESCE(delivered_at, NOW())
-              WHERE receiver_id = :me
-              AND sender_id = :them
-              AND is_one_time = 0 
-              AND status != 'seen'";
             $stmt = $pdo->prepare($query);
             $stmt->execute([':me' => $user_id, ':them' => $sender_id]);
             $updatedCount = $stmt->rowCount();

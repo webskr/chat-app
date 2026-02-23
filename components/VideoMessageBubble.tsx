@@ -14,7 +14,7 @@ import { saveMedia } from '../utils/mediaSaver';
 */
 
 interface VideoMessageBubbleProps {
-    videoUrl: string;
+    videoUrl: string | null;
     thumbnailUrl?: string | null;
     duration?: number;
     fileSize?: number;
@@ -29,7 +29,7 @@ export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl
     const [status, setStatus] = useState<any>({});
 
     // Construct full URLs
-    const fullVideoUrl = videoUrl.startsWith('http') ? videoUrl : `${Config.API_URL}/${videoUrl.replace(/^\//, '')}`;
+    const fullVideoUrl = videoUrl ? (videoUrl.startsWith('http') ? videoUrl : `${Config.API_URL}/${videoUrl.replace(/^\//, '')}`) : null;
     const fullThumbnailUrl = thumbnailUrl
         ? (thumbnailUrl.startsWith('http') ? thumbnailUrl : `${Config.API_URL}/${thumbnailUrl.replace(/^\//, '')}`)
         : null;
@@ -60,14 +60,16 @@ export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl
                         <Image source={{ uri: fullThumbnailUrl }} style={styles.thumbnail} resizeMode="cover" />
                     ) : (
                         <View style={[styles.thumbnail, styles.placeholder]}>
-                            <Video
-                                style={styles.thumbnail}
-                                source={{ uri: fullVideoUrl }}
-                                useNativeControls={false}
-                                resizeMode={ResizeMode.COVER}
-                                shouldPlay={false}
-                                isMuted={true}
-                            />
+                            {fullVideoUrl && (
+                                <Video
+                                    style={styles.thumbnail}
+                                    source={{ uri: fullVideoUrl }}
+                                    useNativeControls={false}
+                                    resizeMode={ResizeMode.COVER}
+                                    shouldPlay={false}
+                                    isMuted={true}
+                                />
+                            )}
                         </View>
                     )}
 
@@ -85,7 +87,7 @@ export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl
 
                     <TouchableOpacity
                         style={styles.bubbleDownloadButton}
-                        onPress={() => saveMedia(videoUrl, 'video')}
+                        onPress={() => videoUrl && saveMedia(videoUrl, 'video')}
                     >
                         <Download size={18} color="white" />
                     </TouchableOpacity>
@@ -99,20 +101,26 @@ export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl
                 onRequestClose={() => setModalVisible(false)}
             >
                 <View style={styles.modalContainer}>
-                    <Video
-                        style={styles.fullscreenVideo}
-                        source={{ uri: fullVideoUrl }}
-                        useNativeControls
-                        resizeMode={ResizeMode.CONTAIN}
-                        isLooping={false}
-                        shouldPlay={true}
-                        onPlaybackStatusUpdate={status => setStatus(() => status)}
-                    />
+                    {fullVideoUrl ? (
+                        <Video
+                            style={styles.fullscreenVideo}
+                            source={{ uri: fullVideoUrl }}
+                            useNativeControls
+                            resizeMode={ResizeMode.CONTAIN}
+                            isLooping={false}
+                            shouldPlay={true}
+                            onPlaybackStatusUpdate={status => setStatus(() => status)}
+                        />
+                    ) : (
+                        <View style={styles.modalContainer}>
+                            <ThemedText style={{ color: '#fff' }}>Download video to watch</ThemedText>
+                        </View>
+                    )}
 
                     <View style={styles.headerButtons}>
                         <TouchableOpacity
                             style={styles.headerButton}
-                            onPress={() => saveMedia(videoUrl, 'video')}
+                            onPress={() => videoUrl && saveMedia(videoUrl, 'video')}
                         >
                             <Download size={26} color="white" />
                         </TouchableOpacity>

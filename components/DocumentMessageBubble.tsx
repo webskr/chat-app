@@ -4,7 +4,7 @@ import { FileText, Download, FileJson, FileType2, FileCode, FileSpreadsheet, Fil
 import { ThemedText } from './ThemedText';
 import { Colors } from '../constants/Colors';
 import { Config } from '../constants/Config';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
 interface DocumentMessageBubbleProps {

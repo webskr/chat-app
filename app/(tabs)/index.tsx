@@ -160,7 +160,7 @@ export default function ChatScreen() {
 
     const onSettings = () => {
         setMenuVisible(false);
-        router.push('/(tabs)/settings'); // Assuming settings.tsx is a tab or reachable
+        router.push('/(tabs)/settings-tab'); // Match renamed route to avoid conflict
     };
 
     return (

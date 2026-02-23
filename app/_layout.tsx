@@ -15,6 +15,8 @@ import { ThemeProvider as NeonThemeProvider } from '../context/ThemeContext';
 import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
 import { handleNotificationResponse } from '../utils/notifications';
+import { MediaStorageService } from '../storage/MediaStorageService';
+import * as ScreenCapture from 'expo-screen-capture';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -32,6 +34,13 @@ export default function RootLayout() {
         }
     }, [loaded]);
 
+    useEffect(() => {
+        // [Security] Prevent Screen Capture / App Switcher Snapshots
+        ScreenCapture.preventScreenCaptureAsync().catch(e => {
+            console.error("Failed to prevent screen capture:", e);
+        });
+    }, []);
+
     const url = Linking.useURL();
 
     useEffect(() => {
@@ -45,6 +54,14 @@ export default function RootLayout() {
         if (Platform.OS === 'android') {
             checkDeferredInvite();
         }
+    }, []);
+
+    useEffect(() => {
+        // Initialize Media Folders
+        MediaStorageService.init().catch(err => {
+            console.error('Failed to init media storage:', err);
+            fetch(`http://10.64.147.27/chat-app/backend/chat/backend_debug.log?err=${encodeURIComponent(String(err))}`, { method: 'POST', body: String(err) }).catch(() => { });
+        });
     }, []);
 
     useEffect(() => {

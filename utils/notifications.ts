@@ -50,12 +50,16 @@ export async function registerForPushNotificationsAsync() {
         // For bare workflow or development builds, project ID might be needed if not in app.json
         try {
             const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? 'a577d34c-aee7-46d8-9df6-ffee5d2d947a';
-            token = (await Notifications.getExpoPushTokenAsync({
+            const expoToken = await Notifications.getExpoPushTokenAsync({
                 projectId,
-            })).data;
+            });
+            token = expoToken.data;
             console.log("Push Token:", token);
-        } catch (e) {
+        } catch (e: any) {
             console.log("Error fetching token:", e);
+            if (e.message?.includes('SERVICE_NOT_AVAILABLE')) {
+                console.warn('Google Play Services is temporarily unavailable. Push tokens cannot be fetched right now.');
+            }
         }
     } else {
         console.log('Must use physical device for Push Notifications');

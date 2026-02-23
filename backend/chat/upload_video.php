@@ -97,7 +97,7 @@ try {
         throw new Exception("Failed to move uploaded file");
     }
 
-} catch (Exception $e) {
+} catch (Throwable $e) {
     debug_log("ERROR: " . $e->getMessage());
     http_response_code(500);
     echo json_encode([

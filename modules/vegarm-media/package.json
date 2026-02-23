@@ -1,0 +1,13 @@
+{
+    "name": "vegarm-media",
+    "version": "1.0.0",
+    "description": "Custom Android media storage module for Vegarm.",
+    "main": "index.ts",
+    "dependencies": {},
+    "peerDependencies": {
+        "expo": "*"
+    },
+    "expo": {
+        "module": "expo-module.config.json"
+    }
+}

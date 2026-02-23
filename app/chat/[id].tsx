@@ -1,5 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal, Keyboard, AppState, AlertButton, ActivityIndicator } from 'react-native';
+﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton } from 'react-native';
+import { FlashList, FlashListRef } from '@shopify/flash-list';
+// @ts-ignore
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
@@ -47,8 +49,12 @@ import { styles } from '../../components/chat/features/styles';
 // I will edit the 'styles' object in `components/chat/features/styles.ts` to be clean.
 
 import { saveMedia } from '../../utils/mediaSaver';
+import { MediaStorageService } from '../../storage/MediaStorageService';
+import { SyncService } from '../utils/SyncService';
 import { ScheduleConfirmationModal } from '../../components/chat/features/ScheduleConfirmationModal';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { E2EEService } from '../utils/crypto';
+import { LocalDatabaseService } from '../utils/LocalDatabaseService';
 
 export default function ChatDetailScreen() {
     const { id, user: otherUsername, avatar_id, avatar_url, is_group: isGroupParam, is_official: isOfficialParam } = useLocalSearchParams<{ id: string, user: string, avatar_id: string, avatar_url?: string, is_group?: string, is_official?: string }>();
@@ -144,7 +150,7 @@ export default function ChatDetailScreen() {
     const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
 
     // Refs
-    const flatListRef = useRef<FlatList>(null);
+    const flatListRef = useRef<FlashListRef<any>>(null);
     const inputRef = useRef<TextInput>(null);
     const isAtBottomRef = useRef(true);
     const scrollOffset = useRef(0);
@@ -395,8 +401,7 @@ export default function ChatDetailScreen() {
         try {
             const response = await fetch(url, { signal });
             if (signal?.aborted) return;
-
-            const data = await response.json();
+            let data = await response.json();
 
             // 5️⃣ Race Condition Check
             if (currentIdRef.current !== id) {
@@ -405,10 +410,92 @@ export default function ChatDetailScreen() {
             }
 
             if (response.ok) {
-                setMessages(data);
+                // --- E2EE DECRYPTION ---
+                try {
+                    if (!isGroup) {
+                        const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
+                        if (myPrivateKey) {
+                            const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`, { signal });
+                            if (keyRes.ok) {
+                                const keys = await keyRes.json();
+                                if (keys && keys.identity_key) {
+                                    const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
+                                    data = data.map((msg: any) => {
+                                        if (msg.message_type === 'text' && msg.message_text && msg.message_text.includes(':')) {
+                                            try {
+                                                const decryptedText = E2EEService.decryptMessage(msg.message_text, sharedSecret);
+                                                msg.message_text = decryptedText;
+                                                msg.encrypted_payload = decryptedText;
+                                            } catch (e) {
+                                                // Fallback
+                                            }
+                                        }
+                                        return msg;
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Polling decryption failed:", err);
+                }
+                // --- END DECRYPTION ---
+
+                // --- MERGE INTO LOCAL DB ---
+                if (data && data.length > 0) {
+                    const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                    for (const msg of data) {
+                        try {
+                            await LocalDatabaseService.insertMessage({
+                                server_id: msg.id.toString(),
+                                chat_id: chatId,
+                                sender_id: msg.sender_id.toString(),
+                                receiver_id: msg.receiver_id?.toString(),
+                                type: msg.message_type || 'text',
+                                encrypted_payload: msg.encrypted_payload || msg.message_text,
+                                local_file_path: msg.media_url && msg.media_url.startsWith('file://') ? msg.media_url : undefined,
+                                status: msg.status || 'delivered'
+                            });
+                        } catch (e) { }
+                    }
+                }
+
+                // Load UI from secure local DB directly
+                const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                const localRows = await LocalDatabaseService.getLocalMessages(chatId);
+                const mappedMessages = localRows.map(r => {
+                    let msgText = r.encrypted_payload;
+                    let mediaUrl = r.local_file_path;
+                    let msgType = r.type;
+                    let e2e_media = null;
+
+                    if (msgText && msgText.startsWith('{') && msgText.includes('"media"')) {
+                        try {
+                            const parsed = JSON.parse(msgText);
+                            if (parsed.media) {
+                                msgText = parsed.content;
+                                e2e_media = parsed.media;
+                                msgType = parsed.media.mimeType && parsed.media.mimeType.includes('video') ? 'video' : 'image';
+                            }
+                        } catch (e) { }
+                    }
+
+                    return {
+                        id: r.server_id ? parseInt(r.server_id) : r.id,
+                        local_db_id: r.id,
+                        sender_id: r.sender_id,
+                        receiver_id: r.receiver_id,
+                        message_text: msgText,
+                        media_url: mediaUrl,
+                        e2e_media: e2e_media,
+                        message_type: msgType,
+                        status: r.status,
+                        created_at: r.timestamp
+                    };
+                });
+
+                setMessages(mappedMessages);
                 if (AppState.currentState === 'active') {
-                    // For groups, we always want to update read status if we are active and have messages
-                    // For 1-on-1, check if there are unseen messages
                     const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
 
                     if (shouldMarkRead) updateMessageStatus('seen');
@@ -419,7 +506,7 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const updateMessageStatus = async (status: 'delivered' | 'seen') => {
+    const updateMessageStatus = async (status: 'delivered' | 'seen', messageIds: (string | number)[] = []) => {
         if (!currentUser) return;
         // Logic: if we are active in this chat, we mark as read (seen).
         // 'delivered' is handled by Mark Delivered globally or when fetching list.
@@ -427,15 +514,16 @@ export default function ChatDetailScreen() {
 
         if (status === 'seen') {
             try {
-                await fetch(`${Config.API_URL}/chat/mark_read.php`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: currentUser.id,
-                        target_id: id,
-                        is_group: isGroup
-                    })
-                });
+                // [Sync] Use reliable reporting with offline retry queue
+                await SyncService.reportStatus(Number(currentUser.id), Number(id), isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`, status);
+
+                // Socket real-time read receipt
+                if (socket.current && !isGroup) {
+                    socket.current.emit("message:read", {
+                        room: `user_${id}`,
+                        message_ids: messageIds
+                    });
+                }
             } catch (error) { console.error('Error marking read:', error); }
         } else if (!isGroup) {
             // Keep legacy delivered update for 1-on-1 if needed, strictly for "delivered" status updates 
@@ -447,6 +535,14 @@ export default function ChatDetailScreen() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: currentUser.id, sender_id: id, status: status })
                 });
+
+                // Socket real-time delivery receipt
+                if (socket.current) {
+                    socket.current.emit("message:delivered", {
+                        room: `user_${id}`,
+                        message_ids: messageIds
+                    });
+                }
             } catch (error) { console.error('Error updating status:', error); }
         }
     };
@@ -511,6 +607,130 @@ export default function ChatDetailScreen() {
             const abortController = new AbortController();
             const signal = abortController.signal;
 
+            // --- REAL-TIME SOCKET SETUP ---
+            socket.current = io(Config.SOCKET_URL, {
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000,
+            });
+
+            socket.current.on('connect', () => {
+                const roomId = isGroup ? `group_${id}` : `user_${currentUser.id}`;
+                socket.current?.emit('join', roomId);
+
+                // [Sync] Trigger offline sync on reconnect
+                SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`);
+                SyncService.processRetryQueue(Number(currentUser.id));
+
+                // Re-fetch messages when reconnecting to not miss anything
+                fetchMessages(signal);
+            });
+
+            socket.current.on('message:new', async (data: any) => {
+                // Determine if this message belongs here
+                if (isGroup && data.room !== `group_${id}`) return;
+                if (!isGroup && String(data.sender_id) !== String(id)) return;
+
+                // Add to Local DB
+                try {
+                    const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                    let decryptedPayload = data.encrypted_payload;
+
+                    // Decrypt if 1-on-1 and encrypted
+                    if (!isGroup && data.message_type === 'text' && data.encrypted_payload && data.encrypted_payload.includes(':')) {
+                        try {
+                            const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
+                            const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
+                            if (keyRes.ok && myPrivateKey) {
+                                const keys = await keyRes.json();
+                                if (keys && keys.identity_key) {
+                                    const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
+                                    decryptedPayload = E2EEService.decryptMessage(data.encrypted_payload, sharedSecret);
+                                }
+                            }
+                        } catch (e) { console.error("Realtime decryption failed", e); }
+                    }
+
+                    await LocalDatabaseService.insertMessage({
+                        server_id: data.temp_id, // Might not have real ID yet, use temp or generate one
+                        chat_id: chatId,
+                        sender_id: data.sender_id.toString(),
+                        receiver_id: isGroup ? undefined : currentUser.id.toString(),
+                        type: data.message_type || 'text',
+                        encrypted_payload: decryptedPayload,
+                        local_file_path: data.media_url && data.media_url.startsWith('file://') ? data.media_url : undefined,
+                        status: 'delivered'
+                    });
+
+                    // Mark as seen automatically if chat is open
+                    if (AppState.currentState === 'active') {
+                        updateMessageStatus('seen', [data.temp_id]);
+                    }
+
+                    // Refresh UI
+                    fetchMessages(signal);
+
+                } catch (e) {
+                    console.error("Socket insert error", e);
+                }
+            });
+
+            socket.current.on('message:delivered', (data: any) => {
+                if (isGroup && data.room !== `group_${id}`) return;
+                if (!isGroup && data.room !== `user_${id}`) return; // Depending on how we route receipts
+
+                setMessages(prev => prev.map(m =>
+                    (data.message_ids && data.message_ids.includes(m.id)) || !data.message_ids
+                        ? { ...m, status: m.status === 'seen' ? 'seen' : 'delivered' }
+                        : m
+                ));
+            });
+
+            socket.current.on('message:read', (data: any) => {
+                if (isGroup && data.room !== `group_${id}`) return;
+                if (!isGroup && data.room !== `user_${id}`) return;
+
+                setMessages(prev => prev.map(m =>
+                    (data.message_ids && data.message_ids.includes(m.id)) || !data.message_ids
+                        ? { ...m, status: 'seen' }
+                        : m
+                ));
+            });
+
+            socket.current.on('message:delete', async (data: any) => {
+                try {
+                    const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                    const localRows = await LocalDatabaseService.getLocalMessages(chatId);
+                    const matchingRow = localRows.find(r => r.server_id === String(data.message_id));
+
+                    if (matchingRow) {
+                        if (matchingRow.local_file_path && matchingRow.local_file_path.startsWith('file://')) {
+                            try {
+                                const FileSystem = require('expo-file-system');
+                                await FileSystem.deleteAsync(matchingRow.local_file_path, { idempotent: true });
+                            } catch (e) { }
+                        }
+                        await LocalDatabaseService.markMessageDeletedForEveryone(String(data.message_id));
+                    }
+                } catch (e) { }
+
+                setMessages(prev => prev.map(m => m.id === data.message_id || String(m.id) === String(data.message_id)
+                    ? { ...m, message_text: '🚫 This message was deleted', media_url: null, message_type: 'deleted' }
+                    : m
+                ));
+            });
+
+            socket.current.on('typing_start', (data: any) => {
+                const roomId = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                if (data.room === roomId && String(data.user) !== String(currentUser.id)) setIsTyping(true);
+            });
+
+            socket.current.on('typing_stop', (data: any) => {
+                const roomId = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                if (data.room === roomId && String(data.user) !== String(currentUser.id)) setIsTyping(false);
+            });
+            // --- END REAL-TIME SOCKET SETUP ---
+
             const fetchData = async () => {
                 try {
                     console.log(`[Chat ${id}] Fetching data...`);
@@ -527,8 +747,94 @@ export default function ChatDetailScreen() {
 
                     // 1. Messages
                     if (msgsRes.ok) {
-                        const data = await msgsRes.json();
-                        setMessages(data);
+                        let data = await msgsRes.json();
+
+                        // --- E2EE DECRYPTION ---
+                        try {
+                            if (!isGroup) {
+                                const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
+                                if (myPrivateKey) {
+                                    // Fetch other user's public key (in a real app, cache this)
+                                    const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
+                                    if (keyRes.ok) {
+                                        const keys = await keyRes.json();
+                                        if (keys && keys.identity_key) {
+                                            const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
+                                            data = data.map((msg: any) => {
+                                                if (msg.message_type === 'text' && msg.message_text && msg.message_text.includes(':')) {
+                                                    try {
+                                                        const decryptedText = E2EEService.decryptMessage(msg.message_text, sharedSecret);
+                                                        msg.message_text = decryptedText;
+                                                        msg.encrypted_payload = decryptedText;
+                                                    } catch (e) {
+                                                        // Fallback if it wasn't actually encrypted or failed
+                                                    }
+                                                }
+                                                return msg;
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (decryptErr) {
+                            console.error("Decryption sweep failed:", decryptErr);
+                        }
+                        // --- END E2EE DECRYPTION ---
+
+                        // --- MERGE INTO LOCAL DB ---
+                        if (data && data.length > 0) {
+                            const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                            for (const msg of data) {
+                                try {
+                                    await LocalDatabaseService.insertMessage({
+                                        server_id: msg.id.toString(),
+                                        chat_id: chatId,
+                                        sender_id: msg.sender_id.toString(),
+                                        receiver_id: msg.receiver_id?.toString(),
+                                        type: msg.message_type || 'text',
+                                        encrypted_payload: msg.encrypted_payload || msg.message_text,
+                                        local_file_path: msg.media_url && msg.media_url.startsWith('file://') ? msg.media_url : undefined,
+                                        status: msg.status || 'delivered'
+                                    });
+                                } catch (e) { }
+                            }
+                        }
+
+                        // Load UI from secure local DB directly
+                        const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                        const localRows = await LocalDatabaseService.getLocalMessages(chatId);
+                        const mappedMessages = localRows.map(r => {
+                            let msgText = r.encrypted_payload;
+                            let mediaUrl = r.local_file_path;
+                            let msgType = r.type;
+                            let e2e_media = null;
+
+                            if (msgText && msgText.startsWith('{') && msgText.includes('"media"')) {
+                                try {
+                                    const parsed = JSON.parse(msgText);
+                                    if (parsed.media) {
+                                        msgText = parsed.content;
+                                        e2e_media = parsed.media;
+                                        msgType = parsed.media.mimeType && parsed.media.mimeType.includes('video') ? 'video' : 'image';
+                                    }
+                                } catch (e) { }
+                            }
+
+                            return {
+                                id: r.server_id ? parseInt(r.server_id) : r.id,
+                                local_db_id: r.id,
+                                sender_id: r.sender_id,
+                                receiver_id: r.receiver_id,
+                                message_text: msgText,
+                                media_url: mediaUrl,
+                                e2e_media: e2e_media,
+                                message_type: msgType,
+                                status: r.status,
+                                created_at: r.timestamp
+                            };
+                        });
+
+                        setMessages(mappedMessages);
                         // Mark seen if active
                         if (AppState.currentState === 'active') {
                             const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
@@ -597,6 +903,10 @@ export default function ChatDetailScreen() {
                 console.log(`[Chat ${id}] Unmounting/Blurring - Cleanup`);
                 abortController.abort();
                 clearInterval(interval);
+                if (socket.current) {
+                    socket.current.disconnect();
+                    socket.current = null;
+                }
                 saveLastScrollPosition();
                 // We DO NOT reset messages here to avoid flash if navigating back briefly,
                 // BUT the goal is strict correctness. If we navigate BACK to list, we destroy.
@@ -607,18 +917,18 @@ export default function ChatDetailScreen() {
     );
 
 
+    // ... other imports ...
 
-
-
-    const handleSend = async (text: string = inputText, imagePath: string | null = null, isRetry = false, isOneTime = false, scheduledAt: Date | null = null) => {
-        console.log('handleSend called:', { text, imagePath, isOneTime, scheduledAt, isGroup });
-        if (!currentUser) return;
-        const messageText = text.trim();
-        if (!messageText && !imagePath) return;
+    // Inside `export default function ChatDetailScreen() {`
+    const handleSend = async (text: string = inputText, mediaPath: string | null = null, mediaType: 'text' | 'image' | 'video' | 'audio' | 'document' | 'gif' | 'sticker' = 'text', isRetry = false, isOneTime = false, scheduledAt: Date | null = null, extraMeta: any = {}) => {
+        console.log('handleSend called:', { text, mediaPath, mediaType, isOneTime, scheduledAt, isGroup });
+        if (!currentUser) return null;
+        let messageText = text.trim();
+        if (!messageText && !mediaPath) return null;
 
         // Rate Limit (Skip)
 
-        if (!imagePath) setInputText('');
+        if (!mediaPath) setInputText('');
         setIsSending(true);
 
         const tempId = Date.now();
@@ -628,12 +938,13 @@ export default function ChatDetailScreen() {
             receiver_id: isGroup ? null : id,
             group_id: isGroup ? id : null,
             message_text: messageText,
-            media_url: imagePath,
-            message_type: imagePath ? 'image' : 'text',
+            media_url: mediaPath,
+            message_type: mediaPath ? mediaType : 'text',
             is_local: true,
             reply_to_message_id: replyingToMessage?.id || null,
             is_one_time: isOneTime ? 1 : 0,
             status: scheduledAt ? 'scheduled' : 'sending',
+            ...extraMeta
         };
 
         if (!scheduledAt) {
@@ -646,23 +957,86 @@ export default function ChatDetailScreen() {
                 reply_media_url: replyingToMessage?.media_url
             };
             setMessages(prev => [...prev, localMessage]);
+
+            // --- LOCAL DB INSERT ---
+            try {
+                const dbId = await LocalDatabaseService.insertMessage({
+                    chat_id: isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`,
+                    sender_id: currentUser.id.toString(),
+                    receiver_id: isGroup ? undefined : id.toString(),
+                    type: newMessage.message_type,
+                    encrypted_payload: undefined,
+                    local_file_path: mediaPath || undefined,
+                    status: 'sending'
+                });
+                (newMessage as any).local_db_id = dbId;
+            } catch (err) {
+                console.error("Local DB Insert Error", err);
+            }
         } else {
             Alert.alert("Scheduled", `Message scheduled for ${formatChatTime(scheduledAt)}`);
             setInputText('');
         }
 
         setReplyingToMessage(null);
-        if (isRetry) setFailedMessages(prev => prev.filter(m => m.message_text !== messageText || m.media_url !== imagePath));
+        if (isRetry) setFailedMessages(prev => prev.filter(m => m.message_text !== messageText || m.media_url !== mediaPath));
 
         try {
+            let payloadToEncrypt = messageText;
+            let isMediaE2E = false;
+
+            if (extraMeta && extraMeta.e2e_media_payload) {
+                payloadToEncrypt = JSON.stringify({
+                    content: messageText,
+                    media: extraMeta.e2e_media_payload
+                });
+                isMediaE2E = true;
+                messageText = payloadToEncrypt; // set as stringified JSON. Will be ciphertext if E2EE succeeds.
+            }
+
+            // --- E2EE SCRAMBLE ---
+            try {
+                if (!isGroup && (messageText || isMediaE2E)) {
+                    const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
+                    if (myPrivateKey) {
+                        const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
+                        if (keyRes.ok) {
+                            const keys = await keyRes.json();
+                            if (keys && keys.identity_key) {
+                                const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
+                                messageText = E2EEService.encryptMessage(payloadToEncrypt || " ", sharedSecret);
+                                console.log("Message dynamically encrypted for transit.");
+                            }
+                        }
+                    }
+                }
+            } catch (encryptError) {
+                console.error("Encryption failed, falling back or aborting:", encryptError);
+            }
+            // --- END E2EE SCRAMBLE ---
+
             const payload: any = {
                 sender_id: currentUser.id,
                 message: messageText,
-                image_path: imagePath,
                 reply_to_message_id: newMessage.reply_to_message_id,
                 is_one_time: isOneTime ? 1 : 0,
                 scheduled_at: scheduledAt ? scheduledAt.toISOString() : null
             };
+
+            // Map mediaPath to correct backend key ONLY if NOT encrypted as JSON
+            // Because if it's E2EE, the server ignores native media attachments.
+            if (mediaPath && !isMediaE2E) {
+                if (mediaType === 'image') payload.image_path = mediaPath;
+                else if (mediaType === 'video') payload.video_url = mediaPath;
+                else if (mediaType === 'audio') payload.audio_url = mediaPath;
+                else if (mediaType === 'document') payload.file_url = mediaPath;
+                else if (mediaType === 'gif') payload.gif_url = mediaPath;
+                else if (mediaType === 'sticker') payload.sticker_url = mediaPath;
+            }
+
+            // Append extra metadata (duration, file_size, etc.)
+            Object.assign(payload, extraMeta);
+            delete payload.e2e_media_payload;
 
             if (isGroup) {
                 payload.group_id = id;
@@ -677,10 +1051,33 @@ export default function ChatDetailScreen() {
             });
 
             if (response.ok) {
+                const data = await response.json();
                 if (!scheduledAt) {
                     isAtBottomRef.current = true;
-                    // fetchMessages(); // Optional, local update is faster
+                    // --- LOCAL DB UPDATE ---
+                    if ((newMessage as any).local_db_id) {
+                        try {
+                            await LocalDatabaseService.updateMessageStatus((newMessage as any).local_db_id, 'sent');
+                        } catch (e) { console.error(e); }
+                    }
+
+                    // --- REALTIME SOCKET FORWARDING ---
+                    if (socket.current) {
+                        const targetRoom = isGroup ? `group_${id}` : `user_${id}`;
+                        socket.current.emit("message:new", {
+                            room: targetRoom,
+                            sender_id: currentUser.id,
+                            temp_id: tempId,
+                            encrypted_payload: messageText, // Forward ciphertext
+                            timestamp: newMessage.created_at,
+                            message_type: newMessage.message_type,
+                            reply_to_message_id: newMessage.reply_to_message_id,
+                            is_one_time: newMessage.is_one_time,
+                            media_url: newMessage.media_url // E2E payload handles actual media string
+                        });
+                    }
                 }
+                return data.message_id;
             } else {
                 if (!scheduledAt) setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed' }]);
             }
@@ -690,6 +1087,7 @@ export default function ChatDetailScreen() {
         } finally {
             setIsSending(false);
         }
+        return null;
     };
 
 
@@ -787,9 +1185,14 @@ export default function ChatDetailScreen() {
 
         try {
             const response = await fetch(`${Config.API_URL}/chat/upload_image.php`, { method: 'POST', body: formData });
-            const data = await response.json();
-            if (response.ok && data.success) {
-                return { success: true, ...data };
+            const responseText = await response.text();
+            try {
+                const data = JSON.parse(responseText);
+                if (response.ok && data.success) {
+                    return { success: true, ...data };
+                }
+            } catch (jsonErr) {
+                console.error("Image upload failed parsing JSON. Raw response:", responseText);
             }
         } catch (e) {
             console.error("Image upload failed", e);
@@ -903,6 +1306,35 @@ export default function ChatDetailScreen() {
             setIsUploading(false);
         }
         return { success: false };
+        return { success: false };
+    };
+
+    const uploadEncryptedFile = async (asset: any) => {
+        setIsUploading(true);
+        try {
+            const encryptedData = await E2EEService.encryptFile(asset.uri);
+            const formData = new FormData();
+            formData.append('file', { uri: Platform.OS === 'android' ? encryptedData.encryptedUri : encryptedData.encryptedUri.replace('file://', ''), name: 'upload.enc', type: 'application/octet-stream' } as any);
+
+            const response = await fetch(`${Config.API_URL}/chat/upload_encrypted_media.php`, { method: 'POST', body: formData });
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                return {
+                    success: true,
+                    url: data.url,
+                    key: encryptedData.key,
+                    nonce: encryptedData.nonce,
+                    tag: encryptedData.tag,
+                    mimeType: asset.mimeType || asset.type
+                };
+            }
+        } catch (e) {
+            console.error("Encrypted upload error", e);
+        } finally {
+            setIsUploading(false);
+        }
+        return { success: false };
     };
 
     const handleMediaPreviewSend = async (caption: string, isOneTime: boolean) => {
@@ -910,57 +1342,35 @@ export default function ChatDetailScreen() {
         if (!previewMedia || previewMedia.length === 0) return;
         setIsPreviewVisible(false);
 
-        const mediaItems = previewMedia; // Capture current state
-        setPreviewMedia(null); // Clear state immediately
+        const mediaItems = previewMedia;
+        setPreviewMedia(null);
 
-        // Iterate and send
         for (let i = 0; i < mediaItems.length; i++) {
             const item = mediaItems[i];
-            const itemCaption = i === 0 ? caption : ''; // Attach caption only to the first item
+            const itemCaption = i === 0 ? caption : '';
 
             let uploadResult;
+            let messageId: number | string | null = null;
 
-            if (item.type === 'image') {
-                uploadResult = await uploadImage({ uri: item.uri, type: item.mimeType, fileName: item.name });
-                if (uploadResult.success) {
-                    handleSend(itemCaption, uploadResult.image_path, false, isOneTime);
-                }
-            } else if (item.type === 'video') {
-                uploadResult = await uploadVideo({ uri: item.uri, fileName: item.name, mimeType: item.mimeType, duration: item.duration });
-                if (uploadResult.success) {
-                    await fetch(`${Config.API_URL}/chat/send_message.php`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            sender_id: currentUser?.id,
-                            ...(isGroup ? { group_id: id } : { receiver_id: id }),
-                            message: itemCaption,
-                            video_url: uploadResult.video_path,
-                            thumbnail_url: uploadResult.thumbnail_path,
-                            file_size: uploadResult.file_size,
-                            duration: Math.ceil((item.duration || 0) / 1000),
-                            is_one_time: isOneTime ? 1 : 0
-                        })
-                    });
-                }
-            } else if (item.type === 'document') {
-                uploadResult = await uploadDocument({ uri: item.uri, name: item.name, mimeType: item.mimeType, size: item.size });
-                if (uploadResult.success) {
-                    await fetch(`${Config.API_URL}/chat/send_message.php`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            sender_id: currentUser?.id,
-                            ...(isGroup ? { group_id: id } : { receiver_id: id }),
-                            message: itemCaption,
-                            file_url: uploadResult.file_path,
-                            file_size: uploadResult.file_size,
-                            file_name: uploadResult.file_name,
-                            mime_type: uploadResult.mime_type,
-                            is_one_time: isOneTime ? 1 : 0
-                        })
-                    });
-                }
+            // USE SECURE ZERO-KNOWLEDGE UPLOAD
+            uploadResult = await uploadEncryptedFile({ uri: item.uri, type: item.type, mimeType: item.mimeType, name: item.name });
+
+            if (uploadResult && uploadResult.success) {
+                messageId = await handleSend(itemCaption, item.uri, item.type, false, isOneTime, null, {
+                    e2e_media_payload: {
+                        url: uploadResult.url,
+                        key: uploadResult.key,
+                        nonce: uploadResult.nonce,
+                        tag: uploadResult.tag,
+                        mimeType: uploadResult.mimeType
+                    },
+                    file_size: item.size,
+                    duration: item.duration ? Math.ceil(item.duration / 1000) : undefined
+                });
+            }
+
+            if (messageId) {
+                await MediaStorageService.copyToCache(item.uri, messageId, item.type);
             }
         }
         fetchMessages();
@@ -984,17 +1394,11 @@ export default function ChatDetailScreen() {
             const response = await fetch(`${Config.API_URL}/chat/upload_audio.php`, { method: 'POST', body: formData });
             const data = await response.json();
             if (response.ok && data.success) {
-                await fetch(`${Config.API_URL}/chat/send_message.php`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sender_id: currentUser?.id,
-                        ...(isGroup ? { group_id: id } : { receiver_id: id }),
-                        audio_url: data.audio_url,
-                        duration: duration
-                    })
-                });
-                fetchMessages();
+                // Upload is complete, now send the message using centralized handler
+                const messageId = await handleSend('', data.audio_url, 'audio', false, false, null, { duration: duration });
+                if (messageId) {
+                    await MediaStorageService.copyToCache(uri, messageId, 'voice');
+                }
             }
         } catch (error) {
             console.error('Voice upload error', error);
@@ -1080,7 +1484,7 @@ export default function ChatDetailScreen() {
 
     const handleConfirmSchedule = () => {
         if (pendingScheduleTime && pendingScheduleText) {
-            handleSend(pendingScheduleText, null, false, false, pendingScheduleTime);
+            handleSend(pendingScheduleText, null, 'text', false, false, pendingScheduleTime);
             setScheduleModalVisible(false);
             setPendingScheduleTime(null);
             setPendingScheduleText('');
@@ -1311,23 +1715,66 @@ export default function ChatDetailScreen() {
     };
 
     const deleteMessageLogic = async (messageId: number | number[], type: 'for_me' | 'everyone') => {
+        if (!currentUser) return;
         const ids = Array.isArray(messageId) ? messageId : [messageId];
 
-        // Optimistic UI Update
-        const msgsToDelete = messages.filter(m => ids.includes(m.id));
-        setMessages(prev => prev.filter(m => !ids.includes(m.id)));
-        if (msgsToDelete.length > 0) {
-            // setDeletedMessagesStack(prev => [...prev, { ids, messages: msgsToDelete }]);
-            // Show undo toast?
-        }
-
         try {
-            ids.forEach(id => {
-                fetch(`${Config.API_URL}/chat/delete_message.php`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message_id: id, user_id: currentUser?.id, delete_type: type })
-                });
+            const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+            const localRows = await LocalDatabaseService.getLocalMessages(chatId);
+
+            ids.forEach(async idLocal => {
+                const message = messages.find(m => m.id === idLocal);
+                const localRow = localRows.find(r => parseInt(r.server_id) === idLocal || r.id === idLocal);
+
+                if (type === 'for_me') {
+                    // 1. Update UI
+                    setMessages(prev => prev.filter(m => m.id !== idLocal));
+
+                    // 2. Update Local DB
+                    if (localRow) {
+                        await LocalDatabaseService.deleteMessageLocal(localRow.id);
+                    }
+
+                    // 3. Optional backend sync
+                    fetch(`${Config.API_URL}/chat/delete_message.php`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message_id: idLocal, user_id: currentUser?.id, delete_type: type })
+                    });
+                } else if (type === 'everyone') {
+                    // 1. Update UI
+                    setMessages(prev => prev.map(m => m.id === idLocal
+                        ? { ...m, message_text: '🚫 This message was deleted', media_url: null, message_type: 'deleted' }
+                        : m
+                    ));
+
+                    // 2. Remove File
+                    if (message && message.media_url && message.media_url.startsWith('file://')) {
+                        try {
+                            const FileSystem = require('expo-file-system');
+                            await FileSystem.deleteAsync(message.media_url, { idempotent: true });
+                        } catch (e) { }
+                    }
+
+                    // 3. Update Local DB
+                    const targetServerId = message?.server_id || localRow?.server_id || idLocal;
+                    await LocalDatabaseService.markMessageDeletedForEveryone(String(targetServerId));
+
+                    // 4. Backend sync
+                    fetch(`${Config.API_URL}/chat/delete_message.php`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message_id: idLocal, user_id: currentUser?.id, delete_type: type })
+                    });
+
+                    // 5. Emit Socket
+                    if (socket.current) {
+                        socket.current.emit("message:delete", {
+                            room: isGroup ? `group_${id}` : `user_${id}`,
+                            message_id: idLocal
+                        });
+                    }
+                }
             });
         } catch (e) { console.error("Delete error", e); }
 
@@ -1562,46 +2009,61 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const renderMessage = ({ item, index }: any) => (
-        <MessageItem
-            item={item}
-            index={index}
-            isMe={String(item.sender_id) === String(currentUser?.id)}
-            isSelfChat={String(id) === String(currentUser?.id)}
-            isLastInGroup={
-                !messages[index + 1] ||
-                messages[index + 1].sender_id !== item.sender_id ||
-                formatChatTime(messages[index + 1].created_at) !== formatChatTime(item.created_at)
-            }
-            isGroupChat={isGroup}
-            currentUser={currentUser}
-            id={id}
-            otherUsername={otherUsername}
-            targetUserProfile={targetUserProfile}
-            onSwipe={setReplyingToMessage}
-            onLongPress={handleLongPressMessage}
-            onReaction={(msgId: number, emoji: string) => { }} // TODO
-            onDelete={handleDeleteMessage}
-            onSend={handleSend}
-            onImagePress={(url: string, isOneTime?: boolean, messageId?: number) => {
-                if (isOneTime && messageId) {
-                    handleViewOneTimeMessage(url, messageId);
-                } else {
-                    setFullScreenImage(url);
-                    setIsFullScreenVisible(true);
-                }
-            }}
-            onQuotePress={scrollToMessage}
-            onForward={handleForwardMessage}
-            selectedMessageId={selectedMessageId}
-            // Selection Props
-            selectionMode={isSelectionMode}
-            isSelected={selectedMessageIds.includes(item.id)}
-            onSelect={handleSelectMessage}
-            selectedCount={selectedMessageIds.length}
-            groupMembers={groupMembers}
-        />
-    );
+    const handleImagePress = useCallback((url: string, isOneTime?: boolean, messageId?: number) => {
+        if (isOneTime && messageId) {
+            handleViewOneTimeMessage(url, messageId);
+        } else {
+            setFullScreenImage(url);
+            setIsFullScreenVisible(true);
+        }
+    }, [id, currentUser]); // handleViewOneTimeMessage is stable
+
+    const handleReaction = useCallback((msgId: number, emoji: string) => { }, []);
+
+    const renderMessage = useCallback(({ item, index }: any) => {
+        if (!item) return null;
+        const isMe = String(item.sender_id) === String(currentUser?.id);
+        const isSelfChat = String(id) === String(currentUser?.id);
+        const nextMsg = messages[index + 1];
+        const isLastInGroup = !nextMsg ||
+            nextMsg.sender_id !== item.sender_id ||
+            formatChatTime(nextMsg.created_at) !== formatChatTime(item.created_at);
+
+        return (
+            <MessageItem
+                item={item}
+                index={index}
+                isMe={isMe}
+                isSelfChat={isSelfChat}
+                isLastInGroup={isLastInGroup}
+                isGroupChat={isGroup}
+                currentUser={currentUser}
+                id={id}
+                otherUsername={otherUsername}
+                targetUserProfile={targetUserProfile}
+                onSwipe={setReplyingToMessage}
+                onLongPress={handleLongPressMessage}
+                onReaction={handleReaction}
+                onDelete={handleDeleteMessage}
+                onSend={handleSend}
+                onImagePress={handleImagePress}
+                onQuotePress={scrollToMessage}
+                onForward={handleForwardMessage}
+                selectedMessageId={selectedMessageId}
+                selectionMode={isSelectionMode}
+                isSelected={selectedMessageIds.includes(item.id)}
+                onSelect={handleSelectMessage}
+                selectedCount={selectedMessageIds.length}
+                groupMembers={groupMembers}
+            />
+        );
+    }, [
+        messages, isGroup, currentUser, id, otherUsername, targetUserProfile,
+        selectedMessageId, isSelectionMode, selectedMessageIds, groupMembers,
+        handleLongPressMessage, handleDeleteMessage, handleSend, handleImagePress,
+        scrollToMessage, handleForwardMessage, handleSelectMessage, handleReaction,
+        setReplyingToMessage
+    ]);
 
     if (isCheckingLock) {
         return <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}><Timer size={32} color={Colors.primary} /></View>;
@@ -1649,7 +2111,7 @@ export default function ChatDetailScreen() {
             <View style={{ flex: 1, backgroundColor: Colors.background }}>
                 {Platform.OS === 'android' ? (
                     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-                        <FlatList
+                        <FlashList
                             key={id} // 4️⃣ Force re-mount on chat change
                             ref={flatListRef}
                             data={isReady ? [...messages, ...failedMessages] : []}
@@ -1729,7 +2191,7 @@ export default function ChatDetailScreen() {
                     </View>
                 ) : (
                     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={90}>
-                        <FlatList
+                        <FlashList
                             key={id} // 4️⃣ Force re-mount on chat change
                             ref={flatListRef}
                             data={[...messages, ...failedMessages]}
@@ -1749,7 +2211,11 @@ export default function ChatDetailScreen() {
                                         title="No messages yet"
                                         message="Start chatting!"
                                     />
-                                ) : null
+                                ) : (
+                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                        <ActivityIndicator size="large" color={Colors.primary} />
+                                    </View>
+                                )
                             }
                             showsVerticalScrollIndicator={false}
                         />
@@ -1857,7 +2323,7 @@ export default function ChatDetailScreen() {
                                 <Send size={20} color={Colors.text} /><ThemedText style={styles.modalOptionText}>Forward</ThemedText>
                             </TouchableOpacity>
                         )}
-                        {selectedMessageForOptions?.media_url && !selectedMessageForOptions.is_one_time && (
+                        {!!selectedMessageForOptions?.media_url && !selectedMessageForOptions.is_one_time && (
                             <TouchableOpacity style={styles.modalOption} onPress={() => handleSaveMediaToDevice(selectedMessageForOptions)}>
                                 <Download size={20} color={Colors.text} />
                                 <ThemedText style={styles.modalOptionText}>
