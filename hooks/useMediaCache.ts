@@ -14,8 +14,8 @@ import { DeviceEventEmitter, Platform } from 'react-native';
 import { MediaStorageService } from '../storage/MediaStorageService';
 import { Config } from '../constants/Config';
 import * as FileSystem from 'expo-file-system';
-import { E2EEService } from '../app/utils/crypto';
-import { LocalDatabaseService } from '../app/utils/LocalDatabaseService';
+import { E2EEService } from '../utils/crypto';
+import { LocalDatabaseService } from '../utils/LocalDatabaseService';
 
 export type UseMediaCacheResult = {
     /** Best available URI (local file:// or remote URL). Null while checking. */

@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import { hashSHA256 } from '../app/utils/crypto/hash';
+import { hashSHA256 } from './crypto/hash';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

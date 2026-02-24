@@ -1,5 +1,5 @@
 import { LocalDatabaseService } from './LocalDatabaseService';
-import { Config } from '../../constants/Config';
+import { Config } from '../constants/Config';
 import { Platform } from 'react-native';
 
 export class SyncService {

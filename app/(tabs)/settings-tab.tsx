@@ -27,7 +27,7 @@ import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
-import { LocalDatabaseService } from '../utils/LocalDatabaseService';
+import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 
 const SECTIONS = [
     {

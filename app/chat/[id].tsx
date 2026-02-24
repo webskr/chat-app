@@ -50,11 +50,11 @@ import { styles } from '../../components/chat/features/styles';
 
 import { saveMedia } from '../../utils/mediaSaver';
 import { MediaStorageService } from '../../storage/MediaStorageService';
-import { SyncService } from '../utils/SyncService';
+import { SyncService } from '../../utils/SyncService';
 import { ScheduleConfirmationModal } from '../../components/chat/features/ScheduleConfirmationModal';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { E2EEService } from '../utils/crypto';
-import { LocalDatabaseService } from '../utils/LocalDatabaseService';
+import { E2EEService } from '../../utils/crypto';
+import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 
 export default function ChatDetailScreen() {
     const { id, user: otherUsername, avatar_id, avatar_url, is_group: isGroupParam, is_official: isOfficialParam } = useLocalSearchParams<{ id: string, user: string, avatar_id: string, avatar_url?: string, is_group?: string, is_official?: string }>();
