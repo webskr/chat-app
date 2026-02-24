@@ -10,6 +10,10 @@
         "*"
       ]
     },
-    "jsx": "react-native"
+    "jsx": "react-native",
+    "types": [
+      "react-native",
+      "node"
+    ]
   }
 }

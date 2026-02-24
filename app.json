@@ -69,12 +69,20 @@
             "packagingOptions": {
               "pickFirst": [
                 "lib/**/libcrypto.so",
-                "lib/**/libssl.so"
+                "lib/**/libssl.so",
+                "lib/**/libjsi.so",
+                "lib/**/libreactnative.so",
+                "lib/**/libreact_nativeutils.so",
+                "lib/**/libfbjni.so",
+                "lib/**/libyoga.so",
+                "lib/**/libfolly_runtime.so",
+                "lib/**/libglog.so"
               ]
             }
           }
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "router": {},

@@ -1,6 +1,6 @@
 import { open, DB } from '@op-engineering/op-sqlite';
 import * as FileSystem from 'expo-file-system';
-import QuickCrypto from 'react-native-quick-crypto';
+import { hashSHA256 } from './crypto/hash';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
@@ -21,9 +21,7 @@ export class LocalDatabaseService {
         // Deterministic but highly secure: userSessionToken ensures lock out after logout.
         const deviceId = Constants.sessionId || 'fallbackDeviceID_vegram';
 
-        const hash = QuickCrypto.createHash('sha256');
-        hash.update(userSessionToken + deviceId);
-        const encryptionKey = hash.digest('hex').toString(); // 64 char string (256-bit AES key for SQLCipher)
+        const encryptionKey = hashSHA256(userSessionToken + deviceId); // 64 char string (256-bit AES key for SQLCipher)
 
         // 3. Open DB with SQLCipher Key
         try {
