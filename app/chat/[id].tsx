@@ -1004,7 +1004,7 @@ export default function ChatDetailScreen() {
                             const keys = await keyRes.json();
                             if (keys && keys.identity_key) {
                                 const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
-                                messageText = E2EEService.encryptMessage(payloadToEncrypt || " ", sharedSecret);
+                                messageText = await E2EEService.encryptMessage(payloadToEncrypt || " ", sharedSecret);
                                 console.log("Message dynamically encrypted for transit.");
                             }
                         }

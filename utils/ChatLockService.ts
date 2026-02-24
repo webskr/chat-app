@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import * as Crypto from 'expo-crypto';
+import { hashSHA256 } from '../app/utils/crypto/hash';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -9,10 +9,7 @@ const PIN_KEY_PREFIX = 'chat_pin_';
 export const ChatLockService = {
     // Hash the PIN for secure storage
     async hashPin(pin: string): Promise<string> {
-        return await Crypto.digestStringAsync(
-            Crypto.CryptoDigestAlgorithm.SHA256,
-            pin
-        );
+        return hashSHA256(pin);
     },
 
     // Check if a specific chat is locked

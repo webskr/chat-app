@@ -1,4 +1,4 @@
-import { sha256 } from "@noble/hashes/sha256";
+import { sha256 } from "@noble/hashes/sha2";
 import { utf8ToBytes, bytesToHex } from "@noble/hashes/utils";
 
 export function hashSHA256(data: string) {

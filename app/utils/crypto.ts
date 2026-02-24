@@ -1,7 +1,12 @@
-import QuickCrypto from 'react-native-quick-crypto';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system';
+import { Buffer } from 'buffer';
+import { generateKeyPair as ecdhGenerate, createSharedSecret } from './crypto/ecdh';
+import { encrypt as aesEncrypt, decrypt as aesDecrypt } from './crypto/aes';
+import { secureRandomBytes } from './crypto/random';
+import { GCM } from "@stablelib/gcm";
+import { AES } from "@stablelib/aes";
 
 const KEY_ALIAS_PREFIX = 'vegram_e2e_';
 
@@ -13,17 +18,13 @@ export interface KeyPair {
 export class E2EEService {
 
     /**
-     * Generates a new ECDH Key Pair (X25519)
+     * Generates a new ECDH Key Pair (secp256k1)
      */
-    static generateKeyPair(): KeyPair {
-        const { publicKey, privateKey } = QuickCrypto.generateKeyPairSync('x25519', {
-            publicKeyEncoding: { type: 'spki', format: 'der' },
-            privateKeyEncoding: { type: 'pkcs8', format: 'der' },
-        });
-
+    static async generateKeyPair(): Promise<KeyPair> {
+        const { publicKey, privateKey } = await ecdhGenerate();
         return {
-            publicKey: (publicKey as any).toString('base64'),
-            privateKey: (privateKey as any).toString('base64'),
+            publicKey: Buffer.from(publicKey).toString('base64'),
+            privateKey: Buffer.from(privateKey).toString('base64'),
         };
     }
 
@@ -31,26 +32,24 @@ export class E2EEService {
      * Derives a shared symmetric secret using ECDH
      */
     static deriveSharedSecret(myPrivateKeyBase64: string, theirPublicKeyBase64: string): Buffer {
-        const sharedSecret = QuickCrypto.diffieHellman(
-            Buffer.from(myPrivateKeyBase64, 'base64') as any,
-            Buffer.from(theirPublicKeyBase64, 'base64') as any
-        );
-        return sharedSecret as any;
+        const myPriv = Buffer.from(myPrivateKeyBase64, 'base64');
+        const theirPub = Buffer.from(theirPublicKeyBase64, 'base64');
+        const sharedSecret = createSharedSecret(new Uint8Array(myPriv), new Uint8Array(theirPub));
+        return Buffer.from(sharedSecret);
     }
 
     /**
      * Encrypts plaintext using AES-256-GCM and a shared secret
      */
-    static encryptMessage(plaintext: string, sharedSecret: Buffer): string {
-        const nonce = QuickCrypto.randomBytes(12); // 96-bit nonce for GCM
-        const cipher = QuickCrypto.createCipheriv('aes-256-gcm', sharedSecret.slice(0, 32), nonce); // GCM requires 256-bit key
+    static async encryptMessage(plaintext: string, sharedSecret: Buffer): Promise<string> {
+        const { iv, cipher } = await aesEncrypt(new Uint8Array(sharedSecret.slice(0, 32)), plaintext);
 
-        let ciphertext = cipher.update(plaintext, 'utf8', 'base64');
-        ciphertext += cipher.final('base64');
-        const authTag = cipher.getAuthTag();
+        // Stablelib seal appends the 16-byte tag to the ciphertext
+        const tag = cipher.slice(-16);
+        const actualCiphertext = cipher.slice(0, -16);
 
         // Format: nonce:authTag:ciphertext
-        return `${nonce.toString('base64')}:${authTag.toString('base64')}:${ciphertext}`;
+        return `${Buffer.from(iv).toString('base64')}:${Buffer.from(tag).toString('base64')}:${Buffer.from(actualCiphertext).toString('base64')}`;
     }
 
     /**
@@ -64,15 +63,14 @@ export class E2EEService {
 
         const nonce = Buffer.from(parts[0], 'base64');
         const authTag = Buffer.from(parts[1], 'base64');
-        const ciphertext = parts[2];
+        const ciphertext = Buffer.from(parts[2], 'base64');
 
-        const decipher = QuickCrypto.createDecipheriv('aes-256-gcm', sharedSecret.slice(0, 32), nonce);
-        decipher.setAuthTag(authTag as any);
+        // Stablelib open expects ciphertext + tag combined
+        const combined = new Uint8Array(ciphertext.length + authTag.length);
+        combined.set(new Uint8Array(ciphertext));
+        combined.set(new Uint8Array(authTag), ciphertext.length);
 
-        let plaintext = decipher.update(ciphertext, 'base64', 'utf8');
-        plaintext += decipher.final('utf8');
-
-        return plaintext;
+        return aesDecrypt(new Uint8Array(sharedSecret.slice(0, 32)), new Uint8Array(nonce), combined);
     }
 
     /**
@@ -80,7 +78,6 @@ export class E2EEService {
      */
     static async savePrivateKey(userId: string, keyPair: KeyPair): Promise<void> {
         await SecureStore.setItemAsync(`${KEY_ALIAS_PREFIX}${userId}_priv`, keyPair.privateKey);
-        // Let's cache the public key too for convenience
         await SecureStore.setItemAsync(`${KEY_ALIAS_PREFIX}${userId}_pub`, keyPair.publicKey);
     }
 
@@ -96,24 +93,25 @@ export class E2EEService {
      */
     static async encryptFile(fileUri: string): Promise<{ encryptedUri: string, key: string, nonce: string, tag: string }> {
         const fileBase64 = await FileSystem.readAsStringAsync(fileUri, { encoding: 'base64' as any });
+        const fileData = Buffer.from(fileBase64, 'base64');
 
-        const key = QuickCrypto.randomBytes(32);
-        const nonce = QuickCrypto.randomBytes(12);
-        const cipher = QuickCrypto.createCipheriv('aes-256-gcm', key, nonce);
+        const key = await secureRandomBytes(32);
+        const nonce = await secureRandomBytes(12);
 
-        // Encrypt the base64 content bridging back and forth
-        let encryptedBase64 = cipher.update(fileBase64, 'base64', 'base64');
-        encryptedBase64 += cipher.final('base64');
-        const authTag = cipher.getAuthTag();
+        const aes = new GCM(new AES(new Uint8Array(key)));
+        const encrypted = aes.seal(nonce, new Uint8Array(fileData));
+
+        const tag = encrypted.slice(-16);
+        const ciphertext = encrypted.slice(0, -16);
 
         const tempUri = ((FileSystem as any).cacheDirectory || 'file:///') + 'encrypted_' + Date.now() + '.enc';
-        await FileSystem.writeAsStringAsync(tempUri, encryptedBase64, { encoding: 'base64' as any });
+        await FileSystem.writeAsStringAsync(tempUri, Buffer.from(ciphertext).toString('base64'), { encoding: 'base64' as any });
 
         return {
             encryptedUri: tempUri,
-            key: key.toString('base64'),
-            nonce: nonce.toString('base64'),
-            tag: authTag.toString('base64')
+            key: Buffer.from(key).toString('base64'),
+            nonce: Buffer.from(nonce).toString('base64'),
+            tag: Buffer.from(tag).toString('base64')
         };
     }
 
@@ -121,16 +119,19 @@ export class E2EEService {
      * Decrypts a downloaded encrypted file and saves it to the strictly secure Android Media directory.
      */
     static async decryptFile(encryptedUri: string, keyBase64: string, nonceBase64: string, tagBase64: string, mimeType: string): Promise<string> {
-        const encryptedBase64 = await FileSystem.readAsStringAsync(encryptedUri, { encoding: 'base64' as any });
+        const ciphertextBase64 = await FileSystem.readAsStringAsync(encryptedUri, { encoding: 'base64' as any });
+        const ciphertext = Buffer.from(ciphertextBase64, 'base64');
         const key = Buffer.from(keyBase64, 'base64');
         const nonce = Buffer.from(nonceBase64, 'base64');
-        const authTag = Buffer.from(tagBase64, 'base64');
+        const tag = Buffer.from(tagBase64, 'base64');
 
-        const decipher = QuickCrypto.createDecipheriv('aes-256-gcm', key, nonce);
-        decipher.setAuthTag(authTag as any);
+        const aes = new GCM(new AES(new Uint8Array(key)));
+        const combined = new Uint8Array(ciphertext.length + tag.length);
+        combined.set(new Uint8Array(ciphertext));
+        combined.set(new Uint8Array(tag), ciphertext.length);
 
-        let decryptedBase64 = decipher.update(encryptedBase64, 'base64', 'base64');
-        decryptedBase64 += decipher.final('base64');
+        const decrypted = aes.open(new Uint8Array(nonce), combined);
+        if (!decrypted) throw new Error("File decryption failed");
 
         // Determine extension
         let ext = '.bin';
@@ -140,7 +141,6 @@ export class E2EEService {
         else if (mimeType.includes('audio/')) ext = '.m4a';
         else if (mimeType.includes('gif')) ext = '.gif';
 
-        // Save directly to the strictly secured Document Sandbox
         const baseDir = (FileSystem as any).documentDirectory || 'file:///';
         const mediaDir = baseDir + 'Media/';
         const dirInfo = await FileSystem.getInfoAsync(mediaDir);
@@ -149,7 +149,7 @@ export class E2EEService {
         }
 
         const finalUri = mediaDir + 'MEDIA_' + Date.now() + ext;
-        await FileSystem.writeAsStringAsync(finalUri, decryptedBase64, { encoding: 'base64' as any });
+        await FileSystem.writeAsStringAsync(finalUri, Buffer.from(decrypted).toString('base64'), { encoding: 'base64' as any });
 
         return finalUri;
     }

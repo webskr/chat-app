@@ -51,13 +51,13 @@ export default function LoginScreen() {
                     const existingKey = await E2EEService.loadPrivateKey(data.user.id);
                     if (!existingKey) {
                         console.log("Generating new E2EE keys for device...");
-                        const identityKeyPair = E2EEService.generateKeyPair();
-                        const signedPreKeyPair = E2EEService.generateKeyPair(); // Simplified for now
+                        const identityKeyPair = await E2EEService.generateKeyPair();
+                        const signedPreKeyPair = await E2EEService.generateKeyPair(); // Simplified for now
 
                         // Generate a batch of One-Time Pre-Keys
                         const oneTimePreKeys = [];
                         for (let i = 0; i < 50; i++) {
-                            const otk = E2EEService.generateKeyPair();
+                            const otk = await E2EEService.generateKeyPair();
                             oneTimePreKeys.push({
                                 key_id: i,
                                 public_key: otk.publicKey,
