@@ -1,0 +1,23 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+apply from: "${project.rootDir}/../node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle"
+applyKotlinExpoModulesCorePlugin()
+useDefaultAndroidSdkVersions()
+
+group = 'expo.modules.vegarmmedia'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.vegarmmedia"
+
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  useCoreDependencies()
+  implementation "org.jetbrains.kotlin:kotlin-stdlib:${project.ext.kotlinVersion()}"
+}

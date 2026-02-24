@@ -1,6 +1,6 @@
 ﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton } from 'react-native';
-import { FlashList, FlashListRef } from '@shopify/flash-list';
+import { FlashList } from '@shopify/flash-list';
 // @ts-ignore
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -150,7 +150,7 @@ export default function ChatDetailScreen() {
     const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
 
     // Refs
-    const flatListRef = useRef<FlashListRef<any>>(null);
+    const flatListRef = useRef<FlashList<any>>(null);
     const inputRef = useRef<TextInput>(null);
     const isAtBottomRef = useRef(true);
     const scrollOffset = useRef(0);
@@ -2118,11 +2118,10 @@ export default function ChatDetailScreen() {
                             keyExtractor={(item) => item.id.toString()}
                             renderItem={renderMessage}
                             style={{ flex: 1, backgroundColor: Colors.background }}
-                            contentContainerStyle={[
-                                styles.listContent,
-                                (messages.length === 0 || !isReady) && { flex: 1 },
-                                { paddingBottom: (relationshipStatus === 'blocked' ? 80 : keyboardHeight + inputHeight) + 20 }
-                            ]}
+                            contentContainerStyle={{
+                                ...styles.listContent,
+                                paddingBottom: (relationshipStatus === 'blocked' ? 80 : keyboardHeight + inputHeight) + 20
+                            }}
                             onScroll={(e) => { scrollOffset.current = e.nativeEvent.contentOffset.y; }}
                             keyboardShouldPersistTaps="handled"
                             ListEmptyComponent={
@@ -2198,11 +2197,10 @@ export default function ChatDetailScreen() {
                             keyExtractor={(item) => item.id.toString()}
                             renderItem={renderMessage}
                             style={{ flex: 1 }}
-                            contentContainerStyle={[
-                                styles.listContent,
-                                messages.length === 0 && { flex: 1 },
-                                { paddingBottom: 20 }
-                            ]}
+                            contentContainerStyle={{
+                                ...styles.listContent,
+                                paddingBottom: 20
+                            }}
                             onScroll={(e) => { scrollOffset.current = e.nativeEvent.contentOffset.y; }}
                             ListEmptyComponent={
                                 !isLoading ? (
