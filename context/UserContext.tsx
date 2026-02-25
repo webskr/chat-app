@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { registerForPushNotificationsAsync } from '../utils/notifications';
 import { Config } from '../constants/Config';
+import { LocalDatabaseService } from '../utils/LocalDatabaseService';
 
 interface User {
     id: string;
@@ -34,6 +35,7 @@ interface UserContextType {
     updateUserProfile: (data: Partial<User>) => Promise<void>;
     reloadUser: () => Promise<void>;
     isLoading: boolean;
+    isDbReady: boolean;
     unreadCount: number;
     setUnreadCount: (count: number) => void;
 }
@@ -43,6 +45,7 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export function UserProvider({ children }: { children: React.ReactNode }) {
     const [user, setUserState] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isDbReady, setIsDbReady] = useState(false);
 
     useEffect(() => {
         loadUser();
@@ -51,11 +54,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const loadUser = async () => {
         try {
             const userData = await AsyncStorage.getItem('user');
+            console.error(`[UserContext] Loading user from storage... exists: ${!!userData}`);
             if (userData) {
-                setUserState(JSON.parse(userData));
+                const parsedUser = JSON.parse(userData);
+                console.error(`[UserContext] User ID extracted: ${parsedUser.id}`);
+                setUserState(parsedUser);
+                // Initialize DB on reload
+                console.error("[UserContext] Calling LocalDatabaseService.initDB...");
+                await LocalDatabaseService.initDB(String(parsedUser.id));
+                setIsDbReady(true);
+                console.error("[UserContext] isDbReady set to true.");
             }
         } catch (error) {
-            console.error('Error loading user from storage:', error);
+            console.error('[UserContext] Error loading user:', error);
         } finally {
             setIsLoading(false);
         }
@@ -107,6 +118,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 await AsyncStorage.removeItem('user');
             }
             setUserState(newUser);
+            if (newUser) {
+                await LocalDatabaseService.initDB(newUser.id.toString());
+                setIsDbReady(true);
+            } else {
+                setIsDbReady(false);
+            }
         } catch (error) {
             console.error('Error saving user to storage:', error);
         }
@@ -121,7 +138,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const [unreadCount, setUnreadCount] = useState(0);
 
     return (
-        <UserContext.Provider value={{ user, setUser, updateUserProfile, reloadUser, isLoading, unreadCount, setUnreadCount }}>
+        <UserContext.Provider value={{ user, setUser, updateUserProfile, reloadUser, isLoading, isDbReady, unreadCount, setUnreadCount }}>
             {children}
         </UserContext.Provider>
     );
@@ -129,8 +146,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
 export function useUser() {
     const context = useContext(UserContext);
-    if (context === undefined) {
-        throw new Error('useUser must be used within a UserProvider');
+    if (!context) {
+        throw new Error("useUser must be used within UserProvider");
     }
     return context;
 }

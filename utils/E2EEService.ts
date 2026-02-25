@@ -1,12 +1,19 @@
-import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system';
 import { Buffer } from 'buffer';
+import { GCM } from "@stablelib/gcm";
+import { AES } from "@stablelib/aes";
 import { generateKeyPair as ecdhGenerate, createSharedSecret } from './crypto/ecdh';
 import { encrypt as aesEncrypt, decrypt as aesDecrypt } from './crypto/aes';
 import { secureRandomBytes } from './crypto/random';
-import { GCM } from "@stablelib/gcm";
-import { AES } from "@stablelib/aes";
+
+export async function sha256(input: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(input);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 const KEY_ALIAS_PREFIX = 'vegram_e2e_';
 

@@ -53,12 +53,12 @@ import { MediaStorageService } from '../../storage/MediaStorageService';
 import { SyncService } from '../../utils/SyncService';
 import { ScheduleConfirmationModal } from '../../components/chat/features/ScheduleConfirmationModal';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { E2EEService } from '../../utils/crypto';
+import { E2EEService } from '../../utils/E2EEService';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 
 export default function ChatDetailScreen() {
     const { id, user: otherUsername, avatar_id, avatar_url, is_group: isGroupParam, is_official: isOfficialParam } = useLocalSearchParams<{ id: string, user: string, avatar_id: string, avatar_url?: string, is_group?: string, is_official?: string }>();
-    const { user: currentUser } = useUser();
+    const { user: currentUser, isDbReady } = useUser();
 
     // Parse isGroup correctly
     const isGroup = isGroupParam === '1' || isGroupParam === 'true';
@@ -148,6 +148,7 @@ export default function ChatDetailScreen() {
     // Data State
     const [relationshipStatus, setRelationshipStatus] = useState<string | null>(null);
     const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
+    const sharedSecretCache = useRef<Map<string, Buffer>>(new Map());
 
     // Refs
     const flatListRef = useRef<FlashList<any>>(null);
@@ -413,27 +414,35 @@ export default function ChatDetailScreen() {
                 // --- E2EE DECRYPTION ---
                 try {
                     if (!isGroup) {
-                        const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
-                        if (myPrivateKey) {
-                            const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`, { signal });
-                            if (keyRes.ok) {
-                                const keys = await keyRes.json();
-                                if (keys && keys.identity_key) {
-                                    const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
-                                    data = data.map((msg: any) => {
-                                        if (msg.message_type === 'text' && msg.message_text && msg.message_text.includes(':')) {
-                                            try {
-                                                const decryptedText = E2EEService.decryptMessage(msg.message_text, sharedSecret);
-                                                msg.message_text = decryptedText;
-                                                msg.encrypted_payload = decryptedText;
-                                            } catch (e) {
-                                                // Fallback
-                                            }
-                                        }
-                                        return msg;
-                                    });
+                        const otherId = String(id);
+                        let sharedSecret = sharedSecretCache.current.get(otherId);
+
+                        if (!sharedSecret) {
+                            const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
+                            if (myPrivateKey) {
+                                const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`, { signal });
+                                if (keyRes.ok) {
+                                    const keys = await keyRes.json();
+                                    if (keys && keys.identity_key) {
+                                        sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
+                                        // Store in a way that persists within the component life
+                                        sharedSecretCache.current.set(otherId, sharedSecret);
+                                    }
                                 }
                             }
+                        }
+
+                        if (sharedSecret) {
+                            data = data.map((msg: any) => {
+                                if (msg.message_type === 'text' && msg.message_text && msg.message_text.includes(':')) {
+                                    try {
+                                        const decryptedText = E2EEService.decryptMessage(msg.message_text, sharedSecret);
+                                        msg.message_text = decryptedText;
+                                        msg.encrypted_payload = decryptedText;
+                                    } catch (e) { /* Fallback */ }
+                                }
+                                return msg;
+                            });
                         }
                     }
                 } catch (err) {
@@ -593,7 +602,7 @@ export default function ChatDetailScreen() {
 
     useFocusEffect(
         React.useCallback(() => {
-            if (!currentUser || !id) return;
+            if (!currentUser || !id || !isDbReady) return;
 
             // Reset State Synchronously on Focus/Mount if ID changed (handled by dependency array)
             // But we also need to handle the case where we push a new ID.
@@ -610,26 +619,28 @@ export default function ChatDetailScreen() {
             // --- REAL-TIME SOCKET SETUP ---
             socket.current = io(Config.SOCKET_URL, {
                 reconnection: true,
-                reconnectionAttempts: 5,
+                reconnectionAttempts: 10,
                 reconnectionDelay: 1000,
             });
 
             socket.current.on('connect', () => {
-                const roomId = isGroup ? `group_${id}` : `user_${currentUser.id}`;
-                socket.current?.emit('join', roomId);
+                const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                console.log(`[Socket] Connected. Joining room: ${chatId}`);
+                socket.current?.emit('join_room', chatId);
 
                 // [Sync] Trigger offline sync on reconnect
-                SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`);
-                SyncService.processRetryQueue(Number(currentUser.id));
-
-                // Re-fetch messages when reconnecting to not miss anything
-                fetchMessages(signal);
+                SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, chatId);
             });
 
             socket.current.on('message:new', async (data: any) => {
+                console.log(`[Socket] Received message:new from ${data.sender_id} in room ${data.room}`);
+
                 // Determine if this message belongs here
-                if (isGroup && data.room !== `group_${id}`) return;
-                if (!isGroup && String(data.sender_id) !== String(id)) return;
+                const belongsHere = isGroup
+                    ? String(data.room) === `group_${id}`
+                    : (String(data.sender_id) === String(id) || String(data.receiver_id) === String(currentUser.id));
+
+                if (!belongsHere) return;
 
                 // Add to Local DB
                 try {
@@ -639,14 +650,25 @@ export default function ChatDetailScreen() {
                     // Decrypt if 1-on-1 and encrypted
                     if (!isGroup && data.message_type === 'text' && data.encrypted_payload && data.encrypted_payload.includes(':')) {
                         try {
-                            const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
-                            const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
-                            if (keyRes.ok && myPrivateKey) {
-                                const keys = await keyRes.json();
-                                if (keys && keys.identity_key) {
-                                    const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
-                                    decryptedPayload = E2EEService.decryptMessage(data.encrypted_payload, sharedSecret);
+                            const otherId = String(data.sender_id);
+                            let sharedSecret = sharedSecretCache.current.get(otherId);
+
+                            if (!sharedSecret) {
+                                console.log(`[Socket] Fetching keys for ${otherId} to derive secret...`);
+                                const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
+                                const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${otherId}`);
+                                if (keyRes.ok && myPrivateKey) {
+                                    const keys = await keyRes.json();
+                                    if (keys && keys.identity_key) {
+                                        sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
+                                        sharedSecretCache.current.set(otherId, sharedSecret);
+                                    }
                                 }
+                            }
+
+                            if (sharedSecret) {
+                                decryptedPayload = E2EEService.decryptMessage(data.encrypted_payload, sharedSecret);
+                                console.log(`[Socket] Decrypted message successfully.`);
                             }
                         } catch (e) { console.error("Realtime decryption failed", e); }
                     }
@@ -676,9 +698,8 @@ export default function ChatDetailScreen() {
             });
 
             socket.current.on('message:delivered', (data: any) => {
-                if (isGroup && data.room !== `group_${id}`) return;
-                if (!isGroup && data.room !== `user_${id}`) return; // Depending on how we route receipts
-
+                // If it's for another room we don't care (server isolates rooms but good to be safe)
+                // For 1-on-1, room is our own user room.
                 setMessages(prev => prev.map(m =>
                     (data.message_ids && data.message_ids.includes(m.id)) || !data.message_ids
                         ? { ...m, status: m.status === 'seen' ? 'seen' : 'delivered' }
@@ -687,9 +708,6 @@ export default function ChatDetailScreen() {
             });
 
             socket.current.on('message:read', (data: any) => {
-                if (isGroup && data.room !== `group_${id}`) return;
-                if (!isGroup && data.room !== `user_${id}`) return;
-
                 setMessages(prev => prev.map(m =>
                     (data.message_ids && data.message_ids.includes(m.id)) || !data.message_ids
                         ? { ...m, status: 'seen' }
@@ -721,19 +739,68 @@ export default function ChatDetailScreen() {
             });
 
             socket.current.on('typing_start', (data: any) => {
-                const roomId = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-                if (data.room === roomId && String(data.user) !== String(currentUser.id)) setIsTyping(true);
+                const isRelevant = isGroup
+                    ? String(data.user) !== String(currentUser.id)
+                    : String(data.user) === String(id);
+                if (isRelevant) setIsTyping(true);
             });
 
             socket.current.on('typing_stop', (data: any) => {
-                const roomId = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-                if (data.room === roomId && String(data.user) !== String(currentUser.id)) setIsTyping(false);
+                const isRelevant = isGroup
+                    ? String(data.user) !== String(currentUser.id)
+                    : String(data.user) === String(id);
+                if (isRelevant) setIsTyping(false);
             });
             // --- END REAL-TIME SOCKET SETUP ---
 
             const fetchData = async () => {
+                const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+
+                // 1. First, always load from local database (Offline-First)
                 try {
-                    console.log(`[Chat ${id}] Fetching data...`);
+                    console.log(`[ChatDetail] Loading local messages for chatId: ${chatId}`);
+                    const localRows = await LocalDatabaseService.getLocalMessages(chatId);
+                    console.log(`[ChatDetail] Local database returned ${localRows.length} rows.`);
+
+                    const mappedMessages = localRows.map(r => {
+                        let msgText = r.encrypted_payload;
+                        let mediaUrl = r.local_file_path;
+                        let msgType = r.type;
+                        let e2e_media = null;
+
+                        if (msgText && msgText.startsWith('{') && msgText.includes('"media"')) {
+                            try {
+                                const parsed = JSON.parse(msgText);
+                                if (parsed.media) {
+                                    msgText = parsed.content;
+                                    e2e_media = parsed.media;
+                                    msgType = parsed.media.mimeType && parsed.media.mimeType.includes('video') ? 'video' : 'image';
+                                }
+                            } catch (e) { /* Not JSON or malformed */ }
+                        }
+
+                        return {
+                            id: r.server_id ? parseInt(r.server_id) : r.id,
+                            local_db_id: r.id,
+                            sender_id: r.sender_id,
+                            receiver_id: r.receiver_id,
+                            message_text: msgText,
+                            media_url: mediaUrl,
+                            e2e_media: e2e_media,
+                            message_type: msgType,
+                            status: r.status,
+                            created_at: r.timestamp
+                        };
+                    });
+                    setMessages(mappedMessages);
+                    // setIsLoading(false); // Keep loading until network fetch is done
+                } catch (localError) {
+                    console.error("[ChatDetail] Local load failed:", localError);
+                }
+
+                // 2. Then, try to fetch from server and update DB
+                try {
+                    console.log(`[Chat ${id}] Syncing with server...`);
 
                     // Parallel Fetch
                     const [msgsRes, relRes, userRes] = await Promise.all([
@@ -752,28 +819,34 @@ export default function ChatDetailScreen() {
                         // --- E2EE DECRYPTION ---
                         try {
                             if (!isGroup) {
-                                const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
-                                if (myPrivateKey) {
-                                    // Fetch other user's public key (in a real app, cache this)
-                                    const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
-                                    if (keyRes.ok) {
-                                        const keys = await keyRes.json();
-                                        if (keys && keys.identity_key) {
-                                            const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
-                                            data = data.map((msg: any) => {
-                                                if (msg.message_type === 'text' && msg.message_text && msg.message_text.includes(':')) {
-                                                    try {
-                                                        const decryptedText = E2EEService.decryptMessage(msg.message_text, sharedSecret);
-                                                        msg.message_text = decryptedText;
-                                                        msg.encrypted_payload = decryptedText;
-                                                    } catch (e) {
-                                                        // Fallback if it wasn't actually encrypted or failed
-                                                    }
-                                                }
-                                                return msg;
-                                            });
+                                const otherId = String(id);
+                                let sharedSecret = sharedSecretCache.current.get(otherId);
+
+                                if (!sharedSecret) {
+                                    const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
+                                    if (myPrivateKey) {
+                                        const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
+                                        if (keyRes.ok) {
+                                            const keys = await keyRes.json();
+                                            if (keys && keys.identity_key) {
+                                                sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
+                                                sharedSecretCache.current.set(otherId, sharedSecret);
+                                            }
                                         }
                                     }
+                                }
+
+                                if (sharedSecret) {
+                                    data = data.map((msg: any) => {
+                                        if (msg.message_type === 'text' && msg.message_text && msg.message_text.includes(':')) {
+                                            try {
+                                                const decryptedText = E2EEService.decryptMessage(msg.message_text, sharedSecret);
+                                                msg.message_text = decryptedText;
+                                                msg.encrypted_payload = decryptedText;
+                                            } catch (e) { /* Fallback */ }
+                                        }
+                                        return msg;
+                                    });
                                 }
                             }
                         } catch (decryptErr) {
@@ -783,7 +856,6 @@ export default function ChatDetailScreen() {
 
                         // --- MERGE INTO LOCAL DB ---
                         if (data && data.length > 0) {
-                            const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
                             for (const msg of data) {
                                 try {
                                     await LocalDatabaseService.insertMessage({
@@ -796,14 +868,14 @@ export default function ChatDetailScreen() {
                                         local_file_path: msg.media_url && msg.media_url.startsWith('file://') ? msg.media_url : undefined,
                                         status: msg.status || 'delivered'
                                     });
-                                } catch (e) { }
+                                } catch (e) { /* Ignore duplicates or errors during insert */ }
                             }
                         }
 
-                        // Load UI from secure local DB directly
-                        const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-                        const localRows = await LocalDatabaseService.getLocalMessages(chatId);
-                        const mappedMessages = localRows.map(r => {
+                        // Re-load UI from secure local DB after network sync
+                        console.log(`[ChatDetail] Re-loading messages for chatId: ${chatId} after network sync.`);
+                        const updatedLocalRows = await LocalDatabaseService.getLocalMessages(chatId);
+                        const updatedMappedMessages = updatedLocalRows.map(r => {
                             let msgText = r.encrypted_payload;
                             let mediaUrl = r.local_file_path;
                             let msgType = r.type;
@@ -834,7 +906,7 @@ export default function ChatDetailScreen() {
                             };
                         });
 
-                        setMessages(mappedMessages);
+                        setMessages(updatedMappedMessages);
                         // Mark seen if active
                         if (AppState.currentState === 'active') {
                             const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
@@ -913,7 +985,7 @@ export default function ChatDetailScreen() {
                 // If we navigate FORWARD, we might keep it.
                 // For now, let's rely on the mount-reset logic.
             };
-        }, [id, currentUser]) // Re-run deeply when ID changes
+        }, [id, currentUser, isDbReady]) // Re-run deeply when ID changes
     );
 
 
@@ -1058,6 +1130,9 @@ export default function ChatDetailScreen() {
                     if ((newMessage as any).local_db_id) {
                         try {
                             await LocalDatabaseService.updateMessageStatus((newMessage as any).local_db_id, 'sent');
+                            if (data.message_id) {
+                                await LocalDatabaseService.updateServerId((newMessage as any).local_db_id, String(data.message_id));
+                            }
                         } catch (e) { console.error(e); }
                     }
 
@@ -1094,16 +1169,19 @@ export default function ChatDetailScreen() {
     const handleTyping = (text: string) => {
         setInputText(text);
         if (!socket.current || !currentUser) return;
-        const roomId = `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+
+        // Always send to the other user's personal room
+        const targetRoom = isGroup ? `group_${id}` : `user_${id}`;
+
         if (text.length > 0) {
-            socket.current.emit('typing_start', { room: roomId, user: currentUser.id });
+            socket.current.emit('typing_start', { room: targetRoom, user: currentUser.id });
             if (typingTimeout.current) clearTimeout(typingTimeout.current);
             typingTimeout.current = setTimeout(() => {
-                socket.current?.emit('typing_stop', { room: roomId, user: currentUser.id });
+                socket.current?.emit('typing_stop', { room: targetRoom, user: currentUser.id });
             }, 2000);
         } else {
             if (typingTimeout.current) clearTimeout(typingTimeout.current);
-            socket.current.emit('typing_stop', { room: roomId, user: currentUser.id });
+            socket.current.emit('typing_stop', { room: targetRoom, user: currentUser.id });
         }
     };
 
@@ -1306,7 +1384,6 @@ export default function ChatDetailScreen() {
             setIsUploading(false);
         }
         return { success: false };
-        return { success: false };
     };
 
     const uploadEncryptedFile = async (asset: any) => {
@@ -1370,6 +1447,7 @@ export default function ChatDetailScreen() {
             }
 
             if (messageId) {
+                const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
                 await MediaStorageService.copyToCache(item.uri, messageId, item.type);
             }
         }
@@ -2117,7 +2195,7 @@ export default function ChatDetailScreen() {
                             data={isReady ? [...messages, ...failedMessages] : []}
                             keyExtractor={(item) => item.id.toString()}
                             renderItem={renderMessage}
-                            style={{ flex: 1, backgroundColor: Colors.background }}
+                            estimatedItemSize={100}
                             contentContainerStyle={{
                                 ...styles.listContent,
                                 paddingBottom: (relationshipStatus === 'blocked' ? 80 : keyboardHeight + inputHeight) + 20
@@ -2196,7 +2274,7 @@ export default function ChatDetailScreen() {
                             data={[...messages, ...failedMessages]}
                             keyExtractor={(item) => item.id.toString()}
                             renderItem={renderMessage}
-                            style={{ flex: 1 }}
+                            estimatedItemSize={100}
                             contentContainerStyle={{
                                 ...styles.listContent,
                                 paddingBottom: 20

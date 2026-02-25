@@ -1,77 +1,194 @@
-import { open, DB } from '@op-engineering/op-sqlite';
 import * as FileSystem from 'expo-file-system';
-import { hashSHA256 } from './crypto/hash';
+import { sha256 } from './E2EEService';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+let opSqlite: any = null;
+if (Platform.OS !== 'web') {
+    try {
+        opSqlite = require('@op-engineering/op-sqlite');
+    } catch (e) {
+        console.warn("[LocalDatabaseService] op-sqlite module not found. This is expected if running in Expo Go. Use a development build.");
+    }
+}
+
 export class LocalDatabaseService {
-    private static db: DB | null = null;
+    private static db: any = null;
     private static isInitialized = false;
+    private static isInitializing = false;
+    private static initPromise: Promise<void> | null = null;
 
     static async initDB(userSessionToken: string): Promise<void> {
         if (this.isInitialized && this.db) return;
+        if (this.isInitializing) return;
+        if (this.initPromise) return this.initPromise;
 
-        // 1. Determine Path
-        // By leaving location undefined or setting to 'default', op-sqlite automatically 
-        // places the database in the highly secure, app-specific internal Sandbox directory.
-        // This implicitly prevents DB extraction via File Managers on non-rooted devices.
-        let location: string | undefined = undefined;
+        this.isInitializing = true;
+        console.error("[LocalDatabaseService] --- INIT DB START ---");
 
-        // 2. Derive Encryption Key
-        // Deterministic but highly secure: userSessionToken ensures lock out after logout.
-        const deviceId = Constants.sessionId || 'fallbackDeviceID_vegram';
+        this.initPromise = (async () => {
+            if (Platform.OS === 'web') {
+                console.warn("[LocalDatabaseService] Database is not supported on Web yet. Using no-op.");
+                this.isInitialized = true;
+                return;
+            }
 
-        const encryptionKey = hashSHA256(userSessionToken + deviceId); // 64 char string (256-bit AES key for SQLCipher)
+            if (!opSqlite) {
+                const msg = "[LocalDatabaseService] Cannot initialize DB: op-sqlite native module is missing. This happens in Expo Go. Use a development build.";
+                console.error(msg);
+                throw new Error(msg);
+            }
 
-        // 3. Open DB with SQLCipher Key
-        try {
-            this.db = open({
-                name: 'vegram_encrypted.sqlite',
-                location: location,
-                encryptionKey: encryptionKey
-            });
+            try {
 
-            // 4. Create Schema
-            await this.db.execute(`
-                CREATE TABLE IF NOT EXISTS messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    server_id TEXT UNIQUE,
-                    chat_id TEXT NOT NULL,
-                    sender_id TEXT NOT NULL,
-                    receiver_id TEXT,
-                    type TEXT NOT NULL,
-                    encrypted_payload TEXT,
-                    local_file_path TEXT,
-                    status TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                );
-            `);
+                // Debug paths
+                try {
+                    const docs = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory!).catch(() => []);
+                    console.error("[LocalDatabaseService] DocumentDirectory contents:", docs);
+                    const sqliteDir = `${FileSystem.documentDirectory}SQLite/`;
+                    const sqliteDocs = await FileSystem.readDirectoryAsync(sqliteDir).catch(() => []);
+                    console.error("[LocalDatabaseService] SQLiteDir contents:", sqliteDocs);
+                } catch (e) { }
 
-            await this.db.execute(`
-                CREATE TABLE IF NOT EXISTS status_retry_queue (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    server_id TEXT NOT NULL,
-                    chat_id TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                );
-            `);
+                // 1. Derive Device ID safely and persistently
+                let deviceId = 'fallbackDeviceID_vegram';
+                try {
+                    const idFile = `${FileSystem.documentDirectory}vegram_device_id`;
+                    const storedDeviceId = await FileSystem.readAsStringAsync(idFile).catch(() => null);
+                    if (storedDeviceId && storedDeviceId.length > 5) {
+                        deviceId = storedDeviceId;
+                    } else {
+                        deviceId = 'dev_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+                        await FileSystem.writeAsStringAsync(idFile, deviceId).catch(() => { });
+                    }
+                } catch (e) {
+                    console.error("[LocalDatabaseService] Failed to handle persistent deviceId:", e);
+                }
 
-            await this.db.execute('CREATE INDEX IF NOT EXISTS idx_chat_id ON messages(chat_id);');
-            await this.db.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp);');
+                const safeToken = String(userSessionToken || 'guest');
+                const dataToHash = safeToken + deviceId;
 
-            this.isInitialized = true;
-            console.log("Local SQLCipher Database Initialized Securely.");
-        } catch (dbError) {
-            console.error("Failed to initialize encrypted database:", dbError);
-            throw dbError; // Bubble up for Auth flow to handle (e.g., force logout if DB stuck)
-        }
+                console.error(`[LocalDatabaseService] Token Start: ${safeToken.slice(0, 5)}... DeviceId: ${deviceId}`);
+
+                // 2. Derive Encryption Key
+                let encryptionKey: string;
+                try {
+                    encryptionKey = await sha256(dataToHash);
+                } catch (hashError) {
+                    console.error("[LocalDatabaseService] Hash failed:", hashError);
+                    encryptionKey = "emergency_fallback_key_persistent";
+                }
+
+                // 3. Open DB with SQLCipher Key
+                console.error("[LocalDatabaseService] Opening opSqlite with key length:", encryptionKey.length);
+                const dbPath = `${FileSystem.documentDirectory}SQLite/vegram_encrypted.sqlite`;
+
+                const openAndValidate = async () => {
+                    this.db = opSqlite.open({
+                        name: 'vegram_encrypted.sqlite',
+                        encryptionKey: encryptionKey
+                    });
+
+                    try {
+                        await this.db.execute("PRAGMA user_version;");
+                        console.error("[LocalDatabaseService] Database validated successfully.");
+                    } catch (e) {
+                        console.error("[LocalDatabaseService] Key validation failed (PRAGMA).");
+                        throw e;
+                    }
+                };
+
+                try {
+                    await openAndValidate();
+                } catch (openError) {
+                    console.error("[LocalDatabaseService] Initial open/validate failed. Attempting wipe...", openError);
+                    try {
+                        // Check multiple potential paths for the sqlite file
+                        const pkg = "com.skr.vegarm";
+                        const pathsToTry = [
+                            `${FileSystem.documentDirectory}SQLite/vegram_encrypted.sqlite`,
+                            `${FileSystem.documentDirectory}../databases/vegram_encrypted.sqlite`,
+                            `/data/data/${pkg}/databases/vegram_encrypted.sqlite`,
+                            `/data/user/0/${pkg}/databases/vegram_encrypted.sqlite`
+                        ];
+
+                        for (const p of pathsToTry) {
+                            try {
+                                const info = await FileSystem.getInfoAsync(p);
+                                if (info.exists) {
+                                    await FileSystem.deleteAsync(p);
+                                    console.error(`[LocalDatabaseService] Deleted DB at: ${p}`);
+                                }
+                            } catch (e) { }
+                        }
+
+                        // Small delay before retry
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await openAndValidate();
+                        console.error("[LocalDatabaseService] DB recreated and validated after wipe.");
+                    } catch (wipeError) {
+                        console.error("[LocalDatabaseService] CRITICAL: Wipe and recreate failed:", wipeError);
+                        throw wipeError;
+                    }
+                }
+
+                // 4. Create Schema
+                await this.db.execute(`
+                    CREATE TABLE IF NOT EXISTS messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        server_id TEXT UNIQUE,
+                        chat_id TEXT NOT NULL,
+                        sender_id TEXT NOT NULL,
+                        receiver_id TEXT,
+                        type TEXT NOT NULL,
+                        encrypted_payload TEXT,
+                        local_file_path TEXT,
+                        status TEXT NOT NULL,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                `);
+
+                await this.db.execute(`
+                    CREATE TABLE IF NOT EXISTS status_retry_queue (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        server_id TEXT NOT NULL,
+                        chat_id TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                `);
+
+                await this.db.execute('CREATE INDEX IF NOT EXISTS idx_chat_id ON messages(chat_id);');
+                await this.db.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp);');
+
+                this.isInitialized = true;
+                this.isInitializing = false;
+                console.error("[LocalDatabaseService] --- INIT DB COMPLETE ---");
+                console.error("[LocalDatabaseService] Local SQLCipher Database Initialized Securely.");
+            } catch (dbError) {
+                this.isInitializing = false;
+                console.error("[LocalDatabaseService] CRITICAL: Failed to initialize encrypted database:", dbError);
+                this.initPromise = null;
+                throw dbError;
+            }
+        })();
+
+        return this.initPromise;
+    }
+
+    static isReady(): boolean {
+        return this.isInitialized;
     }
 
     /**
      * Get the database connection
      */
-    static getDB(): DB {
+    static getDB(): any {
+        if (Platform.OS === 'web') {
+            return {
+                execute: async () => ({ rows: [], insertId: 0 })
+            };
+        }
         if (!this.db || !this.isInitialized) {
             throw new Error("LocalDatabaseService must be initialized with initDB(token) first.");
         }
