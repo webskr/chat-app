@@ -17,6 +17,21 @@ export class LocalDatabaseService {
     private static isInitialized = false;
     private static isInitializing = false;
     private static initPromise: Promise<void> | null = null;
+    private static DB_FILENAME = 'vegram_encrypted.sqlite';
+
+    private static async deleteDatabase() {
+        const sqliteDir = `${FileSystem.documentDirectory}SQLite/`;
+        const path = sqliteDir + this.DB_FILENAME;
+        try {
+            const info = await FileSystem.getInfoAsync(path);
+            if (info.exists) {
+                await FileSystem.deleteAsync(path, { idempotent: true });
+                console.log("[LocalDatabaseService] Database file deleted to allow recovery.");
+            }
+        } catch (e) {
+            console.error("[LocalDatabaseService] Failed to delete database file:", e);
+        }
+    }
 
     static async initDB(userSessionToken: string): Promise<void> {
         if (this.isInitialized && this.db) return;
@@ -24,7 +39,7 @@ export class LocalDatabaseService {
         if (this.initPromise) return this.initPromise;
 
         this.isInitializing = true;
-        console.error("[LocalDatabaseService] --- INIT DB START ---");
+        console.log("[LocalDatabaseService] --- INIT DB START ---");
 
         this.initPromise = (async () => {
             if (Platform.OS === 'web') {
@@ -44,10 +59,10 @@ export class LocalDatabaseService {
                 // Debug paths
                 try {
                     const docs = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory!).catch(() => []);
-                    console.error("[LocalDatabaseService] DocumentDirectory contents:", docs);
+                    console.log("[LocalDatabaseService] DocumentDirectory contents:", docs);
                     const sqliteDir = `${FileSystem.documentDirectory}SQLite/`;
                     const sqliteDocs = await FileSystem.readDirectoryAsync(sqliteDir).catch(() => []);
-                    console.error("[LocalDatabaseService] SQLiteDir contents:", sqliteDocs);
+                    console.log("[LocalDatabaseService] SQLiteDir contents:", sqliteDocs);
                 } catch (e) { }
 
                 // 1. Derive Device ID safely and persistently
@@ -68,32 +83,31 @@ export class LocalDatabaseService {
                 const safeToken = String(userSessionToken || 'guest');
                 const dataToHash = safeToken + deviceId;
 
-                console.error(`[LocalDatabaseService] Token Start: ${safeToken.slice(0, 5)}... DeviceId: ${deviceId}`);
+                console.log(`[LocalDatabaseService] Token Start: ${safeToken.slice(0, 5)}... DeviceId: ${deviceId}`);
 
-                // 2. Derive Encryption Key
+                // 2. Derive Encryption Key with versioning
                 let encryptionKey: string;
                 try {
-                    encryptionKey = await sha256(dataToHash);
+                    encryptionKey = "v1_" + await sha256(dataToHash);
                 } catch (hashError) {
                     console.error("[LocalDatabaseService] Hash failed:", hashError);
-                    encryptionKey = "emergency_fallback_key_persistent";
+                    encryptionKey = "v1_emergency_fallback_key_persistent";
                 }
 
                 // 3. Open DB with SQLCipher Key
-                console.error("[LocalDatabaseService] Opening opSqlite with key length:", encryptionKey.length);
-                const dbPath = `${FileSystem.documentDirectory}SQLite/vegram_encrypted.sqlite`;
+                console.log("[LocalDatabaseService] Opening opSqlite with key length:", encryptionKey.length);
 
                 const openAndValidate = async () => {
                     this.db = opSqlite.open({
-                        name: 'vegram_encrypted.sqlite',
+                        name: this.DB_FILENAME,
                         encryptionKey: encryptionKey
                     });
 
                     try {
                         await this.db.execute("PRAGMA user_version;");
-                        console.error("[LocalDatabaseService] Database validated successfully.");
+                        console.log("[LocalDatabaseService] Database validated successfully.");
                     } catch (e) {
-                        console.error("[LocalDatabaseService] Key validation failed (PRAGMA).");
+                        console.warn("[LocalDatabaseService] Key validation failed (PRAGMA).");
                         throw e;
                     }
                 };
@@ -101,34 +115,18 @@ export class LocalDatabaseService {
                 try {
                     await openAndValidate();
                 } catch (openError) {
-                    console.error("[LocalDatabaseService] Initial open/validate failed. Attempting wipe...", openError);
+                    console.warn("[LocalDatabaseService] Invalid key or corrupted DB detected. Attempting automatic recovery...");
                     try {
-                        // Check multiple potential paths for the sqlite file
-                        const pkg = "com.skr.vegarm";
-                        const pathsToTry = [
-                            `${FileSystem.documentDirectory}SQLite/vegram_encrypted.sqlite`,
-                            `${FileSystem.documentDirectory}../databases/vegram_encrypted.sqlite`,
-                            `/data/data/${pkg}/databases/vegram_encrypted.sqlite`,
-                            `/data/user/0/${pkg}/databases/vegram_encrypted.sqlite`
-                        ];
-
-                        for (const p of pathsToTry) {
-                            try {
-                                const info = await FileSystem.getInfoAsync(p);
-                                if (info.exists) {
-                                    await FileSystem.deleteAsync(p);
-                                    console.error(`[LocalDatabaseService] Deleted DB at: ${p}`);
-                                }
-                            } catch (e) { }
+                        if (this.db) {
+                            try { this.db.close(); } catch (e) { }
+                            this.db = null;
                         }
-
-                        // Small delay before retry
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await this.deleteDatabase();
                         await openAndValidate();
-                        console.error("[LocalDatabaseService] DB recreated and validated after wipe.");
-                    } catch (wipeError) {
-                        console.error("[LocalDatabaseService] CRITICAL: Wipe and recreate failed:", wipeError);
-                        throw wipeError;
+                        console.log("[LocalDatabaseService] DB successfully recreated and validated.");
+                    } catch (recoveryError) {
+                        console.error("[LocalDatabaseService] CRITICAL: DB Recovery failed:", recoveryError);
+                        throw recoveryError;
                     }
                 }
 
@@ -163,8 +161,8 @@ export class LocalDatabaseService {
 
                 this.isInitialized = true;
                 this.isInitializing = false;
-                console.error("[LocalDatabaseService] --- INIT DB COMPLETE ---");
-                console.error("[LocalDatabaseService] Local SQLCipher Database Initialized Securely.");
+                console.log("[LocalDatabaseService] --- INIT DB COMPLETE ---");
+                console.log("[LocalDatabaseService] Local SQLCipher Database Initialized Securely.");
             } catch (dbError) {
                 this.isInitializing = false;
                 console.error("[LocalDatabaseService] CRITICAL: Failed to initialize encrypted database:", dbError);

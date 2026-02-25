@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Config } from '../../constants/Config';
 import { useUser } from '../../context/UserContext';
-import { E2EEService } from '../../utils/crypto';
+import { E2EEService } from '../../utils/E2EEService';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 
 export default function LoginScreen() {

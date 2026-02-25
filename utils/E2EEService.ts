@@ -6,13 +6,15 @@ import { AES } from "@stablelib/aes";
 import { generateKeyPair as ecdhGenerate, createSharedSecret } from './crypto/ecdh';
 import { encrypt as aesEncrypt, decrypt as aesDecrypt } from './crypto/aes';
 import { secureRandomBytes } from './crypto/random';
+import * as Crypto from 'expo-crypto';
 
 export async function sha256(input: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(input);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    const hash = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        input,
+        { encoding: Crypto.CryptoEncoding.HEX }
+    );
+    return hash.toLowerCase();
 }
 
 const KEY_ALIAS_PREFIX = 'vegram_e2e_';

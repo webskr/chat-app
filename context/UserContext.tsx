@@ -54,16 +54,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const loadUser = async () => {
         try {
             const userData = await AsyncStorage.getItem('user');
-            console.error(`[UserContext] Loading user from storage... exists: ${!!userData}`);
+            console.log(`[UserContext] Loading user from storage... exists: ${!!userData}`);
             if (userData) {
                 const parsedUser = JSON.parse(userData);
-                console.error(`[UserContext] User ID extracted: ${parsedUser.id}`);
+                console.log(`[UserContext] User ID extracted: ${parsedUser.id}`);
                 setUserState(parsedUser);
                 // Initialize DB on reload
-                console.error("[UserContext] Calling LocalDatabaseService.initDB...");
+                console.log("[UserContext] Calling LocalDatabaseService.initDB...");
                 await LocalDatabaseService.initDB(String(parsedUser.id));
                 setIsDbReady(true);
-                console.error("[UserContext] isDbReady set to true.");
+                console.log("[UserContext] isDbReady set to true.");
             }
         } catch (error) {
             console.error('[UserContext] Error loading user:', error);

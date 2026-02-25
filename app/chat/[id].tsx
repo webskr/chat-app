@@ -988,15 +988,10 @@ export default function ChatDetailScreen() {
         }, [id, currentUser, isDbReady]) // Re-run deeply when ID changes
     );
 
-
-    // ... other imports ...
-
-    // Inside `export default function ChatDetailScreen() {`
-    const handleSend = async (text: string = inputText, mediaPath: string | null = null, mediaType: 'text' | 'image' | 'video' | 'audio' | 'document' | 'gif' | 'sticker' = 'text', isRetry = false, isOneTime = false, scheduledAt: Date | null = null, extraMeta: any = {}) => {
-        console.log('handleSend called:', { text, mediaPath, mediaType, isOneTime, scheduledAt, isGroup });
+    const handleSend = async (messageText: string = inputText, mediaPath: string | null = null, mediaType: 'text' | 'image' | 'video' | 'audio' | 'document' | 'gif' | 'sticker' = 'text', isRetry = false, isOneTime = false, scheduledAt: Date | null = null, extraMeta: any = {}) => {
         if (!currentUser) return null;
-        let messageText = text.trim();
-        if (!messageText && !mediaPath) return null;
+        if (!messageText.trim() && !mediaPath && !extraMeta?.e2e_media_payload) return null;
+        console.log('handleSend called:', { messageText, mediaPath, mediaType, isOneTime, scheduledAt, isGroup });
 
         // Rate Limit (Skip)
 
@@ -1249,6 +1244,7 @@ export default function ChatDetailScreen() {
     };
 
     const uploadImage = async (asset: any) => {
+        if (!currentUser) return { success: false };
         setIsUploading(true);
         const formData = new FormData();
         const filename = asset.fileName || asset.uri.split('/').pop() || 'upload.jpg';
@@ -1311,6 +1307,7 @@ export default function ChatDetailScreen() {
 
 
     const uploadVideo = async (asset: any) => {
+        if (!currentUser) return { success: false };
         setIsUploading(true);
         const formData = new FormData();
         const filename = asset.fileName || asset.uri.split('/').pop();
@@ -1360,6 +1357,7 @@ export default function ChatDetailScreen() {
     };
 
     const uploadDocument = async (asset: any) => {
+        if (!currentUser) return { success: false };
         setIsUploading(true);
         const formData = new FormData();
         const filename = asset.name;
@@ -1415,8 +1413,7 @@ export default function ChatDetailScreen() {
     };
 
     const handleMediaPreviewSend = async (caption: string, isOneTime: boolean) => {
-        console.log('handleMediaPreviewSend called:', isOneTime);
-        if (!previewMedia || previewMedia.length === 0) return;
+        if (!currentUser || !previewMedia || previewMedia.length === 0) return;
         setIsPreviewVisible(false);
 
         const mediaItems = previewMedia;
@@ -1455,6 +1452,7 @@ export default function ChatDetailScreen() {
     };
 
     const uploadVoiceMessage = async (uri: string, duration: number) => {
+        if (!currentUser) return;
         setIsUploading(true);
         const formData = new FormData();
         const filename = uri.split('/').pop() || 'voice.m4a';
@@ -1528,7 +1526,7 @@ export default function ChatDetailScreen() {
     };
 
     const handleSaveEdit = async () => {
-        if (!editingMessage || !inputText.trim()) return;
+        if (!currentUser || !editingMessage || !inputText.trim()) return;
         const originalText = editingMessage.message_text;
         const newText = inputText.trim();
         if (originalText === newText) return handleCancelEdit();
@@ -1610,6 +1608,7 @@ export default function ChatDetailScreen() {
     };
 
     const handleExitGroup = () => {
+        if (!currentUser) return;
         setMenuVisible(false);
         setActionModalConfig({
             visible: true,
@@ -1668,6 +1667,7 @@ export default function ChatDetailScreen() {
     };
 
     const clearChatSelf = async () => {
+        if (!currentUser) return;
         try {
             const response = await fetch(`${Config.API_URL}/chat/group_actions.php`, {
                 method: 'POST',
@@ -1685,6 +1685,7 @@ export default function ChatDetailScreen() {
     };
 
     const confirmClearEveryone = (isOneOnOne = false) => {
+        if (!currentUser) return;
         setActionModalConfig({
             visible: true,
             title: 'Clear Chat?',
@@ -1716,6 +1717,7 @@ export default function ChatDetailScreen() {
     };
 
     const handleBlockUser = () => {
+        if (!currentUser) return;
         const isBlocked = relationshipStatus === 'blocked';
         const action = isBlocked ? 'unblock' : 'block';
 
