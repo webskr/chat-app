@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kolkata');
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
@@ -388,8 +389,19 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
                 }
             }
 
+            // Fetch server-generated created_at for the inserted message
+            $ts_stmt = $pdo->prepare("SELECT created_at FROM messages WHERE id = :mid");
+            $ts_stmt->execute([':mid' => $message_id]);
+            $created_at_row = $ts_stmt->fetch(PDO::FETCH_ASSOC);
+            $server_created_at = $created_at_row ? $created_at_row['created_at'] : date('Y-m-d H:i:s');
+
             http_response_code(200);
-            echo json_encode(array("message" => "Message sent.", "conversation_id" => $conv_id));
+            echo json_encode(array(
+                "message"         => "Message sent.",
+                "message_id"      => (int)$message_id,
+                "conversation_id" => $conv_id,
+                "created_at"      => $server_created_at
+            ));
         } else {
             http_response_code(503); echo json_encode(array("message" => "Unable to send message."));
         }

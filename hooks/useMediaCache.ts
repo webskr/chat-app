@@ -58,7 +58,7 @@ export function useMediaCache(
     // Build the full remote URL
     const remoteUrl = !mediaUrl
         ? null
-        : mediaUrl.startsWith('http')
+        : (mediaUrl.startsWith('http') || mediaUrl.startsWith('file://'))
             ? mediaUrl
             : `${Config.API_URL}/${mediaUrl.replace(/^\//, '')}`;
 

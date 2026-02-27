@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kolkata');
 // backend/chat/upload_document.php
 
 header("Access-Control-Allow-Origin: *");
@@ -61,12 +62,14 @@ try {
 
     if (move_uploaded_file($_FILES["document"]["tmp_name"], $target_file)) {
         echo json_encode([
-            "success" => true,
-            "message" => "File uploaded successfully",
-            "file_path" => "uploads/documents/" . $new_filename,
-            "file_name" => $original_name, // Return original name for DB
-            "file_size" => $file_size,
-            "mime_type" => $mime_type
+            "success"    => true,
+            "message"    => "File uploaded successfully",
+            "file_path"  => "uploads/documents/" . $new_filename,
+            "media_url"  => "uploads/documents/" . $new_filename,
+            "file_name"  => $original_name,
+            "file_size"  => $file_size,
+            "mime_type"  => $mime_type,
+            "created_at" => date('Y-m-d H:i:s')
         ]);
     } else {
         throw new Exception("Failed to move uploaded file");

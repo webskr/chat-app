@@ -82,6 +82,7 @@ export default function ChatDetailScreen() {
     const [selectedMessageForOptions, setSelectedMessageForOptions] = useState<any>(null);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [canDeleteForEachOther, setCanDeleteForEachOther] = useState(false); // Renamed for clarity, logic to follow
+    const lastSentRef = useRef<{ text: string, media: string | null, type: string, time: number } | null>(null);
 
     // 1️⃣ Strict State Reset on Chat Change
     useEffect(() => {
@@ -161,10 +162,92 @@ export default function ChatDetailScreen() {
     const recentMessages = useRef<number[]>([]);
     const currentIdRef = useRef(id); // 5️⃣ Race condition protection
     if (currentIdRef.current !== id) currentIdRef.current = id;
+    const isFetchingRef = useRef(false); // 🔒 Prevent concurrent fetchMessages calls
 
+    // ✅ Deduplication helper — keyed by temp_id for locals, by id for confirmed.
+    // This prevents temp numeric IDs from colliding with real server IDs.
+    const deduplicateMessages = (msgs: any[]): any[] => {
+        // Step 1: Separate optimistic (local) from confirmed (server) messages
+        const confirmed = new Map<string, any>();
+        const localOnly = new Map<string, any>();
+
+        for (const m of msgs) {
+            if (m.is_local) {
+                // Local/optimistic: key by temp_id (unique client-side timestamp)
+                const tempKey = `temp_${m.temp_id ?? m.id}`;
+                localOnly.set(tempKey, m);
+            } else {
+                // Server-confirmed: key by real server id
+                const serverKey = String(m.id);
+                if (!confirmed.has(serverKey)) {
+                    confirmed.set(serverKey, m);
+                }
+            }
+        }
+
+        // Step 2: Remove local messages whose temp_id was confirmed by server
+        for (const [, m] of confirmed) {
+            if (m.temp_id) {
+                const tempKey = `temp_${m.temp_id}`;
+                localOnly.delete(tempKey);
+            }
+        }
+
+        // Step 3: Merge confirmed + remaining unconfirmed locals, sort by created_at
+        const merged = [...confirmed.values(), ...localOnly.values()];
+        merged.sort((a, b) => {
+            const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return ta - tb;
+        });
+        return merged;
+    };
+    // ─────────────────────────────────────────────────────────────────────────
+    // ✅ SAFE STATE UPDATER
+    // ALL message state mutations must go through safeSetMessages.
+    // It deduplicates on every write so duplicate keys can NEVER reach the list.
+    // ─────────────────────────────────────────────────────────────────────────
+    const safeSetMessages = useCallback(
+        (updater: any[] | ((prev: any[]) => any[])) => {
+            setMessages(prev => {
+                const next = typeof updater === 'function' ? updater(prev) : updater;
+                return deduplicateMessages(next);
+            });
+        },
+        // deduplicateMessages is defined inline so it's stable per render;
+        // no deps needed here — it captures only pure Map/sort logic.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        []
+    );
 
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [inputHeight, setInputHeight] = useState(60);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 🔍 STEP 1 — DEV-ONLY duplicate ID logger
+    // Fires whenever messages changes and prints any duplicate keys it finds.
+    // Zero cost in production (guarded by __DEV__).
+    // ─────────────────────────────────────────────────────────────────────────
+    useEffect(() => {
+        if (!__DEV__) return;
+        const seen = new Map<string, number>();
+        const duplicates: string[] = [];
+        messages.forEach(m => {
+            const key = String(m.id);
+            const count = (seen.get(key) ?? 0) + 1;
+            seen.set(key, count);
+            if (count === 2) duplicates.push(key); // log once when first duplicate appears
+        });
+        if (duplicates.length > 0) {
+            console.warn(
+                `[DuplicateKey] ⚠️ ${duplicates.length} duplicate message ID(s) detected:`,
+                duplicates,
+                '\nFull message ids:',
+                messages.map(m => ({ id: m.id, temp_id: m.temp_id, is_local: m.is_local, text: m.message_text?.slice(0, 20) }))
+            );
+        }
+    }, [messages]);
+
     const [userRole, setUserRole] = useState<string | null>(null);
 
     const [permissions, setPermissions] = useState({
@@ -395,6 +478,10 @@ export default function ChatDetailScreen() {
 
     const fetchMessages = async (signal?: AbortSignal) => {
         if (!currentUser) return;
+        // 🔒 Prevent concurrent calls (socket + polling racing)
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
+
         let url = `${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}`;
         if (isGroup) url += `&group_id=${id}`;
         else url += `&receiver_id=${id}`;
@@ -425,7 +512,6 @@ export default function ChatDetailScreen() {
                                     const keys = await keyRes.json();
                                     if (keys && keys.identity_key) {
                                         sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
-                                        // Store in a way that persists within the component life
                                         sharedSecretCache.current.set(otherId, sharedSecret);
                                     }
                                 }
@@ -469,10 +555,10 @@ export default function ChatDetailScreen() {
                     }
                 }
 
-                // Load UI from secure local DB directly
+                // Load UI from secure local DB
                 const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
                 const localRows = await LocalDatabaseService.getLocalMessages(chatId);
-                const mappedMessages = localRows.map(r => {
+                const serverMessages = localRows.map(r => {
                     let msgText = r.encrypted_payload;
                     let mediaUrl = r.local_file_path;
                     let msgType = r.type;
@@ -491,6 +577,7 @@ export default function ChatDetailScreen() {
 
                     return {
                         id: r.server_id ? parseInt(r.server_id) : r.id,
+                        is_local: false, // ✅ confirmed server message
                         local_db_id: r.id,
                         sender_id: r.sender_id,
                         receiver_id: r.receiver_id,
@@ -503,15 +590,21 @@ export default function ChatDetailScreen() {
                     };
                 });
 
-                setMessages(mappedMessages);
+                // ✅ MERGE: keep pending optimistic messages, let safeSetMessages deduplicate
+                safeSetMessages(prev => {
+                    const localOnly = prev.filter(m => m.is_local === true);
+                    return [...serverMessages, ...localOnly];
+                });
+
                 if (AppState.currentState === 'active') {
                     const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
-
                     if (shouldMarkRead) updateMessageStatus('seen');
                 }
             }
         } catch (error: any) {
             if (error.name !== 'AbortError') console.error('Error fetching messages:', error);
+        } finally {
+            isFetchingRef.current = false; // 🔓 Always release the guard
         }
     };
 
@@ -633,14 +726,22 @@ export default function ChatDetailScreen() {
             });
 
             socket.current.on('message:new', async (data: any) => {
-                console.log(`[Socket] Received message:new from ${data.sender_id} in room ${data.room}`);
+                console.log(`[Socket] Received message:new from ${data.sender_id}`);
 
-                // Determine if this message belongs here
+                // ── Determine if this message belongs to THIS chat ──
                 const belongsHere = isGroup
                     ? String(data.room) === `group_${id}`
-                    : (String(data.sender_id) === String(id) || String(data.receiver_id) === String(currentUser.id));
+                    : (
+                        // 1-on-1: must be from the OTHER user to us
+                        String(data.sender_id) === String(id) &&
+                        String(data.receiver_id ?? currentUser.id) === String(currentUser.id)
+                    );
 
                 if (!belongsHere) return;
+
+                // ── Skip own messages: we already have the optimistic message ──
+                // The sender already handled state update in handleSend()
+                if (String(data.sender_id) === String(currentUser.id)) return;
 
                 // Add to Local DB
                 try {
@@ -673,8 +774,11 @@ export default function ChatDetailScreen() {
                         } catch (e) { console.error("Realtime decryption failed", e); }
                     }
 
+                    // Use real server message_id if available (emitted by sender after server confirms)
+                    const realId = data.message_id ?? data.temp_id ?? `sock_${Date.now()}`;
+
                     await LocalDatabaseService.insertMessage({
-                        server_id: data.temp_id, // Might not have real ID yet, use temp or generate one
+                        server_id: String(realId),
                         chat_id: chatId,
                         sender_id: data.sender_id.toString(),
                         receiver_id: isGroup ? undefined : currentUser.id.toString(),
@@ -684,13 +788,25 @@ export default function ChatDetailScreen() {
                         status: 'delivered'
                     });
 
+                    // ✅ Merge directly into state — no fetchMessages() call to avoid double-fire
+                    const incomingMsg = {
+                        id: realId,
+                        temp_id: data.temp_id,
+                        sender_id: data.sender_id,
+                        receiver_id: isGroup ? null : currentUser.id,
+                        message_text: decryptedPayload,
+                        media_url: data.media_url || null,
+                        message_type: data.message_type || 'text',
+                        status: 'delivered',
+                        is_local: false,
+                        created_at: data.timestamp || new Date().toISOString(),
+                    };
+                    safeSetMessages(prev => [...prev, incomingMsg]);
+
                     // Mark as seen automatically if chat is open
                     if (AppState.currentState === 'active') {
-                        updateMessageStatus('seen', [data.temp_id]);
+                        updateMessageStatus('seen', [realId]);
                     }
-
-                    // Refresh UI
-                    fetchMessages(signal);
 
                 } catch (e) {
                     console.error("Socket insert error", e);
@@ -700,7 +816,7 @@ export default function ChatDetailScreen() {
             socket.current.on('message:delivered', (data: any) => {
                 // If it's for another room we don't care (server isolates rooms but good to be safe)
                 // For 1-on-1, room is our own user room.
-                setMessages(prev => prev.map(m =>
+                safeSetMessages(prev => prev.map(m =>
                     (data.message_ids && data.message_ids.includes(m.id)) || !data.message_ids
                         ? { ...m, status: m.status === 'seen' ? 'seen' : 'delivered' }
                         : m
@@ -708,7 +824,7 @@ export default function ChatDetailScreen() {
             });
 
             socket.current.on('message:read', (data: any) => {
-                setMessages(prev => prev.map(m =>
+                safeSetMessages(prev => prev.map(m =>
                     (data.message_ids && data.message_ids.includes(m.id)) || !data.message_ids
                         ? { ...m, status: 'seen' }
                         : m
@@ -732,7 +848,7 @@ export default function ChatDetailScreen() {
                     }
                 } catch (e) { }
 
-                setMessages(prev => prev.map(m => m.id === data.message_id || String(m.id) === String(data.message_id)
+                safeSetMessages(prev => prev.map(m => m.id === data.message_id || String(m.id) === String(data.message_id)
                     ? { ...m, message_text: '🚫 This message was deleted', media_url: null, message_type: 'deleted' }
                     : m
                 ));
@@ -781,6 +897,7 @@ export default function ChatDetailScreen() {
 
                         return {
                             id: r.server_id ? parseInt(r.server_id) : r.id,
+                            is_local: false, // ✅ from local DB = already confirmed
                             local_db_id: r.id,
                             sender_id: r.sender_id,
                             receiver_id: r.receiver_id,
@@ -792,7 +909,8 @@ export default function ChatDetailScreen() {
                             created_at: r.timestamp
                         };
                     });
-                    setMessages(mappedMessages);
+                    // ✅ Initial load: safeSetMessages deduplicates automatically
+                    safeSetMessages(mappedMessages);
                     // setIsLoading(false); // Keep loading until network fetch is done
                 } catch (localError) {
                     console.error("[ChatDetail] Local load failed:", localError);
@@ -894,6 +1012,7 @@ export default function ChatDetailScreen() {
 
                             return {
                                 id: r.server_id ? parseInt(r.server_id) : r.id,
+                                is_local: false, // ✅ server-confirmed
                                 local_db_id: r.id,
                                 sender_id: r.sender_id,
                                 receiver_id: r.receiver_id,
@@ -906,7 +1025,11 @@ export default function ChatDetailScreen() {
                             };
                         });
 
-                        setMessages(updatedMappedMessages);
+                        // ✅ MERGE: keep any new optimistic messages sent during the network round-trip
+                        safeSetMessages(prev => {
+                            const localOnly = prev.filter(m => m.is_local === true);
+                            return [...updatedMappedMessages, ...localOnly];
+                        });
                         // Mark seen if active
                         if (AppState.currentState === 'active') {
                             const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
@@ -988,9 +1111,22 @@ export default function ChatDetailScreen() {
         }, [id, currentUser, isDbReady]) // Re-run deeply when ID changes
     );
 
-    const handleSend = async (messageText: string = inputText, mediaPath: string | null = null, mediaType: 'text' | 'image' | 'video' | 'audio' | 'document' | 'gif' | 'sticker' = 'text', isRetry = false, isOneTime = false, scheduledAt: Date | null = null, extraMeta: any = {}) => {
+    const handleSend = async (messageText: string = inputText, mediaPath: string | null = null, mediaType: 'text' | 'image' | 'video' | 'audio' | 'voice' | 'document' | 'gif' | 'sticker' = 'text', isRetry = false, isOneTime = false, scheduledAt: Date | null = null, extraMeta: any = {}) => {
         if (!currentUser) return null;
         if (!messageText.trim() && !mediaPath && !extraMeta?.e2e_media_payload) return null;
+
+        // --- DEBOUNCE GUARD ---
+        const now = Date.now();
+        if (lastSentRef.current &&
+            lastSentRef.current.text === messageText &&
+            lastSentRef.current.media === mediaPath &&
+            lastSentRef.current.type === mediaType &&
+            (now - lastSentRef.current.time) < 1000) {
+            console.log('handleSend: Debounced duplicate send');
+            return null;
+        }
+        lastSentRef.current = { text: messageText, media: mediaPath, type: mediaType, time: now };
+
         console.log('handleSend called:', { messageText, mediaPath, mediaType, isOneTime, scheduledAt, isGroup });
 
         // Rate Limit (Skip)
@@ -1000,17 +1136,19 @@ export default function ChatDetailScreen() {
 
         const tempId = Date.now();
         const newMessage = {
-            id: tempId,
+            id: tempId,          // temp key — will be replaced by server ID after response
+            temp_id: tempId,     // kept so we can find & replace this message in state
             sender_id: currentUser.id,
             receiver_id: isGroup ? null : id,
             group_id: isGroup ? id : null,
             message_text: messageText,
             media_url: mediaPath,
             message_type: mediaPath ? mediaType : 'text',
-            is_local: true,
+            is_local: true,      // ✅ marks this as unconfirmed / optimistic
             reply_to_message_id: replyingToMessage?.id || null,
             is_one_time: isOneTime ? 1 : 0,
             status: scheduledAt ? 'scheduled' : 'sending',
+            created_at: new Date().toISOString(),
             ...extraMeta
         };
 
@@ -1023,7 +1161,8 @@ export default function ChatDetailScreen() {
                 reply_type: replyingToMessage?.message_type,
                 reply_media_url: replyingToMessage?.media_url
             };
-            setMessages(prev => [...prev, localMessage]);
+            // ✅ safeSetMessages deduplicates — rapid taps can never cause duplicate optimistic messages
+            safeSetMessages(prev => [...prev, localMessage]);
 
             // --- LOCAL DB INSERT ---
             try {
@@ -1131,19 +1270,39 @@ export default function ChatDetailScreen() {
                         } catch (e) { console.error(e); }
                     }
 
+                    // ✅ Replace optimistic temp message with server-confirmed ID + server timestamp
+                    if (data.message_id) {
+                        safeSetMessages(prev =>
+                            prev.map(m =>
+                                m.id === tempId || m.temp_id === tempId
+                                    ? {
+                                        ...m,
+                                        id: data.message_id,
+                                        temp_id: tempId,
+                                        is_local: false,
+                                        status: 'sent',
+                                        created_at: data.created_at || m.created_at,
+                                    }
+                                    : m
+                            )
+                        );
+                    }
+
                     // --- REALTIME SOCKET FORWARDING ---
                     if (socket.current) {
                         const targetRoom = isGroup ? `group_${id}` : `user_${id}`;
                         socket.current.emit("message:new", {
                             room: targetRoom,
                             sender_id: currentUser.id,
+                            // Send BOTH the real server id AND temp_id so receiver can deduplicate
+                            message_id: data.message_id,
                             temp_id: tempId,
-                            encrypted_payload: messageText, // Forward ciphertext
+                            encrypted_payload: messageText,
                             timestamp: newMessage.created_at,
                             message_type: newMessage.message_type,
                             reply_to_message_id: newMessage.reply_to_message_id,
                             is_one_time: newMessage.is_one_time,
-                            media_url: newMessage.media_url // E2E payload handles actual media string
+                            media_url: newMessage.media_url
                         });
                     }
                 }
@@ -1423,36 +1582,85 @@ export default function ChatDetailScreen() {
             const item = mediaItems[i];
             const itemCaption = i === 0 ? caption : '';
 
-            let uploadResult;
+            let uploadResult: any = { success: false };
             let messageId: number | string | null = null;
 
-            // USE SECURE ZERO-KNOWLEDGE UPLOAD
-            uploadResult = await uploadEncryptedFile({ uri: item.uri, type: item.type, mimeType: item.mimeType, name: item.name });
-
-            if (uploadResult && uploadResult.success) {
-                messageId = await handleSend(itemCaption, item.uri, item.type, false, isOneTime, null, {
-                    e2e_media_payload: {
-                        url: uploadResult.url,
-                        key: uploadResult.key,
-                        nonce: uploadResult.nonce,
-                        tag: uploadResult.tag,
-                        mimeType: uploadResult.mimeType
-                    },
-                    file_size: item.size,
-                    duration: item.duration ? Math.ceil(item.duration / 1000) : undefined
-                });
+            try {
+                if (item.type === 'image') {
+                    // ── Standard image upload via FormData ──
+                    uploadResult = await uploadImage({
+                        uri: item.uri,
+                        type: item.mimeType || 'image/jpeg',
+                        fileName: item.name || item.uri.split('/').pop() || 'image.jpg',
+                    });
+                    if (uploadResult?.success) {
+                        const mediaUrl = uploadResult.media_url || uploadResult.image_path;
+                        messageId = await handleSend(itemCaption, mediaUrl, 'image', false, isOneTime, null, {
+                            file_size: item.size,
+                        });
+                    }
+                } else if (item.type === 'video') {
+                    // ── Standard video upload via FormData ──
+                    uploadResult = await uploadVideo({
+                        uri: item.uri,
+                        mimeType: item.mimeType || 'video/mp4',
+                        fileName: item.name || item.uri.split('/').pop() || 'video.mp4',
+                        duration: item.duration,
+                        fileSize: item.size,
+                    });
+                    if (uploadResult?.success) {
+                        const mediaUrl = uploadResult.media_url || uploadResult.video_path;
+                        messageId = await handleSend(itemCaption, mediaUrl, 'video', false, isOneTime, null, {
+                            file_size: item.size,
+                            duration: item.duration ? Math.ceil(item.duration / 1000) : undefined,
+                        });
+                    }
+                } else if (item.type === 'document') {
+                    // ── Standard document upload via FormData ──
+                    uploadResult = await uploadDocument({
+                        uri: item.uri,
+                        name: item.name || 'document',
+                        mimeType: item.mimeType || 'application/octet-stream',
+                        size: item.size,
+                    });
+                    if (uploadResult?.success) {
+                        const mediaUrl = uploadResult.media_url || uploadResult.file_path;
+                        messageId = await handleSend(itemCaption, mediaUrl, 'document', false, isOneTime, null, {
+                            file_size: item.size,
+                            file_name: item.name,
+                            mime_type: item.mimeType,
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error(`[MediaPreviewSend] Upload failed for ${item.type}:`, err);
             }
 
-            if (messageId) {
-                const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-                await MediaStorageService.copyToCache(item.uri, messageId, item.type);
+            if (messageId && item.uri) {
+                try {
+                    await MediaStorageService.copyToCache(item.uri, messageId, item.type as any);
+                } catch (e) { /* non-fatal */ }
             }
         }
-        fetchMessages();
+        // ✅ Do NOT call fetchMessages() here — socket or next poll will merge new messages
     };
+
+    const lastVoiceUploadRef = useRef<{ uri: string, time: number } | null>(null);
 
     const uploadVoiceMessage = async (uri: string, duration: number) => {
         if (!currentUser) return;
+
+        // --- DUPLICATION GUARD ---
+        // If we just uploaded THIS exact URI in the last 2 seconds, ignore.
+        const now = Date.now();
+        if (lastVoiceUploadRef.current &&
+            lastVoiceUploadRef.current.uri === uri &&
+            (now - lastVoiceUploadRef.current.time) < 2000) {
+            console.log('Skipping duplicate voice upload trigger');
+            return;
+        }
+        lastVoiceUploadRef.current = { uri, time: now };
+
         setIsUploading(true);
         const formData = new FormData();
         const filename = uri.split('/').pop() || 'voice.m4a';
@@ -1471,9 +1679,9 @@ export default function ChatDetailScreen() {
             const data = await response.json();
             if (response.ok && data.success) {
                 // Upload is complete, now send the message using centralized handler
-                const messageId = await handleSend('', data.audio_url, 'audio', false, false, null, { duration: duration });
+                const messageId = await handleSend('', data.audio_url, 'voice', false, false, null, { duration: duration });
                 if (messageId) {
-                    await MediaStorageService.copyToCache(uri, messageId, 'voice');
+                    await MediaStorageService.copyToCache(uri, messageId, 'voice' as any);
                 }
             }
         } catch (error) {
@@ -1486,10 +1694,10 @@ export default function ChatDetailScreen() {
     const handleGifSelect = async (url: string) => {
         if (!currentUser || !id) return;
         const tempId = Date.now();
-        const newMessage = { id: tempId, sender_id: currentUser.id, receiver_id: id, message_text: '', media_url: url, message_type: 'gif', status: 'sending', created_at: new Date().toISOString(), is_local: true };
-        setMessages(prev => [...prev, newMessage]);
+        const newMessage = { id: tempId, temp_id: tempId, sender_id: currentUser.id, receiver_id: id, message_text: '', media_url: url, message_type: 'gif', status: 'sending', created_at: new Date().toISOString(), is_local: true };
+        safeSetMessages(prev => [...prev, newMessage]);
         try {
-            await fetch(`${Config.API_URL}/chat/send_message.php`, {
+            const response = await fetch(`${Config.API_URL}/chat/send_message.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1498,19 +1706,29 @@ export default function ChatDetailScreen() {
                     gif_url: url
                 })
             });
-            fetchMessages();
+            if (response.ok) {
+                const data = await response.json();
+                if (data.message_id) {
+                    safeSetMessages(prev => prev.map(m => m.id === tempId || m.temp_id === tempId
+                        ? { ...m, id: data.message_id, temp_id: tempId, is_local: false, status: 'sent', created_at: data.created_at || m.created_at }
+                        : m
+                    ));
+                }
+            }
         } catch (error) {
             setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed' }]);
         }
+        // ✅ No fetchMessages() — polling will sync on next interval
     };
+
 
     const handleStickerSend = async (url: string) => {
         if (!currentUser || !id) return;
         const tempId = Date.now();
-        const newMessage = { id: tempId, sender_id: currentUser.id, receiver_id: id, message_text: '', media_url: url, message_type: 'sticker', status: 'sending', created_at: new Date().toISOString(), is_local: true };
-        setMessages(prev => [...prev, newMessage]);
+        const newMessage = { id: tempId, temp_id: tempId, sender_id: currentUser.id, receiver_id: id, message_text: '', media_url: url, message_type: 'sticker', status: 'sending', created_at: new Date().toISOString(), is_local: true };
+        safeSetMessages(prev => [...prev, newMessage]);
         try {
-            await fetch(`${Config.API_URL}/chat/send_message.php`, {
+            const response = await fetch(`${Config.API_URL}/chat/send_message.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1519,10 +1737,19 @@ export default function ChatDetailScreen() {
                     sticker_url: url
                 })
             });
-            fetchMessages();
+            if (response.ok) {
+                const data = await response.json();
+                if (data.message_id) {
+                    safeSetMessages(prev => prev.map(m => m.id === tempId || m.temp_id === tempId
+                        ? { ...m, id: data.message_id, temp_id: tempId, is_local: false, status: 'sent', created_at: data.created_at || m.created_at }
+                        : m
+                    ));
+                }
+            }
         } catch (error) {
             setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed' }]);
         }
+        // ✅ No fetchMessages() — polling will sync on next interval
     };
 
     const handleSaveEdit = async () => {
@@ -1530,7 +1757,7 @@ export default function ChatDetailScreen() {
         const originalText = editingMessage.message_text;
         const newText = inputText.trim();
         if (originalText === newText) return handleCancelEdit();
-        setMessages(prev => prev.map(m => m.id === editingMessage.id ? { ...m, message_text: newText, is_edited: true } : m));
+        safeSetMessages(prev => prev.map(m => m.id === editingMessage.id ? { ...m, message_text: newText, is_edited: true } : m));
         handleCancelEdit();
         try {
             const response = await fetch(`${Config.API_URL}/chat/edit_message.php`, {
@@ -2104,10 +2331,21 @@ export default function ChatDetailScreen() {
         if (!item) return null;
         const isMe = String(item.sender_id) === String(currentUser?.id);
         const isSelfChat = String(id) === String(currentUser?.id);
-        const nextMsg = messages[index + 1];
-        const isLastInGroup = !nextMsg ||
-            nextMsg.sender_id !== item.sender_id ||
-            formatChatTime(nextMsg.created_at) !== formatChatTime(item.created_at);
+
+        // Find the next message that will actually be rendered (has content)
+        let nextVisibleMsg = null;
+        for (let i = index + 1; i < messages.length; i++) {
+            const m = messages[i];
+            const hasContent = !!m.message_text || !!m.media_url || m.message_type === 'sticker' || m.message_type === 'voice' || !!m.is_forwarded || !!m.reply_to_message_id || !!m.is_deleted;
+            if (hasContent) {
+                nextVisibleMsg = m;
+                break;
+            }
+        }
+
+        const isLastInGroup = !nextVisibleMsg ||
+            nextVisibleMsg.sender_id !== item.sender_id ||
+            formatChatTime(nextVisibleMsg.created_at) !== formatChatTime(item.created_at);
 
         return (
             <MessageItem
@@ -2153,6 +2391,12 @@ export default function ChatDetailScreen() {
         return <ChatLockScreen unlockPin={unlockPin} setUnlockPin={setUnlockPin} handleEntryUnlock={handleEntryUnlock} />;
     }
 
+    // ── STEP 5: Stable deduplicated data array for FlashList ────────────────────
+    // NEVER spread [...messages, ...failedMessages] directly into data= because
+    // a retried failed message can appear in BOTH arrays simultaneously, causing
+    // duplicate keys. mergedMessages is always safe to pass to keyExtractor.
+    const mergedMessages = deduplicateMessages([...messages, ...failedMessages]);
+
     return (
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <ChatHeader
@@ -2194,8 +2438,8 @@ export default function ChatDetailScreen() {
                         <FlashList
                             key={id} // 4️⃣ Force re-mount on chat change
                             ref={flatListRef}
-                            data={isReady ? [...messages, ...failedMessages] : []}
-                            keyExtractor={(item) => item.id.toString()}
+                            data={isReady ? mergedMessages : []}
+                            keyExtractor={(item) => String(item.id)}
                             renderItem={renderMessage}
                             estimatedItemSize={100}
                             contentContainerStyle={{
@@ -2273,8 +2517,8 @@ export default function ChatDetailScreen() {
                         <FlashList
                             key={id} // 4️⃣ Force re-mount on chat change
                             ref={flatListRef}
-                            data={[...messages, ...failedMessages]}
-                            keyExtractor={(item) => item.id.toString()}
+                            data={mergedMessages}
+                            keyExtractor={(item) => String(item.id)}
                             renderItem={renderMessage}
                             estimatedItemSize={100}
                             contentContainerStyle={{

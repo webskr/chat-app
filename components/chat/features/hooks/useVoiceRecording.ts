@@ -124,6 +124,9 @@ export const useVoiceRecording = (onUpload: (uri: string, duration: number) => P
         const currentRecording = recordingRef.current;
         if (!currentRecording) return;
 
+        // Immediately clear the ref to prevent double calls/uploads
+        recordingRef.current = null;
+
         setRecordingStatus('stopped');
         if (recordingInterval.current) {
             clearInterval(recordingInterval.current);

@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kolkata');
 // Ensure JSON response
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -87,11 +88,13 @@ try {
         }
         
         echo json_encode([
-            "success" => true,
-            "message" => "Video uploaded successfully", 
-            "video_path" => "uploads/videos/" . $new_filename,
+            "success"        => true,
+            "message"        => "Video uploaded successfully", 
+            "video_path"     => "uploads/videos/" . $new_filename,
+            "media_url"      => "uploads/videos/" . $new_filename,
             "thumbnail_path" => $thumbnail_path,
-            "file_size" => $file_size
+            "file_size"      => $file_size,
+            "created_at"     => date('Y-m-d H:i:s')
         ]);
     } else {
         throw new Exception("Failed to move uploaded file");

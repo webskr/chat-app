@@ -1,7 +1,8 @@
 ﻿import React, { useRef } from 'react';
 import { View, StyleSheet, TouchableOpacity, Image as RNImage, Platform, Vibration, Pressable, ActivityIndicator } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { MessageSquare, Check, CheckCheck, Timer, ShieldAlert, Trash2 } from 'lucide-react-native';
+import Animated, { useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
+import { MessageSquare, Check, CheckCheck, Timer, ShieldAlert, Trash2, Forward } from 'lucide-react-native';
 import { Colors } from '../../../constants/Colors';
 import { ThemedText } from '../../../components/ThemedText';
 import { Avatar } from '../../../components/Avatar';
@@ -65,11 +66,39 @@ export const MessageItem = React.memo(({
     const isImage = (item.media_url && (item.message_type === 'image' || (!item.message_type && /\.(jpg|jpeg|png|webp)$/i.test(item.media_url)))) && !isSticker && !isGif;
     const isOneTime = Number(item.is_one_time) === 1 || item.is_one_time === true || item.is_one_time === 'true';
 
-    const renderLeftActions = () => (
-        <View style={styles.swipeActionContainer}>
-            <MessageSquare size={24} color={Colors.primary} />
-        </View>
-    );
+    const hasContent = !!item.message_text ||
+        !!item.media_url ||
+        item.message_type === 'sticker' ||
+        item.message_type === 'voice' ||
+        !!item.is_forwarded ||
+        !!item.reply_to_message_id ||
+        !!item.is_deleted;
+
+    if (!hasContent) return null;
+
+    const ForwardAction = ({ progress }: { progress: Animated.SharedValue<number> }) => {
+        const animatedStyle = useAnimatedStyle(() => ({
+            opacity: progress.value,
+            transform: [
+                {
+                    scale: interpolate(
+                        progress.value,
+                        [0, 1],
+                        [0.5, 1],
+                        Extrapolation.CLAMP
+                    ),
+                },
+            ],
+        }));
+
+        return (
+            <Animated.View style={[styles.swipeActionContainer, animatedStyle]}>
+                <Forward size={24} color={Colors.primary} />
+            </Animated.View>
+        );
+    };
+
+    const renderLeftActions = (progress: any) => <ForwardAction progress={progress} />;
 
     const handleSwipeWillOpen = () => {
         if (selectionMode) return;
@@ -152,7 +181,7 @@ export const MessageItem = React.memo(({
                     >
                         {!!item.is_forwarded && (
                             <View style={styles.forwardedIndicator}>
-                                <MessageSquare size={10} color={isMe ? '#fff' : Colors.textSecondary} opacity={0.6} style={{ transform: [{ scaleX: -1 }] }} />
+                                <Forward size={10} color={isMe ? '#fff' : Colors.textSecondary} opacity={0.6} />
                                 <ThemedText style={[styles.forwardedText, isMe && styles.myForwardedText]}>Forwarded</ThemedText>
                             </View>
                         )}
@@ -264,7 +293,7 @@ export const MessageItem = React.memo(({
                     {!!isLastInGroup && (
                         <View style={styles.timeRow}>
                             <ThemedText numberOfLines={1} style={[styles.messageTime, isMe ? styles.myMessageTime : styles.friendMessageTime]}>
-                                {item.message_type === 'voice' && item.duration ? (
+                                {(item.message_type === 'voice' || item.message_type === 'audio') && item.duration ? (
                                     `${Math.floor(item.duration / 60)}:${(item.duration % 60).toString().padStart(2, '0')} · `
                                 ) : null}
                                 {formatChatTime(item.sent_at || item.created_at)}

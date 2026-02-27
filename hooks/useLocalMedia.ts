@@ -26,11 +26,11 @@ export function useLocalMedia(
 ): string | undefined {
     // Resolve full remote URLs immediately
     const fullRemoteUrl = remoteUrl
-        ? (remoteUrl.startsWith('http') ? remoteUrl : `${Config.API_URL}/${remoteUrl.replace(/^\//, '')}`)
+        ? ((remoteUrl.startsWith('http') || remoteUrl.startsWith('file://')) ? remoteUrl : `${Config.API_URL}/${remoteUrl.replace(/^\//, '')}`)
         : undefined;
 
     const fullThumbnailUrl = thumbnailUrl
-        ? (thumbnailUrl.startsWith('http') ? thumbnailUrl : `${Config.API_URL}/${thumbnailUrl.replace(/^\//, '')}`)
+        ? ((thumbnailUrl.startsWith('http') || thumbnailUrl.startsWith('file://')) ? thumbnailUrl : `${Config.API_URL}/${thumbnailUrl.replace(/^\//, '')}`)
         : undefined;
 
     const [resolvedUri, setResolvedUri] = useState<string | undefined>(fullThumbnailUrl || fullRemoteUrl);

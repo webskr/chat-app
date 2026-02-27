@@ -132,8 +132,28 @@ export default function ChatScreen() {
                                 numberOfLines={1}
                                 style={styles.lastMessage}
                             >
-                                {/* Draft: prefix could be handled here if needed */}
-                                {item.last_message || 'No messages yet'}
+                                {(() => {
+                                    if (!item.last_message) return 'No messages yet';
+
+                                    // Handle JSON previews (for E2EE messages)
+                                    if (item.last_message.startsWith('{') && item.last_message.endsWith('}')) {
+                                        try {
+                                            const parsed = JSON.parse(item.last_message);
+                                            if (parsed.content) return parsed.content;
+                                            if (parsed.media) {
+                                                const type = parsed.media.type || '';
+                                                if (type === 'image') return '📷 Image';
+                                                if (type === 'video') return '🎥 Video';
+                                                if (type === 'voice' || type === 'audio') return '🎤 Voice Message';
+                                                if (type === 'document') return '📄 Document';
+                                                return '📎 Attachment';
+                                            }
+                                        } catch (e) {
+                                            // Fallback to raw if parsing fails
+                                        }
+                                    }
+                                    return item.last_message;
+                                })()}
                             </ThemedText>
 
                             {(item.unread_count > 0 || (item.unread_count_raw > 0)) && (

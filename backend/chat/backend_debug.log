@@ -8568,3 +8568,6 @@
 2026-02-21 17:19:43 - REQUEST RECEIVED
 2026-02-21 17:19:43 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
 2026-02-21 17:19:43 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/52102202611000060327.jpg
+2026-02-27 00:54:38 - REQUEST RECEIVED
+2026-02-27 00:54:38 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
+2026-02-27 00:54:38 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/52702202611000108062.jpg

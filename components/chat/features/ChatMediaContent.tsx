@@ -69,7 +69,7 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
                 delayLongPress={300}
                 android_ripple={null}
             >
-                {!isDownloaded ? (
+                {(!isDownloaded && !isMe) ? (
                     <View>
                         <RNImage
                             source={{ uri: resolvedDisplayUri }}
@@ -91,18 +91,18 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
                             )}
                         </View>
                     </View>
-                ) : mediaLoading ? (
+                ) : (mediaLoading && !isMe) ? (
                     <View style={[styles.messageImage, { width: 220, height: 280, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface }]}>
                         <ActivityIndicator color={Colors.primary} />
                     </View>
                 ) : (
                     <RNImage
-                        source={{ uri: cachedMediaUri ?? undefined }}
+                        source={{ uri: isMe ? resolvedDisplayUri : (cachedMediaUri ?? undefined) }}
                         style={[styles.messageImage, { width: 220, height: 280 }]}
                         resizeMode="cover"
                     />
                 )}
-                {isDownloaded && !selectionMode && (
+                {isDownloaded && !isMe && !selectionMode && (
                     <TouchableOpacity
                         style={styles.mediaDownloadButton}
                         onPress={() => saveMedia(cachedMediaUri || item.media_url, 'image')}
@@ -118,7 +118,7 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
     if (isVideo) {
         return (
             <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
-                {!isDownloaded ? (
+                {(!isDownloaded && !isMe) ? (
                     <View>
                         <VideoMessageBubble
                             videoUrl={null}
@@ -145,7 +145,7 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
                     </View>
                 ) : (
                     <VideoMessageBubble
-                        videoUrl={cachedMediaUri || item.media_url}
+                        videoUrl={isMe ? resolvedDisplayUri : (cachedMediaUri || item.media_url)}
                         thumbnailUrl={item.thumbnail_url}
                         duration={item.duration}
                         fileSize={item.file_size}
@@ -162,14 +162,14 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
         return (
             <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
                 <DocumentMessageBubble
-                    fileUrl={cachedMediaUri || item.media_url}
+                    fileUrl={isMe ? resolvedDisplayUri : (cachedMediaUri || item.media_url)}
                     fileName={item.file_name}
                     fileSize={item.file_size}
                     mimeType={item.mime_type}
                     isMe={isMe}
                     onLongPress={handleLongPress}
                 />
-                {!isDownloaded && (
+                {!isDownloaded && !isMe && (
                     <View style={[styles.downloadOverlay, { backgroundColor: 'rgba(0,0,0,0.1)' }]}>
                         <TouchableOpacity style={[styles.downloadBtn, { paddingVertical: 6 }]} onPress={downloadMedia}>
                             {isDownloading ? <ActivityIndicator color="#fff" /> : <Download size={18} color="white" />}

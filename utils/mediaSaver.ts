@@ -35,50 +35,47 @@ export const saveMedia = async (url: string, type: string, fileName?: string) =>
             return true;
         }
 
-        // 3. Handle Media (Gallery)
-        let status;
+        // 3. Request Media Library Permission
+        // On Android 13+, write-only permission is sufficient and avoids READ_EXTERNAL_STORAGE denial
+        let status: string;
         try {
-            const permissionResponse = await MediaLibrary.requestPermissionsAsync();
-            status = permissionResponse.status;
+            const writeOnly = Platform.OS === 'android';
+            const permResult = await MediaLibrary.requestPermissionsAsync(writeOnly);
+            status = permResult.status;
         } catch (e) {
-            console.log('Full permission request failed, trying writeOnly:', e);
-            try {
-                const writePermissionResponse = await MediaLibrary.requestPermissionsAsync(true);
-                status = writePermissionResponse.status;
-            } catch (e2) {
-                console.log('WriteOnly permission request failed:', e2);
-                status = 'denied';
-            }
+            console.log('Permission request failed:', e);
+            status = 'denied';
         }
 
         if (status !== 'granted') {
-            // Fallback to Share for Expo Go or denied permissions
-            await attemptShare(downloadResult.uri, 'Media Library permission denied (or not available in Expo Go). Sharing file instead.');
+            await attemptShare(downloadResult.uri, 'Media Library permission denied. Sharing file instead.');
             return false;
         }
 
         try {
+            // 4. Create asset first — this triggers creation of Android/media/com.skr.vegarm
             const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
-            // 4. Create or Reuse Album
+
+            // 5. Create or reuse album (must create asset before album)
             let album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
             if (album === null) {
+                // createAlbumAsync moves the asset into a new album folder
                 await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
             } else {
                 await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
             }
-            Alert.alert('Success', `Saved to ${ALBUM_NAME} album`);
+            Alert.alert('Saved', `Saved to ${ALBUM_NAME} album`);
             return true;
         } catch (saveError: any) {
-            console.log('MediaLibrary save failed (likely Expo Go limitation):', saveError);
-            await attemptShare(downloadResult.uri, 'Could not save to Library (likely Expo Go limitation). Shared instead.');
+            console.log('MediaLibrary save failed (likely Expo Go):', saveError);
+            await attemptShare(downloadResult.uri, 'Could not save to Gallery. Sharing instead.');
             return false;
         }
 
     } catch (error: any) {
         console.error('Media save error:', error);
-        // Specific handling if the error percolated up
-        if (error.message && error.message.includes('ExpoMediaLibrary') && localUri) {
-            await attemptShare(localUri, 'Saving this media requires native permissions not present in Expo Go. Sharing instead.');
+        if (localUri) {
+            await attemptShare(localUri, 'Failed to save. Sharing instead.');
             return false;
         }
         Alert.alert('Error', 'Failed to download or save media.');

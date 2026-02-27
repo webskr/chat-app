@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kolkata');
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Content-Type: application/json; charset=UTF-8");
@@ -99,7 +100,8 @@ try {
         "message"        => "Image uploaded successfully",
         "image_path"     => "uploads/" . $new_filename,
         "media_url"      => "uploads/" . $new_filename,
-        "thumbnail_path" => $thumbnail_path ?? ("uploads/" . $new_filename), // fallback to full if thumb failed
+        "thumbnail_path" => $thumbnail_path ?? ("uploads/" . $new_filename),
+        "created_at"     => date('Y-m-d H:i:s')
     ]);
 
 } catch (Throwable $e) {

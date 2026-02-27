@@ -7,7 +7,28 @@
 export const formatChatTime = (dateString: string | Date): string => {
     if (!dateString) return '';
 
-    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+    let date: Date;
+    if (typeof dateString === 'string') {
+        let normalized = dateString;
+        // If it's a standard YYYY-MM-DD HH:MM:SS from PHP, it lacks 'T'.
+        if (normalized.includes(' ') && !normalized.includes('T')) {
+            normalized = normalized.replace(' ', 'T');
+        }
+
+        // If there's no timezone indicator (Z or +/-), most modern JS engines 
+        // parse 'YYYY-MM-DDTHH:mm:ss' as local time. 
+        // If the server IS sending UTC but without 'Z', we might need to append it.
+        // Given the user's request for "India time" and local XAMPP setup, 
+        // local parsing is usually safer.
+        date = new Date(normalized);
+
+        // Check if parsing failed
+        if (isNaN(date.getTime())) {
+            date = new Date(dateString);
+        }
+    } else {
+        date = dateString;
+    }
     const now = new Date();
 
     // Reset times to compare dates only
