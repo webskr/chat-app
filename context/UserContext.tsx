@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { registerForPushNotificationsAsync } from '../utils/notifications';
 import { Config } from '../constants/Config';
 import { LocalDatabaseService } from '../utils/LocalDatabaseService';
+import { initMediaFolder } from '../utils/initMediaFolder';
 
 interface User {
     id: string;
@@ -64,6 +65,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 await LocalDatabaseService.initDB(String(parsedUser.id));
                 setIsDbReady(true);
                 console.log("[UserContext] isDbReady set to true.");
+                // 🗂️ Ensure Android/media/com.skr.vegarm folder exists
+                initMediaFolder().catch(() => { });
             }
         } catch (error) {
             console.error('[UserContext] Error loading user:', error);
@@ -121,6 +124,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             if (newUser) {
                 await LocalDatabaseService.initDB(newUser.id.toString());
                 setIsDbReady(true);
+                // 🗂️ Ensure Android/media/com.skr.vegarm folder exists (first login)
+                initMediaFolder().catch(() => { });
             } else {
                 setIsDbReady(false);
             }

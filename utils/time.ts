@@ -1,50 +1,57 @@
 /**
- * Formats a date string into a user-friendly chat timestamp.
+ * Formats a date string into a user-friendly chat timestamp in IST (India).
  * - Today: 10:42 AM
- * - Yesterday: Yesterday
- * - Older: 12 Jan 2026
+ * - Yesterday: Yesterday, 10:42 AM
+ * - Older: 12 Jan 2026, 10:42 AM
+ *
+ * Server sends PHP/MySQL timestamps in UTC without a timezone indicator.
+ * We append 'Z' so JS parses them correctly as UTC, then display in IST.
  */
 export const formatChatTime = (dateString: string | Date): string => {
     if (!dateString) return '';
 
+    const IST = 'Asia/Kolkata';
+
     let date: Date;
     if (typeof dateString === 'string') {
-        let normalized = dateString;
-        // If it's a standard YYYY-MM-DD HH:MM:SS from PHP, it lacks 'T'.
+        let normalized = dateString.trim();
+        // PHP MySQL format: '2024-01-10 14:30:00' — convert space to T
         if (normalized.includes(' ') && !normalized.includes('T')) {
             normalized = normalized.replace(' ', 'T');
         }
-
-        // If there's no timezone indicator (Z or +/-), most modern JS engines 
-        // parse 'YYYY-MM-DDTHH:mm:ss' as local time. 
-        // If the server IS sending UTC but without 'Z', we might need to append it.
-        // Given the user's request for "India time" and local XAMPP setup, 
-        // local parsing is usually safer.
+        // If no timezone indicator, server is sending UTC — append Z
+        if (!normalized.endsWith('Z') && !/[+\-]\d{2}:\d{2}$/.test(normalized)) {
+            normalized = normalized + 'Z';
+        }
         date = new Date(normalized);
-
-        // Check if parsing failed
         if (isNaN(date.getTime())) {
             date = new Date(dateString);
         }
     } else {
         date = dateString;
     }
-    const now = new Date();
 
-    // Reset times to compare dates only
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (isNaN(date.getTime())) return '';
+
+    // Get IST "now" and IST equivalent of the message date
+    const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: IST }));
+    const dateIST = new Date(date.toLocaleString('en-US', { timeZone: IST }));
+
+    const today = new Date(nowIST.getFullYear(), nowIST.getMonth(), nowIST.getDate());
     const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setDate(today.getDate() - 1);
+    const compareDate = new Date(dateIST.getFullYear(), dateIST.getMonth(), dateIST.getDate());
 
-    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-    // Manual Time Format (h:mm A)
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const formattedHours = hours % 12 || 12;
-    const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
-    const timeStr = `${formattedHours}:${formattedMinutes} ${ampm}`;
+    // Format time in IST: h:mm AM/PM
+    const timeStr = date
+        .toLocaleTimeString('en-IN', {
+            timeZone: IST,
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+        })
+        .replace(/\u202f/g, ' ')   // replace narrow no-break space
+        .toUpperCase();
 
     if (compareDate.getTime() === today.getTime()) {
         return timeStr;
@@ -54,11 +61,7 @@ export const formatChatTime = (dateString: string | Date): string => {
         return `Yesterday, ${timeStr}`;
     }
 
-    // Manual Date Format (d MMM yyyy, h:mm A)
-    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const day = date.getDate();
-    const month = MONTHS[date.getMonth()];
-    const year = date.getFullYear();
-
-    return `${day} ${month} ${year}, ${timeStr}`;
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${dateIST.getDate()} ${MONTHS[dateIST.getMonth()]} ${dateIST.getFullYear()}, ${timeStr}`;
 };

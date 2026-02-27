@@ -1,3 +1,18 @@
+/**
+ * mediaSaver.ts
+ *
+ * Downloads a remote media URL and saves it to the user's gallery.
+ *
+ * Save locations:
+ *  • Images/Videos → MediaLibrary → "Vegarm" album  (Pictures/Vegarm/)
+ *  • Documents      → Expo Sharing sheet (system file picker / Files app)
+ *
+ * Android/media/com.skr.vegarm is the app's EXTERNAL FILES dir, not the
+ * public gallery.  It is created automatically by initMediaFolder on first
+ * login via MediaLibrary. The gallery album (Pictures/Vegarm) is the correct
+ * public location for user-saved media.
+ */
+
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -6,79 +21,127 @@ import { Config } from '../constants/Config';
 
 const ALBUM_NAME = 'Vegarm';
 
-const attemptShare = async (uri: string, message: string) => {
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+/** Turn any relative or absolute URL into a fully-qualified http URL. */
+function resolveUrl(url: string): string {
+    if (!url) return url;
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://')) {
+        return url;
+    }
+    // Strip leading slash to avoid double-slash
+    return `${Config.API_URL}/${url.replace(/^\/+/, '')}`;
+}
+
+/** Show a share sheet as fallback when gallery save fails. */
+async function shareAsFallback(uri: string, reason: string): Promise<void> {
     Alert.alert(
         'Save Issue',
-        message,
-        [{ text: 'Share/Save to Files', onPress: () => Sharing.shareAsync(uri) }]
+        reason,
+        [{ text: 'Share / Save to Files', onPress: () => Sharing.shareAsync(uri) }]
     );
-};
+}
 
-export const saveMedia = async (url: string, type: string, fileName?: string) => {
-    let localUri: string | null = null;
+// ─── main export ──────────────────────────────────────────────────────────────
+
+export const saveMedia = async (
+    url: string,
+    type: string,
+    fileName?: string
+): Promise<boolean> => {
+
+    const fullUrl = resolveUrl(url);
+
+    // Derive a sensible filename
+    const ext = fullUrl.split('?')[0].split('.').pop()?.toLowerCase() || 'bin';
+    const name = fileName || `vegarm_${Date.now()}.${ext}`;
+    const localUri = `${FileSystem.cacheDirectory}${name}`;
+
+    // ── Step 1: Download to local cache ───────────────────────────────────────
+    let downloadedUri: string = localUri;
     try {
-        const fullUrl = url.startsWith('http') ? url : `${Config.API_URL}/${url.replace(/^\//, '')}`;
-        const extension = fullUrl.split('.').pop()?.split('?')[0] || '';
-        const name = fileName || `media_${Date.now()}.${extension}`;
-        localUri = `${FileSystem.cacheDirectory}${name}`;
+        console.log(`[saveMedia] Downloading: ${fullUrl}`);
 
-        // 1. Download to cache
-        const downloadResult = await FileSystem.downloadAsync(fullUrl, localUri);
+        const result = await FileSystem.downloadAsync(fullUrl, localUri);
 
-        if (downloadResult.status !== 200) {
-            throw new Error('Failed to download file');
+        console.log(`[saveMedia] Download status: ${result.status}, uri: ${result.uri}`);
+
+        // Some servers return redirects (301/302) that Expo follows automatically.
+        // Treat anything outside 200-299 as a failure.
+        if (result.status < 200 || result.status >= 300) {
+            throw new Error(`Server returned HTTP ${result.status} for ${fullUrl}`);
         }
 
-        // 2. Handle Documents (Sharing API)
-        if (type === 'document') {
-            await Sharing.shareAsync(downloadResult.uri);
-            return true;
-        }
+        downloadedUri = result.uri;
+    } catch (downloadError: any) {
+        console.error('[saveMedia] Download failed:', downloadError?.message || downloadError);
 
-        // 3. Request Media Library Permission
-        // On Android 13+, write-only permission is sufficient and avoids READ_EXTERNAL_STORAGE denial
-        let status: string;
+        // If we already have a local file from a previous download (cached), use it
+        const info = await FileSystem.getInfoAsync(localUri).catch(() => ({ exists: false } as any));
+        if (info.exists) {
+            console.log('[saveMedia] Using previously cached file as fallback.');
+            downloadedUri = localUri;
+        } else {
+            Alert.alert(
+                'Download Failed',
+                `Could not download the file.\n\nURL tried: ${fullUrl}\n\nMake sure the server is reachable.`
+            );
+            return false;
+        }
+    }
+
+    // ── Step 2: Documents → share sheet ───────────────────────────────────────
+    if (type === 'document') {
         try {
-            const writeOnly = Platform.OS === 'android';
-            const permResult = await MediaLibrary.requestPermissionsAsync(writeOnly);
-            status = permResult.status;
+            await Sharing.shareAsync(downloadedUri);
+            return true;
         } catch (e) {
-            console.log('Permission request failed:', e);
-            status = 'denied';
-        }
-
-        if (status !== 'granted') {
-            await attemptShare(downloadResult.uri, 'Media Library permission denied. Sharing file instead.');
+            Alert.alert('Error', 'Could not open the share sheet.');
             return false;
         }
+    }
 
-        try {
-            // 4. Create asset first — this triggers creation of Android/media/com.skr.vegarm
-            const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+    // ── Step 3: Media (image / video / audio) → MediaLibrary ──────────────────
 
-            // 5. Create or reuse album (must create asset before album)
-            let album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
-            if (album === null) {
-                // createAlbumAsync moves the asset into a new album folder
-                await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
-            } else {
-                await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-            }
-            Alert.alert('Saved', `Saved to ${ALBUM_NAME} album`);
-            return true;
-        } catch (saveError: any) {
-            console.log('MediaLibrary save failed (likely Expo Go):', saveError);
-            await attemptShare(downloadResult.uri, 'Could not save to Gallery. Sharing instead.');
-            return false;
+    // Request write-only permission on Android (avoids READ_EXTERNAL_STORAGE denial on API 33+)
+    let granted = false;
+    try {
+        const writeOnly = Platform.OS === 'android';
+        const { status } = await MediaLibrary.requestPermissionsAsync(writeOnly);
+        granted = status === 'granted';
+    } catch (permErr) {
+        console.warn('[saveMedia] Permission request threw:', permErr);
+    }
+
+    if (!granted) {
+        await shareAsFallback(
+            downloadedUri,
+            'Gallery permission denied. Use the share option to save manually.'
+        );
+        return false;
+    }
+
+    try {
+        // createAssetAsync MUST come before getAlbumAsync / createAlbumAsync
+        const asset = await MediaLibrary.createAssetAsync(downloadedUri);
+
+        let album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
+        if (!album) {
+            // First time — createAlbumAsync creates the Pictures/Vegarm directory
+            await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
+        } else {
+            await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
         }
 
-    } catch (error: any) {
-        console.error('Media save error:', error);
-        if (localUri) {
-            await attemptShare(localUri, 'Failed to save. Sharing instead.');
-            return false;
-        }
-        Alert.alert('Error', 'Failed to download or save media.');
+        Alert.alert('✅ Saved', `Media saved to "${ALBUM_NAME}" album in your gallery.`);
+        return true;
+
+    } catch (saveErr: any) {
+        console.error('[saveMedia] MediaLibrary save failed:', saveErr?.message || saveErr);
+        await shareAsFallback(
+            downloadedUri,
+            'Could not save to gallery. Use the share option instead.'
+        );
         return false;
     }
 };

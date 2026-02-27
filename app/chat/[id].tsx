@@ -548,7 +548,7 @@ export default function ChatDetailScreen() {
                                 receiver_id: msg.receiver_id?.toString(),
                                 type: msg.message_type || 'text',
                                 encrypted_payload: msg.encrypted_payload || msg.message_text,
-                                local_file_path: msg.media_url && msg.media_url.startsWith('file://') ? msg.media_url : undefined,
+                                local_file_path: msg.media_url || undefined,
                                 status: msg.status || 'delivered'
                             });
                         } catch (e) { }
@@ -784,7 +784,7 @@ export default function ChatDetailScreen() {
                         receiver_id: isGroup ? undefined : currentUser.id.toString(),
                         type: data.message_type || 'text',
                         encrypted_payload: decryptedPayload,
-                        local_file_path: data.media_url && data.media_url.startsWith('file://') ? data.media_url : undefined,
+                        local_file_path: data.media_url || undefined,
                         status: 'delivered'
                     });
 
@@ -983,7 +983,7 @@ export default function ChatDetailScreen() {
                                         receiver_id: msg.receiver_id?.toString(),
                                         type: msg.message_type || 'text',
                                         encrypted_payload: msg.encrypted_payload || msg.message_text,
-                                        local_file_path: msg.media_url && msg.media_url.startsWith('file://') ? msg.media_url : undefined,
+                                        local_file_path: msg.media_url || undefined,
                                         status: msg.status || 'delivered'
                                     });
                                 } catch (e) { /* Ignore duplicates or errors during insert */ }

@@ -45,7 +45,8 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
 }) => {
 
     const isVideo = item.message_type === 'video' || (item.media_url && /\.(mp4|mov|mkv|webm)$/i.test(item.media_url));
-    const isDocument = item.message_type === 'document' || (item.media_url && !isVideo && !/\.(jpg|jpeg|png|webp|m4a|mp3|wav|aac)$/i.test(item.media_url));
+    const isGif = item.message_type === 'gif' || (item.media_url && (item.media_url.includes('tenor') || item.media_url.includes('giphy') || item.media_url.includes('.gif')));
+    const isDocument = item.message_type === 'document' || (item.media_url && !isVideo && !isGif && !/\.(jpg|jpeg|png|webp|m4a|mp3|wav|aac)$/i.test(item.media_url));
     const isImage = (item.media_url && (item.message_type === 'image' || (!item.message_type && /\.(jpg|jpeg|png|webp)$/i.test(item.media_url))));
 
     // ── Expired State ────────────────────────────────────────────────────────
@@ -110,6 +111,19 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
                         <Download size={18} color="white" />
                     </TouchableOpacity>
                 )}
+            </Pressable>
+        );
+    }
+
+    // ── GIF Rendering ────────────────────────────────────────────────────────
+    if (isGif) {
+        return (
+            <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
+                <RNImage
+                    source={{ uri: item.media_url }}
+                    style={{ width: 240, height: 240, borderRadius: 12 }}
+                    resizeMode="cover"
+                />
             </Pressable>
         );
     }

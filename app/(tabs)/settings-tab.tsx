@@ -98,14 +98,30 @@ export default function SettingsScreen() {
             console.error("Error saving settings", e);
         }
     };
-    const handleLogout = async () => {
-        try {
-            await LocalDatabaseService.wipeDatabase();
-            await setUser(null);
-            router.replace('/(auth)/login');
-        } catch (error) {
-            console.error('Error during logout:', error);
-        }
+    const handleLogout = () => {
+        Alert.alert(
+            'Log Out',
+            'Are you sure you want to log out? Your messages will remain saved on this device.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Log Out',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            // Close the DB connection without dropping any tables.
+                            // Messages and media files are fully preserved.
+                            LocalDatabaseService.resetConnection();
+                            // Remove the session (user object) from AsyncStorage.
+                            await setUser(null);
+                            router.replace('/(auth)/login');
+                        } catch (error) {
+                            console.error('[Logout] Error during logout:', error);
+                        }
+                    },
+                },
+            ]
+        );
     };
 
     return (

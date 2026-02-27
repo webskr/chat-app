@@ -8571,3 +8571,24 @@
 2026-02-27 00:54:38 - REQUEST RECEIVED
 2026-02-27 00:54:38 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
 2026-02-27 00:54:38 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/52702202611000108062.jpg
+2026-02-27 09:56:47 - REQUEST RECEIVED
+2026-02-27 09:56:47 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-02-27 09:56:47 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12702202651000057677.png
+2026-02-27 10:07:10 - REQUEST RECEIVED
+2026-02-27 10:07:10 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-02-27 10:07:10 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12702202651000057656.png
+2026-02-27 10:08:20 - REQUEST RECEIVED
+2026-02-27 10:08:20 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
+2026-02-27 10:08:20 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/52702202611000108062.jpg
+2026-02-27 10:14:24 - REQUEST RECEIVED
+2026-02-27 10:14:24 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
+2026-02-27 10:14:24 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/52702202611000108062.jpg
+2026-02-27 10:18:16 - REQUEST RECEIVED
+2026-02-27 10:18:16 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-02-27 10:18:16 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12702202651000057682.png
+2026-02-27 10:37:01 - VIDEO UPLOAD REQUEST RECEIVED
+2026-02-27 10:37:01 - Extension: mp4, Size: 5822431
+2026-02-27 10:37:01 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/videos/vid_1_27022026103701_1000056087.mp4
+2026-02-27 13:39:35 - REQUEST RECEIVED
+2026-02-27 13:39:35 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-02-27 13:39:35 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12702202651000057701.png
