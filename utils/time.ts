@@ -1,67 +1,63 @@
 /**
  * Formats a date string into a user-friendly chat timestamp in IST (India).
- * - Today: 10:42 AM
+ * - Today:     10:42 AM
  * - Yesterday: Yesterday, 10:42 AM
- * - Older: 12 Jan 2026, 10:42 AM
+ * - Older:     12 Jan 2026, 10:42 AM
  *
- * Server sends PHP/MySQL timestamps in UTC without a timezone indicator.
- * We append 'Z' so JS parses them correctly as UTC, then display in IST.
+ * ⚠️  Hermes-safe: does NOT use toLocaleString() or Intl.DateTimeFormat
+ *     since Hermes cannot parse locale-formatted date strings.
+ *     Instead we manually shift UTC → IST by adding 5h30m offset.
  */
+
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000; // 330 min in ms
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 export const formatChatTime = (dateString: string | Date): string => {
     if (!dateString) return '';
 
-    const IST = 'Asia/Kolkata';
-
+    // ── 1. Parse to UTC Date ────────────────────────────────────────────────
     let date: Date;
     if (typeof dateString === 'string') {
-        let normalized = dateString.trim();
-        // PHP MySQL format: '2024-01-10 14:30:00' — convert space to T
-        if (normalized.includes(' ') && !normalized.includes('T')) {
-            normalized = normalized.replace(' ', 'T');
+        let s = dateString.trim();
+        // PHP/MySQL: '2024-01-10 14:30:00' → needs T separator
+        if (s.includes(' ') && !s.includes('T')) {
+            s = s.replace(' ', 'T');
         }
-        // If no timezone indicator, server is sending UTC — append Z
-        if (!normalized.endsWith('Z') && !/[+\-]\d{2}:\d{2}$/.test(normalized)) {
-            normalized = normalized + 'Z';
+        // No timezone indicator → server is UTC, append Z
+        if (!s.endsWith('Z') && !/[+\-]\d{2}:\d{2}$/.test(s)) {
+            s += 'Z';
         }
-        date = new Date(normalized);
-        if (isNaN(date.getTime())) {
-            date = new Date(dateString);
-        }
+        date = new Date(s);
+        if (isNaN(date.getTime())) date = new Date(dateString);
     } else {
         date = dateString;
     }
 
     if (isNaN(date.getTime())) return '';
 
-    // Get IST "now" and IST equivalent of the message date
-    const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: IST }));
-    const dateIST = new Date(date.toLocaleString('en-US', { timeZone: IST }));
+    // ── 2. Shift to IST (UTC+5:30) ─────────────────────────────────────────
+    // Create a synthetic UTC Date whose getUTC* methods give the IST values.
+    const istDate = new Date(date.getTime() + IST_OFFSET_MS);
+    const nowIST = new Date(Date.now() + IST_OFFSET_MS);
 
-    const today = new Date(nowIST.getFullYear(), nowIST.getMonth(), nowIST.getDate());
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    const compareDate = new Date(dateIST.getFullYear(), dateIST.getMonth(), dateIST.getDate());
+    // ── 3. Day comparison (date-only, in IST) ───────────────────────────────
+    const toDay = (d: Date) =>
+        Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 
-    // Format time in IST: h:mm AM/PM
-    const timeStr = date
-        .toLocaleTimeString('en-IN', {
-            timeZone: IST,
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-        })
-        .replace(/\u202f/g, ' ')   // replace narrow no-break space
-        .toUpperCase();
+    const msgDay = toDay(istDate);
+    const today = toDay(nowIST);
+    const yesterday = today - 24 * 60 * 60 * 1000;
 
-    if (compareDate.getTime() === today.getTime()) {
-        return timeStr;
-    }
+    // ── 4. Format time h:mm AM/PM ───────────────────────────────────────────
+    let h = istDate.getUTCHours();
+    const m = istDate.getUTCMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    const timeStr = `${h}:${m < 10 ? '0' : ''}${m} ${ampm}`;
 
-    if (compareDate.getTime() === yesterday.getTime()) {
-        return `Yesterday, ${timeStr}`;
-    }
+    // ── 5. Return appropriate format ────────────────────────────────────────
+    if (msgDay === today) return timeStr;
+    if (msgDay === yesterday) return `Yesterday, ${timeStr}`;
 
-    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${dateIST.getDate()} ${MONTHS[dateIST.getMonth()]} ${dateIST.getFullYear()}, ${timeStr}`;
+    return `${istDate.getUTCDate()} ${MONTHS[istDate.getUTCMonth()]} ${istDate.getUTCFullYear()}, ${timeStr}`;
 };

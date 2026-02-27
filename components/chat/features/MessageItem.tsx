@@ -151,6 +151,25 @@ export const MessageItem = React.memo(({
                 )}
 
                 <View style={[styles.bubbleWrapper, isMe ? styles.myBubbleWrapper : styles.friendBubbleWrapper]}>
+                    {!!isSelected && selectedCount === 1 && (
+                        <GlassCard style={[
+                            styles.emojiPicker,
+                            isMe ? styles.emojiPickerRight : styles.emojiPickerLeft,
+                        ]}>
+                            <View style={styles.emojiRow}>
+                                {EMOJIS.map(emoji => (
+                                    <TouchableOpacity key={emoji} onPress={() => onReaction(item.id, emoji)} style={styles.emojiButton}>
+                                        <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
+                                    </TouchableOpacity>
+                                ))}
+                                {isMe && !item.is_deleted && (
+                                    <TouchableOpacity style={styles.deleteButton} onPress={() => onDelete(item.id)}>
+                                        <Trash2 size={20} color={Colors.error} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </GlassCard>
+                    )}
                     {!isMe && !!isGroupChat && !isSelfChat && (
                         <ThemedText style={[styles.senderName, {
                             color: (() => {
@@ -323,22 +342,7 @@ export const MessageItem = React.memo(({
                         </View>
                     )}
 
-                    {!!isSelected && selectedCount === 1 && (
-                        <GlassCard style={styles.emojiPicker}>
-                            <View style={styles.emojiRow}>
-                                {EMOJIS.map(emoji => (
-                                    <TouchableOpacity key={emoji} onPress={() => onReaction(item.id, emoji)} style={styles.emojiButton}>
-                                        <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
-                                    </TouchableOpacity>
-                                ))}
-                                {isMe && !item.is_deleted && (
-                                    <TouchableOpacity style={styles.deleteButton} onPress={() => onDelete(item.id)}>
-                                        <Trash2 size={20} color={Colors.error} />
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        </GlassCard>
-                    )}
+
                 </View>
             </View>
         </ReanimatedSwipeable>
@@ -353,7 +357,6 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingHorizontal: 16,
         paddingVertical: 1,
-        overflow: 'hidden',
     },
     selectedRow: {
         backgroundColor: 'rgba(0, 128, 0, 0.2)',
@@ -366,7 +369,7 @@ const styles = StyleSheet.create({
     myRow: { alignSelf: 'flex-end' },
     friendRow: { alignSelf: 'flex-start' },
     avatarPlaceholder: { width: 32, height: 32 },
-    bubbleWrapper: { maxWidth: '85%', position: 'relative' },
+    bubbleWrapper: { maxWidth: '85%', position: 'relative', overflow: 'visible' },
     myBubbleWrapper: { alignItems: 'flex-end' },
     friendBubbleWrapper: { alignItems: 'flex-start' },
     bubble: {
@@ -421,7 +424,9 @@ const styles = StyleSheet.create({
     reactionBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4 },
     reactionEmoji: { fontSize: 12 },
     reactionCount: { fontSize: 10, color: Colors.textSecondary },
-    emojiPicker: { position: 'absolute', top: -50, right: 0, zIndex: 1000, padding: 8, borderRadius: 24 },
+    emojiPicker: { padding: 8, borderRadius: 24, marginBottom: 4 },
+    emojiPickerRight: { alignSelf: 'flex-end' },
+    emojiPickerLeft: { alignSelf: 'flex-start' },
     emojiRow: { flexDirection: 'row', alignItems: 'center' },
     emojiButton: { padding: 6 },
     emojiText: { fontSize: 20 },
