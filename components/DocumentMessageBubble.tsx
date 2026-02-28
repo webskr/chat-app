@@ -100,9 +100,6 @@ export const DocumentMessageBubble: React.FC<DocumentMessageBubbleProps> = ({ fi
                     {displaySize} • {(mimeType ? mimeType.split('/')[1] : 'FILE')?.toUpperCase() || 'FILE'}
                 </ThemedText>
             </View>
-            <View style={styles.downloadIcon}>
-                <Download size={20} color={Colors.textSecondary} />
-            </View>
         </TouchableOpacity>
     );
 };

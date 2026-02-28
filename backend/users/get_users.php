@@ -27,9 +27,9 @@ try {
     $myPrivacy = $myPrivacyStmt->fetch(PDO::FETCH_ASSOC);
     $iCanSeeLastSeen = $myPrivacy ? (bool)$myPrivacy['privacy_last_seen'] : true;
 
-     $query = "SELECT u.id, u.username, u.display_name, u.scramble_name, u.email, u.avatar_id, u.avatar_url, u.bio, 
+     $query = "SELECT u.id, u.username, u.display_name, u.scramble_enabled, u.scramble_value, u.email, u.avatar_id, u.avatar_url, u.bio, 
                      u.links,
-                     u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.show_in_world, u.neon_color, u.border_color, u.button_color, u.is_official,
+                     u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.show_in_world, u.neon_color, u.border_color, u.button_color, u.is_official, u.is_online, u.last_active,
               (SELECT status FROM relationships WHERE user_id = :uid1 AND target_id = u.id) as sent_status,
               (SELECT status FROM relationships WHERE user_id = u.id AND target_id = :uid2) as received_status
               FROM users u WHERE u.id != :uid3 ORDER BY u.display_name ASC, u.username ASC";
@@ -79,45 +79,17 @@ try {
         // UPDATED: Avatars are now ALWAYS visible per user request.
         if (isset($user['privacy_profile_visibility']) && $user['privacy_profile_visibility'] === 'private' && $user['relationship_status'] !== 'accepted') {
             $user['bio'] = null;
-            // $user['avatar_id'] = 'default'; // Custom: Always show avatar
-            // $user['avatar_url'] = null;     // Custom: Always show avatar
         }
 
-        // Check if scrambling is needed
-        // If scramble_name is true (1) AND relationship is NOT accepted (friend)
-        if (!empty($user['scramble_name']) && $user['relationship_status'] !== 'accepted') {
-            
-            // Scramble display_name
-            if (!empty($user['display_name'])) {
-                $original = $user['display_name'];
-                if (strlen($original) > 1) {
-                    $arr = str_split($original);
-                    shuffle($arr);
-                    $scrambled = implode('', $arr);
-                    // Ensure it's different if possible (simple check)
-                    if ($scrambled === $original) {
-                        shuffle($arr);
-                        $scrambled = implode('', $arr);
-                    }
-                    $user['display_name'] = $scrambled;
-                }
-            }
-
-            // Scramble username
-            if (!empty($user['username'])) {
-                $original = $user['username'];
-                if (strlen($original) > 1) {
-                    $arr = str_split($original);
-                    shuffle($arr);
-                    $scrambled = implode('', $arr);
-                     if ($scrambled === $original) {
-                        shuffle($arr);
-                        $scrambled = implode('', $arr);
-                    }
-                    $user['username'] = $scrambled;
-                }
-            }
+        // Scramble logic
+        // If this user in the list IS the requester AND they have scrambling enabled
+        if ((string)$user['id'] === (string)$user_id && !empty($user['scramble_enabled']) && !empty($user['scramble_value'])) {
+            $user['display_name'] = $user['scramble_value'];
+            $user['username'] = "scrambled_" . substr($user['scramble_value'], -4);
         }
+        
+        // Remove sensitive fields
+        unset($user['scramble_value']);
         
         // ADDED: Push the processed user to the results array
         $users[] = $user;

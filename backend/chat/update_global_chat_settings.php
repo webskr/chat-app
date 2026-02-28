@@ -37,8 +37,16 @@ if (!empty($data->user_id) && (
         }
 
         if (isset($data->scramble_name)) {
-            $fieldsToUpdate[] = "scramble_name = :scramble";
-            $params[':scramble'] = $data->scramble_name ? 1 : 0;
+            $enabled = $data->scramble_name ? 1 : 0;
+            $fieldsToUpdate[] = "scramble_enabled = :sc_enabled";
+            $params[':sc_enabled'] = $enabled;
+            
+            // If toggling ON, generate a new scramble_value
+            if ($enabled) {
+                $newScramble = "User_" . substr(md5(uniqid(mt_rand(), true)), 0, 8);
+                $fieldsToUpdate[] = "scramble_value = :sc_value";
+                $params[':sc_value'] = $newScramble;
+            }
         }
 
         if (isset($data->privacy_last_seen)) {

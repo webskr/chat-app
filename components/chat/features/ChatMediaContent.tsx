@@ -72,11 +72,13 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
             >
                 {(!isDownloaded && !isMe) ? (
                     <View>
-                        <RNImage
-                            source={{ uri: resolvedDisplayUri }}
-                            style={[styles.messageImage, { width: 220, height: 280, opacity: 0.6 }]}
-                            resizeMode="cover"
-                        />
+                        {!!resolvedDisplayUri && (
+                            <RNImage
+                                source={{ uri: resolvedDisplayUri }}
+                                style={[styles.messageImage, { width: 220, height: 280, opacity: 0.6 }]}
+                                resizeMode="cover"
+                            />
+                        )}
                         <View style={styles.downloadOverlay}>
                             {isDownloading ? (
                                 <ActivityIndicator color="#fff" size="large" />
@@ -92,24 +94,14 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
                             )}
                         </View>
                     </View>
-                ) : (mediaLoading && !isMe) ? (
-                    <View style={[styles.messageImage, { width: 220, height: 280, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface }]}>
-                        <ActivityIndicator color={Colors.primary} />
-                    </View>
                 ) : (
-                    <RNImage
-                        source={{ uri: isMe ? resolvedDisplayUri : (cachedMediaUri ?? undefined) }}
-                        style={[styles.messageImage, { width: 220, height: 280 }]}
-                        resizeMode="cover"
-                    />
-                )}
-                {isDownloaded && !isMe && !selectionMode && (
-                    <TouchableOpacity
-                        style={styles.mediaDownloadButton}
-                        onPress={() => saveMedia(cachedMediaUri || item.media_url, 'image')}
-                    >
-                        <Download size={18} color="white" />
-                    </TouchableOpacity>
+                    !!(isMe ? resolvedDisplayUri : (cachedMediaUri ?? undefined)) ? (
+                        <RNImage
+                            source={{ uri: isMe ? (resolvedDisplayUri || undefined) : (cachedMediaUri || undefined) }}
+                            style={[styles.messageImage, { width: 220, height: 280 }]}
+                            resizeMode="cover"
+                        />
+                    ) : null
                 )}
             </Pressable>
         );
@@ -119,11 +111,13 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
     if (isGif) {
         return (
             <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
-                <RNImage
-                    source={{ uri: item.media_url }}
-                    style={{ width: 240, height: 240, borderRadius: 12 }}
-                    resizeMode="cover"
-                />
+                {!!item.media_url ? (
+                    <RNImage
+                        source={{ uri: item.media_url }}
+                        style={{ width: 240, height: 240, borderRadius: 12 }}
+                        resizeMode="cover"
+                    />
+                ) : null}
             </Pressable>
         );
     }

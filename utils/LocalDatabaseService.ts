@@ -133,6 +133,24 @@ export class LocalDatabaseService {
                 `);
 
                 await this.db.execute(`
+                    CREATE TABLE IF NOT EXISTS chats (
+                        id                  TEXT PRIMARY KEY,
+                        is_group            INTEGER DEFAULT 0,
+                        other_user_id       TEXT,
+                        other_username      TEXT,
+                        other_avatar_url    TEXT,
+                        other_avatar_id     INTEGER,
+                        other_is_official   INTEGER DEFAULT 0,
+                        group_name          TEXT,
+                        group_icon          TEXT,
+                        last_message        TEXT,
+                        last_message_time   DATETIME,
+                        last_message_sender TEXT,
+                        unread_count        INTEGER DEFAULT 0
+                    );
+                `);
+
+                await this.db.execute(`
                     CREATE TABLE IF NOT EXISTS status_retry_queue (
                         id         INTEGER PRIMARY KEY AUTOINCREMENT,
                         server_id  TEXT NOT NULL,
@@ -145,6 +163,14 @@ export class LocalDatabaseService {
                 await this.db.execute('CREATE INDEX IF NOT EXISTS idx_chat_id  ON messages(chat_id);');
                 await this.db.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp);');
                 await this.db.execute('CREATE INDEX IF NOT EXISTS idx_server_id ON messages(server_id);');
+                await this.db.execute('CREATE INDEX IF NOT EXISTS idx_chats_last_time ON chats(last_message_time);');
+
+                await this.db.execute(`
+                    CREATE TABLE IF NOT EXISTS settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT
+                    );
+                `);
 
                 this.isInitialized = true;
                 this.isInitializing = false;
@@ -190,21 +216,21 @@ export class LocalDatabaseService {
         encrypted_payload?: string;
         local_file_path?: string;
         status: string;
+        timestamp?: string; // Optional: use server time if provided
     }): Promise<number> {
         const db = this.getDB();
 
         try {
+            let insertId = 0;
+            const finalTimestamp = msg.timestamp || new Date().toISOString();
+
             // Path A — message has a real server_id (comes from server / socket)
             if (msg.server_id) {
                 const result = await db.execute(
-                    // INSERT OR IGNORE: if server_id already exists, do nothing.
-                    // Then UPDATE only the fields that are safe to refresh.
-                    // local_file_path is kept via COALESCE so a cached download
-                    // path is never overwritten by a NULL from a later poll.
                     `INSERT INTO messages
                         (server_id, chat_id, sender_id, receiver_id, type,
-                         encrypted_payload, local_file_path, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                         encrypted_payload, local_file_path, status, timestamp)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                      ON CONFLICT(server_id) DO UPDATE SET
                          status            = CASE
                                                 WHEN messages.status = 'seen' THEN 'seen'
@@ -212,7 +238,8 @@ export class LocalDatabaseService {
                                                 ELSE excluded.status
                                             END,
                          encrypted_payload = COALESCE(messages.encrypted_payload, excluded.encrypted_payload),
-                         local_file_path   = COALESCE(messages.local_file_path,   excluded.local_file_path)`,
+                         local_file_path   = COALESCE(messages.local_file_path,   excluded.local_file_path),
+                         timestamp         = COALESCE(excluded.timestamp, messages.timestamp)`,
                     [
                         msg.server_id,
                         msg.chat_id,
@@ -222,38 +249,74 @@ export class LocalDatabaseService {
                         msg.encrypted_payload || null,
                         msg.local_file_path || null,
                         msg.status,
+                        finalTimestamp
                     ]
                 );
-                return result.insertId || 0;
+                insertId = result.insertId || 0;
+            } else {
+                // Path B — optimistic / local message (no server_id yet)
+                const result = await db.execute(
+                    `INSERT INTO messages
+                        (server_id, chat_id, sender_id, receiver_id, type,
+                         encrypted_payload, local_file_path, status, timestamp)
+                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        msg.chat_id,
+                        msg.sender_id,
+                        msg.receiver_id || null,
+                        msg.type,
+                        msg.encrypted_payload || null,
+                        msg.local_file_path || null,
+                        msg.status,
+                        finalTimestamp
+                    ]
+                );
+                insertId = result.insertId || 0;
             }
 
-            // Path B — optimistic / local message (no server_id yet)
-            // No UNIQUE conflict possible since server_id = NULL.
-            const result = await db.execute(
-                `INSERT INTO messages
-                    (server_id, chat_id, sender_id, receiver_id, type,
-                     encrypted_payload, local_file_path, status)
-                 VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)`,
+            // AUTO-UPDATE CHATS TABLE
+            // We only update last_message and time if the new message is newer than the existing one
+            // OR if it's a new chat row.
+            await db.execute(
+                `INSERT INTO chats (id, last_message, last_message_time, last_message_sender, unread_count)
+                 VALUES (?, ?, ?, ?, ?)
+                 ON CONFLICT(id) DO UPDATE SET
+                    last_message        = CASE 
+                                            WHEN excluded.last_message_time >= chats.last_message_time OR chats.last_message_time IS NULL 
+                                            THEN excluded.last_message 
+                                            ELSE chats.last_message 
+                                          END,
+                    last_message_time   = CASE 
+                                            WHEN excluded.last_message_time >= chats.last_message_time OR chats.last_message_time IS NULL 
+                                            THEN excluded.last_message_time 
+                                            ELSE chats.last_message_time 
+                                          END,
+                    last_message_sender = CASE 
+                                            WHEN excluded.last_message_time >= chats.last_message_time OR chats.last_message_time IS NULL 
+                                            THEN excluded.last_message_sender 
+                                            ELSE chats.last_message_sender 
+                                          END,
+                    unread_count        = CASE
+                                            WHEN excluded.last_message_sender != chats.other_user_id THEN chats.unread_count
+                                            WHEN excluded.last_message_time > chats.last_message_time OR chats.last_message_time IS NULL THEN chats.unread_count + 1
+                                            ELSE chats.unread_count
+                                          END`,
                 [
                     msg.chat_id,
+                    msg.encrypted_payload || (msg.type === 'image' ? '📷 Image' : (msg.type === 'video' ? '🎥 Video' : '📎 Attachment')),
+                    finalTimestamp,
                     msg.sender_id,
-                    msg.receiver_id || null,
-                    msg.type,
-                    msg.encrypted_payload || null,
-                    msg.local_file_path || null,
-                    msg.status,
+                    0 // Default unread_count for new row
                 ]
             );
-            return result.insertId || 0;
+
+            return insertId;
 
         } catch (err: any) {
-            // Swallow constraint errors — prefer a silently-ignored dupe over
-            // a crash that breaks the sync pipeline.
             if (err?.message?.includes('UNIQUE') || err?.message?.includes('constraint')) {
                 console.warn('[DB] insertMessage: swallowed UNIQUE conflict for server_id:', msg.server_id);
                 return 0;
             }
-            // Re-throw genuinely unexpected errors
             console.error('[DB] insertMessage: unexpected error:', err);
             throw err;
         }
@@ -369,10 +432,82 @@ export class LocalDatabaseService {
         const result = await db.execute(
             `SELECT server_id FROM messages
              WHERE chat_id = ? AND server_id IS NOT NULL
-             ORDER BY id DESC LIMIT 1`,
+             ORDER BY timestamp DESC LIMIT 1`,
             [chat_id]
         );
         return (result.rows?.[0] as any)?.server_id || null;
+    }
+
+    // ── Chat List Management ──────────────────────────────────────────────────
+
+    static async getConversations(): Promise<any[]> {
+        const db = this.getDB();
+        // Use subquery to ensure we have the absolute latest status from messages
+        // while sorting the chat list by message time.
+        const result = await db.execute(`
+            SELECT 
+                c.*, 
+                m.encrypted_payload as last_message_preview,
+                m.timestamp as last_message_time_real
+            FROM chats c
+            LEFT JOIN messages m ON m.id = (
+                SELECT id FROM messages 
+                WHERE chat_id = c.id 
+                ORDER BY timestamp DESC 
+                LIMIT 1
+            )
+            ORDER BY COALESCE(m.timestamp, c.last_message_time) DESC
+        `);
+        return (result.rows || []) as any[];
+    }
+
+    static async updateChatMetadata(chatData: {
+        id: string;
+        is_group: boolean;
+        other_user_id?: string;
+        other_username?: string;
+        other_avatar_url?: string;
+        other_avatar_id?: number;
+        other_is_official?: number;
+        group_name?: string;
+        group_icon?: string;
+        unread_count?: number;
+    }): Promise<void> {
+        const db = this.getDB();
+        await db.execute(
+            `INSERT INTO chats (
+                id, is_group, other_user_id, other_username, other_avatar_url, 
+                other_avatar_id, other_is_official, group_name, group_icon, unread_count
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                is_group          = excluded.is_group,
+                other_user_id     = COALESCE(excluded.other_user_id, other_user_id),
+                other_username    = COALESCE(excluded.other_username, other_username),
+                other_avatar_url  = COALESCE(excluded.other_avatar_url, other_avatar_url),
+                other_avatar_id   = COALESCE(excluded.other_avatar_id, other_avatar_id),
+                other_is_official = COALESCE(excluded.other_is_official, other_is_official),
+                group_name        = COALESCE(excluded.group_name, group_name),
+                group_icon        = COALESCE(excluded.group_icon, group_icon),
+                unread_count      = COALESCE(excluded.unread_count, unread_count)`,
+            [
+                chatData.id,
+                chatData.is_group ? 1 : 0,
+                chatData.other_user_id || null,
+                chatData.other_username || null,
+                chatData.other_avatar_url || null,
+                chatData.other_avatar_id || null,
+                chatData.other_is_official || 0,
+                chatData.group_name || null,
+                chatData.group_icon || null,
+                chatData.unread_count || 0
+            ]
+        );
+    }
+
+    static async markChatRead(chatId: string): Promise<void> {
+        const db = this.getDB();
+        await db.execute(`UPDATE chats SET unread_count = 0 WHERE id = ?`, [chatId]);
+        await db.execute(`UPDATE messages SET status = 'seen' WHERE chat_id = ? AND status != 'seen'`, [chatId]);
     }
 
     // ── Session Management ────────────────────────────────────────────────────
@@ -417,6 +552,35 @@ export class LocalDatabaseService {
             console.log("[Security] Encrypted local database wiped and closed.");
         } catch (e) {
             console.error("[Security] Failed to wipe encrypted database:", e);
+        }
+    }
+
+    // ── Settings / Sync Time ──────────────────────────────────────────────────
+
+    static async getLastSyncTime(): Promise<string> {
+        const db = this.getDB();
+        try {
+            const result = await db.execute(`SELECT value FROM settings WHERE key = 'last_sync_time' LIMIT 1`);
+            if (result.rows && result.rows.length > 0) {
+                return result.rows[0].value;
+            }
+        } catch (e) {
+            console.error("[DB] Failed to get last_sync_time:", e);
+        }
+        return '2000-01-01 00:00:00';
+    }
+
+    static async updateLastSyncTime(time?: string): Promise<void> {
+        const db = this.getDB();
+        const syncTime = time || new Date().toISOString().replace('T', ' ').split('.')[0];
+        try {
+            await db.execute(
+                `INSERT INTO settings (key, value) VALUES ('last_sync_time', ?)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+                [syncTime]
+            );
+        } catch (e) {
+            console.error("[DB] Failed to update last_sync_time:", e);
         }
     }
 }

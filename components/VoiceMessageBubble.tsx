@@ -75,34 +75,56 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({ audioUrl
     };
 
     const handlePlayPause = async () => {
-        if (!sound) {
-            await loadSound();
-        } else {
-            if (isPlaying) {
-                await sound.pauseAsync();
+        if (!audioUrl) return;
+
+        try {
+            // Set audio mode to ensure sound plays even if device is on silent (especially for iOS)
+            await Audio.setAudioModeAsync({
+                playsInSilentModeIOS: true,
+                staysActiveInBackground: false,
+                playThroughEarpieceAndroid: false,
+            });
+
+            if (!sound) {
+                await loadSound();
             } else {
-                if (position >= currentDuration) {
-                    await sound.replayAsync();
+                if (isPlaying) {
+                    await sound.pauseAsync();
                 } else {
-                    await sound.playAsync();
+                    if (position >= currentDuration) {
+                        await sound.replayAsync();
+                    } else {
+                        await sound.playAsync();
+                    }
                 }
             }
+        } catch (error) {
+            console.error('Error handling play/pause:', error);
         }
     };
 
     useEffect(() => {
-        return () => {
-            sound?.unloadAsync();
+        // Reset state and unload previous sound when url changes (fixes FlashList recycling issues)
+        const cleanup = async () => {
+            if (sound) {
+                try {
+                    await sound.unloadAsync();
+                } catch (e) { }
+                setSound(null);
+                setIsPlaying(false);
+                setPosition(0);
+            }
         };
-    }, [sound]);
+        cleanup();
+    }, [audioUrl]);
 
     useEffect(() => {
         return () => {
             if (sound) {
-                sound.unloadAsync();
+                sound.unloadAsync().catch(() => { });
             }
         };
-    }, []);
+    }, [sound]);
 
     const progress = currentDuration > 0 ? (position / currentDuration) : 0;
     const currentBarIndex = Math.floor(progress * barCount);

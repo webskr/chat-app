@@ -5,6 +5,8 @@ import { registerForPushNotificationsAsync } from '../utils/notifications';
 import { Config } from '../constants/Config';
 import { LocalDatabaseService } from '../utils/LocalDatabaseService';
 import { initMediaFolder } from '../utils/initMediaFolder';
+import { SyncService } from '../utils/SyncService';
+import { AppState } from 'react-native';
 
 interface User {
     id: string;
@@ -47,10 +49,37 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const [user, setUserState] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isDbReady, setIsDbReady] = useState(false);
+    const isSyncingRef = React.useRef(false); // Guard against concurrent syncs
 
     useEffect(() => {
         loadUser();
-    }, []);
+    }, []); // Only on mount
+
+    useEffect(() => {
+        if (!user) return;
+
+        // AppState listener for background -> foreground sync
+        const subscription = AppState.addEventListener('change', async nextAppState => {
+            if (nextAppState === 'active') {
+                if (isSyncingRef.current) {
+                    console.log("[UserContext] Sync already in progress, skipping AppState trigger.");
+                    return;
+                }
+
+                console.log("[UserContext] App became active, triggering sync...");
+                isSyncingRef.current = true;
+                try {
+                    await SyncService.syncMissedMessages(Number(user.id));
+                } finally {
+                    isSyncingRef.current = false;
+                }
+            }
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, [user?.id]); // Depend on ID specifically to avoid unnecessary listener swaps
 
     const loadUser = async () => {
         try {
@@ -64,6 +93,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 console.log("[UserContext] Calling LocalDatabaseService.initDB...");
                 await LocalDatabaseService.initDB(String(parsedUser.id));
                 setIsDbReady(true);
+
+                // Trigger sync on initial load with guard
+                if (!isSyncingRef.current) {
+                    isSyncingRef.current = true;
+                    SyncService.syncMissedMessages(Number(parsedUser.id)).finally(() => {
+                        isSyncingRef.current = false;
+                        console.log("[UserContext] Initial sync complete.");
+                    });
+                }
+
                 console.log("[UserContext] isDbReady set to true.");
                 // 🗂️ Ensure Android/media/com.skr.vegarm folder exists
                 initMediaFolder().catch(() => { });
@@ -119,6 +158,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
             } else {
                 await AsyncStorage.removeItem('user');
+                LocalDatabaseService.resetConnection();
             }
             setUserState(newUser);
             if (newUser) {

@@ -1,17 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Image, Modal, Dimensions } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { Play, X, Download } from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
 import { ThemedText } from './ThemedText';
 import { Config } from '../constants/Config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { saveMedia } from '../utils/mediaSaver';
-
-/* 
-  RECOMMENDED: install expo-av if not already
-  npx expo install expo-av
-*/
 
 interface VideoMessageBubbleProps {
     videoUrl: string | null;
@@ -24,9 +19,43 @@ interface VideoMessageBubbleProps {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+const ThumbnailVideoContent = ({ url }: { url: string }) => {
+    const player = useVideoPlayer(url, (player) => {
+        player.muted = true;
+        player.loop = true;
+        player.play();
+    });
+
+    return (
+        <VideoView
+            player={player}
+            style={styles.thumbnail}
+            contentFit="cover"
+            nativeControls={false}
+        />
+    );
+};
+
+const FullscreenVideoContent = ({ url }: { url: string }) => {
+    const player = useVideoPlayer(url, (player) => {
+        player.loop = false;
+        player.staysActiveInBackground = false;
+        player.play();
+    });
+
+    return (
+        <VideoView
+            player={player}
+            style={styles.fullscreenVideo}
+            allowsFullscreen
+            allowsPictureInPicture
+            contentFit="contain"
+        />
+    );
+};
+
 export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl, thumbnailUrl, duration, fileSize, isMe, onLongPress }) => {
     const [modalVisible, setModalVisible] = useState(false);
-    const [status, setStatus] = useState<any>({});
 
     // Construct full URLs
     const fullVideoUrl = videoUrl ? (videoUrl.startsWith('http') ? videoUrl : `${Config.API_URL}/${videoUrl.replace(/^\//, '')}`) : null;
@@ -61,14 +90,7 @@ export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl
                     ) : (
                         <View style={[styles.thumbnail, styles.placeholder]}>
                             {fullVideoUrl && (
-                                <Video
-                                    style={styles.thumbnail}
-                                    source={{ uri: fullVideoUrl }}
-                                    useNativeControls={false}
-                                    resizeMode={ResizeMode.COVER}
-                                    shouldPlay={false}
-                                    isMuted={true}
-                                />
+                                <ThumbnailVideoContent url={fullVideoUrl} />
                             )}
                         </View>
                     )}
@@ -85,12 +107,6 @@ export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl
                         </ThemedText>
                     </View>
 
-                    <TouchableOpacity
-                        style={styles.bubbleDownloadButton}
-                        onPress={() => videoUrl && saveMedia(videoUrl, 'video')}
-                    >
-                        <Download size={18} color="white" />
-                    </TouchableOpacity>
                 </View>
             </TouchableOpacity>
 
@@ -101,21 +117,13 @@ export const VideoMessageBubble: React.FC<VideoMessageBubbleProps> = ({ videoUrl
                 onRequestClose={() => setModalVisible(false)}
             >
                 <View style={styles.modalContainer}>
-                    {fullVideoUrl ? (
-                        <Video
-                            style={styles.fullscreenVideo}
-                            source={{ uri: fullVideoUrl }}
-                            useNativeControls
-                            resizeMode={ResizeMode.CONTAIN}
-                            isLooping={false}
-                            shouldPlay={true}
-                            onPlaybackStatusUpdate={status => setStatus(() => status)}
-                        />
-                    ) : (
+                    {modalVisible && fullVideoUrl ? (
+                        <FullscreenVideoContent url={fullVideoUrl} />
+                    ) : !fullVideoUrl ? (
                         <View style={styles.modalContainer}>
                             <ThemedText style={{ color: '#fff' }}>Download video to watch</ThemedText>
                         </View>
-                    )}
+                    ) : null}
 
                     <View style={styles.headerButtons}>
                         <TouchableOpacity

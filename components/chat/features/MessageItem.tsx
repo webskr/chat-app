@@ -1,7 +1,15 @@
 ﻿import React, { useRef } from 'react';
 import { View, StyleSheet, TouchableOpacity, Image as RNImage, Platform, Vibration, Pressable, ActivityIndicator } from 'react-native';
-import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import Animated, { useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
+import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
+import Animated, {
+    useAnimatedStyle,
+    useAnimatedGestureHandler,
+    useSharedValue,
+    withSpring,
+    runOnJS,
+    interpolate,
+    Extrapolation
+} from 'react-native-reanimated';
 import { MessageSquare, Check, CheckCheck, Timer, ShieldAlert, Trash2, Forward } from 'lucide-react-native';
 import { Colors } from '../../../constants/Colors';
 import { ThemedText } from '../../../components/ThemedText';
@@ -76,36 +84,41 @@ export const MessageItem = React.memo(({
 
     if (!hasContent) return null;
 
-    const ForwardAction = ({ progress }: { progress: Animated.SharedValue<number> }) => {
-        const animatedStyle = useAnimatedStyle(() => ({
-            opacity: progress.value,
-            transform: [
-                {
-                    scale: interpolate(
-                        progress.value,
-                        [0, 1],
-                        [0.5, 1],
-                        Extrapolation.CLAMP
-                    ),
-                },
-            ],
-        }));
+    const translateX = useSharedValue(0);
+    const SWIPE_THRESHOLD = 60;
 
-        return (
-            <Animated.View style={[styles.swipeActionContainer, animatedStyle]}>
-                <Forward size={24} color={Colors.primary} />
-            </Animated.View>
-        );
-    };
+    const onGestureEvent = useAnimatedGestureHandler<PanGestureHandlerGestureEvent>({
+        onActive: (event) => {
+            // Strict horizontal check: only allow right swipe (x > 0) 
+            // and reject diagonal (y must be small)
+            if (event.translationX > 0 && Math.abs(event.translationY) < 25) {
+                // Apply a bit of resistance/clamping
+                translateX.value = Math.min(event.translationX * 0.5, SWIPE_THRESHOLD + 20);
+            } else {
+                translateX.value = 0;
+            }
+        },
+        onEnd: (event) => {
+            if (translateX.value >= SWIPE_THRESHOLD) {
+                runOnJS(onSwipe)(item);
+                if (Platform.OS !== 'web') runOnJS(Vibration.vibrate)(10);
+            }
+            translateX.value = withSpring(0);
+        },
+    });
 
-    const renderLeftActions = (progress: any) => <ForwardAction progress={progress} />;
+    const animatedContentStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: translateX.value }],
+    }));
 
-    const handleSwipeWillOpen = () => {
-        if (selectionMode) return;
-        if (Platform.OS !== 'web') Vibration.vibrate(10);
-        onSwipe(item);
-        setTimeout(() => { swipeableRef.current?.close(); }, 0);
-    };
+    const animatedIconStyle = useAnimatedStyle(() => {
+        const opacity = interpolate(translateX.value, [0, SWIPE_THRESHOLD], [0, 1], Extrapolation.CLAMP);
+        const scale = interpolate(translateX.value, [0, SWIPE_THRESHOLD], [0.5, 1], Extrapolation.CLAMP);
+        return {
+            opacity,
+            transform: [{ scale }],
+        };
+    });
 
     const handlePress = () => {
         if (selectionMode) {
@@ -126,226 +139,232 @@ export const MessageItem = React.memo(({
     };
 
     return (
-        <ReanimatedSwipeable
-            ref={swipeableRef}
-            renderLeftActions={renderLeftActions}
-            onSwipeableOpen={handleSwipeWillOpen}
-            friction={2}
-            leftThreshold={70}
-            enabled={!selectionMode}
-            overshootLeft={false}
+        <PanGestureHandler
+            onGestureEvent={onGestureEvent}
+            activeOffsetX={[0, 10]} // Only trigger on right swipe
+            failOffsetY={[-20, 20]}  // Fail if there's significant vertical movement
+            enabled={!selectionMode && !item.is_deleted}
         >
-            <View style={[
-                styles.messageRow,
-                isMe ? styles.myRow : styles.friendRow,
-                isSelected && styles.selectedRow,
-            ]}>
-                {isSelected && <View style={styles.selectionOverlay} />}
+            <Animated.View style={[styles.swipeWrapper]}>
+                {/* Swipe Action Icon (Visible when swiping) */}
+                <Animated.View style={[styles.swipeActionContainer, animatedIconStyle]}>
+                    <Forward size={24} color={Colors.primary} />
+                </Animated.View>
 
-                {!isMe && !isSelfChat && (
-                    <View style={styles.avatarPlaceholder}>
-                        {!!isLastInGroup && (
-                            <Avatar source={getAvatarById(item.sender_avatar_id || '1')} size={32} />
-                        )}
-                    </View>
-                )}
+                <Animated.View style={[animatedContentStyle]}>
+                    <View style={[
+                        styles.messageRow,
+                        isMe ? styles.myRow : styles.friendRow,
+                        isSelected && styles.selectedRow,
+                    ]}>
+                        {isSelected && <View style={styles.selectionOverlay} />}
 
-                <View style={[styles.bubbleWrapper, isMe ? styles.myBubbleWrapper : styles.friendBubbleWrapper]}>
-                    {!!isSelected && selectedCount === 1 && (
-                        <GlassCard style={[
-                            styles.emojiPicker,
-                            isMe ? styles.emojiPickerRight : styles.emojiPickerLeft,
-                        ]}>
-                            <View style={styles.emojiRow}>
-                                {EMOJIS.map(emoji => (
-                                    <TouchableOpacity key={emoji} onPress={() => onReaction(item.id, emoji)} style={styles.emojiButton}>
-                                        <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
-                                    </TouchableOpacity>
-                                ))}
-                                {isMe && !item.is_deleted && (
-                                    <TouchableOpacity style={styles.deleteButton} onPress={() => onDelete(item.id)}>
-                                        <Trash2 size={20} color={Colors.error} />
-                                    </TouchableOpacity>
+                        {!isMe && !isSelfChat && (
+                            <View style={styles.avatarPlaceholder}>
+                                {!!isLastInGroup && (
+                                    <Avatar source={getAvatarById(item.sender_avatar_id || '1')} size={32} />
                                 )}
                             </View>
-                        </GlassCard>
-                    )}
-                    {!isMe && !!isGroupChat && !isSelfChat && (
-                        <ThemedText style={[styles.senderName, {
-                            color: (() => {
-                                const sender = groupMembers?.find((m: any) => String(m.id) === String(item.sender_id) || String(m.user_id) === String(item.sender_id));
-                                if (sender?.role === 'owner') return '#FF3B30';
-                                if (sender?.role === 'admin') return '#FF9500';
-                                return Colors.text;
-                            })()
-                        }]}>
-                            {item.sender_name || 'Unknown'}
-                        </ThemedText>
-                    )}
-
-                    <Pressable
-                        onLongPress={handleLongPress}
-                        onPress={handlePress}
-                        delayLongPress={300}
-                        style={({ pressed }) => [
-                            !isSticker && styles.bubble,
-                            !isSticker && (isMe ? styles.myBubble : styles.friendBubble),
-                            isImage ? styles.imageBubble : null,
-                            isVideo ? styles.videoBubble : null,
-                            isDocument ? styles.documentBubble : null,
-                            isOneTime ? styles.otvBubble : null,
-                            isSticker ? styles.stickerBubble : null,
-                            { opacity: pressed ? 0.9 : 1 }
-                        ]}
-                    >
-                        {!!item.is_forwarded && (
-                            <View style={styles.forwardedIndicator}>
-                                <Forward size={10} color={isMe ? '#fff' : Colors.textSecondary} opacity={0.6} />
-                                <ThemedText style={[styles.forwardedText, isMe && styles.myForwardedText]}>Forwarded</ThemedText>
-                            </View>
                         )}
 
-                        {!!item.reply_to_message_id && (
-                            <TouchableOpacity
-                                onPress={() => !selectionMode && onQuotePress(item.reply_to_message_id)}
-                                style={[styles.replyQuoteContainer, isMe && styles.myReplyQuoteContainer]}
-                            >
-                                <View style={styles.replyQuoteTextContainer}>
-                                    <ThemedText style={[styles.replyQuoteName, isMe && styles.myReplyQuoteName]}>
-                                        {String(item.reply_sender_id) === String(currentUser?.id) ? 'You' : (item.reply_username || 'User')}
-                                    </ThemedText>
-                                    <ThemedText numberOfLines={1} style={[styles.replyQuoteText, isMe && styles.myReplyQuoteText]}>
-                                        {item.reply_text || item.reply_type || 'Message'}
-                                    </ThemedText>
-                                </View>
-                                {!!item.reply_media_url && (
-                                    <RNImage
-                                        source={{ uri: item.reply_media_url.startsWith('http') ? item.reply_media_url : `${Config.API_URL}/${item.reply_media_url.replace(/^\//, '')}` }}
-                                        style={styles.replyQuoteImage}
-                                    />
-                                )}
-                            </TouchableOpacity>
-                        )}
-
-                        {!!item.is_deleted ? null : (
-                            !!isOneTime && (!!item.media_url || item.message_text === '🔒 One-Time Message' || item.status === 'seen') ? (
-                                <TouchableOpacity
-                                    style={styles.otvContent}
-                                    onPress={() => onImagePress(item.media_url ? (item.media_url.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url.replace(/^\//, '')}`) : 'TEXT_OTV', true, item.id)}
-                                    disabled={isMe || item.status === 'seen'}
-                                >
-                                    <View style={[styles.otvIconWrapper, { borderColor: isMe ? '#fff' : Colors.text }]}>
-                                        <ThemedText style={[styles.otvIconText, { color: isMe ? '#fff' : Colors.text }]}>1</ThemedText>
+                        <View style={[styles.bubbleWrapper, isMe ? styles.myBubbleWrapper : styles.friendBubbleWrapper]}>
+                            {!!isSelected && selectedCount === 1 && (
+                                <GlassCard style={[
+                                    styles.emojiPicker,
+                                    isMe ? styles.emojiPickerRight : styles.emojiPickerLeft,
+                                ]}>
+                                    <View style={styles.emojiRow}>
+                                        {EMOJIS.map(emoji => (
+                                            <TouchableOpacity key={emoji} onPress={() => onReaction(item.id, emoji)} style={styles.emojiButton}>
+                                                <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
+                                            </TouchableOpacity>
+                                        ))}
+                                        {isMe && !item.is_deleted && (
+                                            <TouchableOpacity style={styles.deleteButton} onPress={() => onDelete(item.id)}>
+                                                <Trash2 size={20} color={Colors.error} />
+                                            </TouchableOpacity>
+                                        )}
                                     </View>
-                                    <ThemedText style={[styles.otvText, { color: isMe ? '#fff' : Colors.text }]}>
-                                        {item.status === 'seen' ? 'Opened' : (item.message_type === 'image' ? 'Photo' : item.message_type === 'video' ? 'Video' : 'Message')}
-                                    </ThemedText>
-                                </TouchableOpacity>
-                            ) : isSticker ? (
-                                <RNImage
-                                    source={{ uri: item.media_url.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url.replace(/^\//, '')}` }}
-                                    style={styles.stickerImage}
-                                    resizeMode="contain"
-                                />
-                            ) : (
-                                <ChatMediaContent
-                                    item={item}
-                                    isMe={isMe}
-                                    currentUser={currentUser}
-                                    selectionMode={selectionMode}
-                                    handlePress={handlePress}
-                                    handleLongPress={handleLongPress}
-                                    handleImagePress={handleImagePress}
-                                    cachedMediaUri={cachedMediaUri}
-                                    isDownloaded={isDownloaded}
-                                    mediaLoading={mediaLoading}
-                                    downloadMedia={downloadMedia}
-                                    isDownloading={isDownloading}
-                                    resolvedDisplayUri={resolvedDisplayUri}
-                                />
-                            )
-                        )}
+                                </GlassCard>
+                            )}
+                            {!isMe && !!isGroupChat && !isSelfChat && (
+                                <ThemedText style={[styles.senderName, {
+                                    color: (() => {
+                                        const sender = groupMembers?.find((m: any) => String(m.id) === String(item.sender_id) || String(m.user_id) === String(item.sender_id));
+                                        if (sender?.role === 'owner') return '#FF3B30';
+                                        if (sender?.role === 'admin') return '#FF9500';
+                                        return Colors.text;
+                                    })()
+                                }]}>
+                                    {item.sender_name || 'Unknown'}
+                                </ThemedText>
+                            )}
 
-                        {!!item.message_text && (!isOneTime || item.message_text !== '🔒 One-Time Message') && (
-                            <View>
-                                <View style={styles.textWrap}>
-                                    {item.message_text.split(URL_REGEX).map((part: string, i: number) => {
-                                        if (/^https?:\/\//.test(part)) {
-                                            return (
-                                                <ThemedText
-                                                    key={i}
-                                                    style={[styles.messageText, styles.linkText, isMe && styles.whiteLinkText]}
-                                                    onPress={() => !selectionMode && Linking.openURL(part)}
-                                                >
-                                                    {part}
-                                                </ThemedText>
-                                            );
-                                        }
-                                        const mentionParts = part.split(/(@[a-zA-Z0-9_]+)/g);
-                                        return mentionParts.map((subPart, j) => {
-                                            if (subPart.startsWith('@') && groupMembers) {
-                                                const username = subPart.slice(1);
-                                                const isMember = groupMembers.some((m: any) => m.username.toLowerCase() === username.toLowerCase());
-                                                if (isMember) {
+                            <Pressable
+                                onLongPress={handleLongPress}
+                                onPress={handlePress}
+                                delayLongPress={300}
+                                style={({ pressed }) => [
+                                    !isSticker && styles.bubble,
+                                    !isSticker && (isMe ? styles.myBubble : styles.friendBubble),
+                                    isImage ? styles.imageBubble : null,
+                                    isVideo ? styles.videoBubble : null,
+                                    isDocument ? styles.documentBubble : null,
+                                    isOneTime ? styles.otvBubble : null,
+                                    isSticker ? styles.stickerBubble : null,
+                                    { opacity: pressed ? 0.9 : 1 }
+                                ]}
+                            >
+                                {!!item.is_forwarded && (
+                                    <View style={styles.forwardedIndicator}>
+                                        <Forward size={10} color={isMe ? '#fff' : Colors.textSecondary} opacity={0.6} />
+                                        <ThemedText style={[styles.forwardedText, isMe && styles.myForwardedText]}>Forwarded</ThemedText>
+                                    </View>
+                                )}
+
+                                {!!item.reply_to_message_id && (
+                                    <TouchableOpacity
+                                        onPress={() => !selectionMode && onQuotePress(item.reply_to_message_id)}
+                                        style={[styles.replyQuoteContainer, isMe && styles.myReplyQuoteContainer]}
+                                    >
+                                        <View style={styles.replyQuoteTextContainer}>
+                                            <ThemedText style={[styles.replyQuoteName, isMe && styles.myReplyQuoteName]}>
+                                                {String(item.reply_sender_id) === String(currentUser?.id) ? 'You' : (item.reply_username || 'User')}
+                                            </ThemedText>
+                                            <ThemedText numberOfLines={1} style={[styles.replyQuoteText, isMe && styles.myReplyQuoteText]}>
+                                                {item.reply_text || item.reply_type || 'Message'}
+                                            </ThemedText>
+                                        </View>
+                                        {!!item.reply_media_url && (
+                                            <RNImage
+                                                source={{ uri: item.reply_media_url.startsWith('http') ? item.reply_media_url : `${Config.API_URL}/${item.reply_media_url.replace(/^\//, '')}` }}
+                                                style={styles.replyQuoteImage}
+                                            />
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+
+                                {!!item.is_deleted ? null : (
+                                    !!isOneTime && (!!item.media_url || item.message_text === '🔒 One-Time Message' || item.status === 'seen') ? (
+                                        <TouchableOpacity
+                                            style={styles.otvContent}
+                                            onPress={() => onImagePress(item.media_url ? (item.media_url.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url.replace(/^\//, '')}`) : 'TEXT_OTV', true, item.id)}
+                                            disabled={isMe || item.status === 'seen'}
+                                        >
+                                            <View style={[styles.otvIconWrapper, { borderColor: isMe ? '#fff' : Colors.text }]}>
+                                                <ThemedText style={[styles.otvIconText, { color: isMe ? '#fff' : Colors.text }]}>1</ThemedText>
+                                            </View>
+                                            <ThemedText style={[styles.otvText, { color: isMe ? '#fff' : Colors.text }]}>
+                                                {item.status === 'seen' ? 'Opened' : (item.message_type === 'image' ? 'Photo' : item.message_type === 'video' ? 'Video' : 'Message')}
+                                            </ThemedText>
+                                        </TouchableOpacity>
+                                    ) : (isSticker && item.media_url) ? (
+                                        <RNImage
+                                            source={{ uri: item.media_url.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url.replace(/^\//, '')}` }}
+                                            style={styles.stickerImage}
+                                            resizeMode="contain"
+                                        />
+                                    ) : (
+                                        <ChatMediaContent
+                                            item={item}
+                                            isMe={isMe}
+                                            currentUser={currentUser}
+                                            selectionMode={selectionMode}
+                                            handlePress={handlePress}
+                                            handleLongPress={handleLongPress}
+                                            handleImagePress={handleImagePress}
+                                            cachedMediaUri={cachedMediaUri}
+                                            isDownloaded={isDownloaded}
+                                            mediaLoading={mediaLoading}
+                                            downloadMedia={downloadMedia}
+                                            isDownloading={isDownloading}
+                                            resolvedDisplayUri={resolvedDisplayUri}
+                                        />
+                                    )
+                                )}
+
+                                {!!item.message_text && (!isOneTime || item.message_text !== '🔒 One-Time Message') && (
+                                    <View>
+                                        <View style={styles.textWrap}>
+                                            {item.message_text.split(URL_REGEX).map((part: string, i: number) => {
+                                                if (/^https?:\/\//.test(part)) {
                                                     return (
-                                                        <ThemedText key={`${i}-${j}`} style={[styles.messageText, { fontWeight: 'bold', color: isMe ? '#fff' : Colors.primary }]}>
-                                                            {subPart}
+                                                        <ThemedText
+                                                            key={i}
+                                                            style={[styles.messageText, styles.linkText, isMe && styles.whiteLinkText]}
+                                                            onPress={() => !selectionMode && Linking.openURL(part)}
+                                                        >
+                                                            {part}
                                                         </ThemedText>
                                                     );
                                                 }
-                                            }
-                                            return (
-                                                <ThemedText key={`${i}-${j}`} style={[styles.messageText, item.is_deleted && { fontStyle: 'italic', opacity: 0.7 }]}>
-                                                    {subPart}
-                                                </ThemedText>
-                                            );
-                                        });
-                                    })}
-                                </View>
-                                {!item.is_deleted && !!extractFirstUrl(item.message_text) && (
-                                    <LinkPreview url={extractFirstUrl(item.message_text)!} isMe={isMe} />
+                                                const mentionParts = part.split(/(@[a-zA-Z0-9_]+)/g);
+                                                return mentionParts.map((subPart, j) => {
+                                                    if (subPart.startsWith('@') && groupMembers) {
+                                                        const username = subPart.slice(1);
+                                                        const isMember = groupMembers.some((m: any) => m.username.toLowerCase() === username.toLowerCase());
+                                                        if (isMember) {
+                                                            return (
+                                                                <ThemedText key={`${i}-${j}`} style={[styles.messageText, { fontWeight: 'bold', color: isMe ? '#fff' : Colors.primary }]}>
+                                                                    {subPart}
+                                                                </ThemedText>
+                                                            );
+                                                        }
+                                                    }
+                                                    return (
+                                                        <ThemedText key={`${i}-${j}`} style={[styles.messageText, item.is_deleted && { fontStyle: 'italic', opacity: 0.7 }]}>
+                                                            {subPart}
+                                                        </ThemedText>
+                                                    );
+                                                });
+                                            })}
+                                        </View>
+                                        {!item.is_deleted && !!extractFirstUrl(item.message_text) && (
+                                            <LinkPreview url={extractFirstUrl(item.message_text)!} isMe={isMe} />
+                                        )}
+                                    </View>
                                 )}
-                            </View>
-                        )}
-                    </Pressable>
+                            </Pressable>
 
-                    {!!isLastInGroup && (
-                        <View style={styles.timeRow}>
-                            <ThemedText numberOfLines={1} style={[styles.messageTime, isMe ? styles.myMessageTime : styles.friendMessageTime]}>
-                                {(item.message_type === 'voice' || item.message_type === 'audio') && item.duration ? (
-                                    `${Math.floor(item.duration / 60)}:${(item.duration % 60).toString().padStart(2, '0')} · `
-                                ) : null}
-                                {formatChatTime(item.sent_at || item.created_at)}
-                                {!!item.is_edited && <ThemedText style={styles.editedText}> edited</ThemedText>}
-                            </ThemedText>
-                            {isMe && (
-                                <View style={styles.statusIcon}>
-                                    {item.status === 'seen' ? <CheckCheck size={16} color={Colors.primary} /> :
-                                        item.status === 'delivered' ? <CheckCheck size={16} color={Colors.textSecondary} /> :
-                                            item.status === 'sending' ? <Timer size={14} color={Colors.textSecondary} /> :
-                                                <Check size={16} color={Colors.textSecondary} />}
+                            {!!isLastInGroup && (
+                                <View style={styles.timeRow}>
+                                    <ThemedText numberOfLines={1} style={[styles.messageTime, isMe ? styles.myMessageTime : styles.friendMessageTime]}>
+                                        {(item.message_type === 'voice' || item.message_type === 'audio') && item.duration ? (
+                                            `${Math.floor(item.duration / 60)}:${(item.duration % 60).toString().padStart(2, '0')} · `
+                                        ) : null}
+                                        {formatChatTime(item.sent_at || item.created_at)}
+                                        {!!item.is_edited && <ThemedText style={styles.editedText}> edited</ThemedText>}
+                                    </ThemedText>
+                                    {isMe && (
+                                        <View style={styles.statusIcon}>
+                                            {item.status === 'seen' ? <CheckCheck size={16} color={Colors.read} /> :
+                                                item.status === 'delivered' ? <CheckCheck size={16} color={Colors.textSecondary} /> :
+                                                    item.status === 'sending' ? <Timer size={14} color={Colors.textSecondary} /> :
+                                                        <Check size={16} color={Colors.textSecondary} />}
+                                        </View>
+                                    )}
                                 </View>
                             )}
-                        </View>
-                    )}
 
-                    {item.reactions?.length > 0 && (
-                        <View style={[styles.reactionTray, isMe ? styles.myReactionTray : styles.friendReactionTray]}>
-                            {Array.from(new Set(item.reactions.map((r: any) => r.emoji))).map((emoji: any) => (
-                                <View key={emoji} style={styles.reactionBadge}>
-                                    <ThemedText style={styles.reactionEmoji}>{emoji}</ThemedText>
-                                    <ThemedText style={styles.reactionCount}>
-                                        {item.reactions.filter((r: any) => r.emoji === emoji).length}
-                                    </ThemedText>
+                            {item.reactions?.length > 0 && (
+                                <View style={[styles.reactionTray, isMe ? styles.myReactionTray : styles.friendReactionTray]}>
+                                    {Array.from(new Set(item.reactions.map((r: any) => r.emoji))).map((emoji: any) => (
+                                        <View key={emoji} style={styles.reactionBadge}>
+                                            <ThemedText style={styles.reactionEmoji}>{emoji}</ThemedText>
+                                            <ThemedText style={styles.reactionCount}>
+                                                {item.reactions.filter((r: any) => r.emoji === emoji).length}
+                                            </ThemedText>
+                                        </View>
+                                    ))}
                                 </View>
-                            ))}
+                            )}
+
+
                         </View>
-                    )}
-
-
-                </View>
-            </View>
-        </ReanimatedSwipeable>
+                    </View>
+                </Animated.View>
+            </Animated.View>
+        </PanGestureHandler>
     );
 });
 
@@ -431,5 +450,18 @@ const styles = StyleSheet.create({
     emojiButton: { padding: 6 },
     emojiText: { fontSize: 20 },
     deleteButton: { marginLeft: 8, borderLeftWidth: 1, borderLeftColor: Colors.glassBorder, paddingLeft: 12 },
-    swipeActionContainer: { width: 70, justifyContent: 'center', alignItems: 'center' },
+    swipeWrapper: {
+        position: 'relative',
+        justifyContent: 'center',
+        alignSelf: 'stretch',
+    },
+    swipeActionContainer: {
+        position: 'absolute',
+        left: 20,
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 40,
+        zIndex: 0
+    },
 });

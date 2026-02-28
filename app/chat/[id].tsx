@@ -1,5 +1,5 @@
 ﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton } from 'react-native';
+import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton, Animated } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 // @ts-ignore
 import { io, Socket } from 'socket.io-client';
@@ -220,8 +220,8 @@ export default function ChatDetailScreen() {
         []
     );
 
-    const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [inputHeight, setInputHeight] = useState(60);
+    const translateY = useRef(new Animated.Value(0)).current;
 
     // ─────────────────────────────────────────────────────────────────────────
     // 🔍 STEP 1 — DEV-ONLY duplicate ID logger
@@ -443,15 +443,25 @@ export default function ChatDetailScreen() {
 
     // Keyboard Listeners
     useEffect(() => {
-        const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
+        const showSubscription = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
             const height = e.endCoordinates.height;
             if (height > 100) {
-                setKeyboardHeight(height);
                 setPanelHeight(height);
                 if (!isMediaSearchingRef.current) setIsPanelOpen(false);
             }
+            Animated.timing(translateY, {
+                toValue: -height,
+                duration: 250,
+                useNativeDriver: true
+            }).start();
         });
-        const hideSubscription = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+        const hideSubscription = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
+            Animated.timing(translateY, {
+                toValue: 0,
+                duration: 250,
+                useNativeDriver: true
+            }).start();
+        });
         return () => {
             showSubscription.remove();
             hideSubscription.remove();
@@ -465,14 +475,15 @@ export default function ChatDetailScreen() {
     const updateLastSeen = async (signal?: AbortSignal) => {
         if (!currentUser) return;
         try {
-            await fetch(`${Config.API_URL}/users/update_last_seen.php`, {
+            // Heartbeat to keep last_active and is_online fresh
+            await fetch(`${Config.API_URL}/users/update_online_status.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id }),
+                body: JSON.stringify({ user_id: currentUser.id, is_online: 1 }),
                 signal
             });
         } catch (e: any) {
-            if (e.name !== 'AbortError') console.error("Last seen update error", e);
+            if (e.name !== 'AbortError') console.error("Heartbeat update error", e);
         }
     };
 
@@ -549,7 +560,8 @@ export default function ChatDetailScreen() {
                                 type: msg.message_type || 'text',
                                 encrypted_payload: msg.encrypted_payload || msg.message_text,
                                 local_file_path: msg.media_url || undefined,
-                                status: msg.status || 'delivered'
+                                status: msg.status || 'delivered',
+                                timestamp: msg.created_at || msg.timestamp
                             });
                         } catch (e) { }
                     }
@@ -610,42 +622,19 @@ export default function ChatDetailScreen() {
 
     const updateMessageStatus = async (status: 'delivered' | 'seen', messageIds: (string | number)[] = []) => {
         if (!currentUser) return;
-        // Logic: if we are active in this chat, we mark as read (seen).
-        // 'delivered' is handled by Mark Delivered globally or when fetching list.
-        // Here we specifically want to mark as READ/SEEN when chat is open.
 
-        if (status === 'seen') {
-            try {
-                // [Sync] Use reliable reporting with offline retry queue
-                await SyncService.reportStatus(Number(currentUser.id), Number(id), isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`, status);
-
-                // Socket real-time read receipt
-                if (socket.current && !isGroup) {
-                    socket.current.emit("message:read", {
-                        room: `user_${id}`,
-                        message_ids: messageIds
-                    });
-                }
-            } catch (error) { console.error('Error marking read:', error); }
-        } else if (!isGroup) {
-            // Keep legacy delivered update for 1-on-1 if needed, strictly for "delivered" status updates 
-            // but fetchConversations usually handles delivered. 
-            // If we really need to mark delivered explicitly here:
-            try {
-                await fetch(`${Config.API_URL}/chat/update_status.php`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: currentUser.id, sender_id: id, status: status })
-                });
-
-                // Socket real-time delivery receipt
-                if (socket.current) {
-                    socket.current.emit("message:delivered", {
-                        room: `user_${id}`,
-                        message_ids: messageIds
-                    });
-                }
-            } catch (error) { console.error('Error updating status:', error); }
+        try {
+            // [Sync] Use reliable reporting with offline retry queue
+            // The backend (message_delivered.php / message_seen.php) will now handle the real-time Socket.io emission to the sender.
+            await SyncService.reportStatus(
+                Number(currentUser.id),
+                Number(id),
+                isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`,
+                status,
+                isGroup
+            );
+        } catch (error) {
+            console.error(`[ChatDetail] Error reporting ${status}:`, error);
         }
     };
 
@@ -697,6 +686,13 @@ export default function ChatDetailScreen() {
         React.useCallback(() => {
             if (!currentUser || !id || !isDbReady) return;
 
+            // --- HEARTBEAT ---
+            // Update last_active every 30 seconds while user is in this chat
+            const heartbeatInterval = setInterval(() => {
+                updateLastSeen();
+            }, 30000);
+            updateLastSeen(); // Initial heartbeat
+
             // Reset State Synchronously on Focus/Mount if ID changed (handled by dependency array)
             // But we also need to handle the case where we push a new ID.
             // React key={id} in Stack.Screen usually handles this by calculating a fresh component, 
@@ -721,8 +717,31 @@ export default function ChatDetailScreen() {
                 console.log(`[Socket] Connected. Joining room: ${chatId}`);
                 socket.current?.emit('join_room', chatId);
 
+                // Identify the user for online status tracking
+                socket.current?.emit('user:identify', currentUser.id);
+
                 // [Sync] Trigger offline sync on reconnect
                 SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, chatId);
+                SyncService.syncMissedMessages(Number(currentUser.id)).then(() => {
+                    // Force UI refresh after global sync to catch any messages for this chat
+                    fetchMessages();
+                });
+            });
+
+            // Listen for user status changes (online/offline)
+            socket.current.on('user:status_change', (data: { user_id: string, status: 'online' | 'offline', last_active?: string }) => {
+                if (String(data.user_id) === String(id) && !isGroup) {
+                    setTargetUserProfile((prev: any) => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            is_online: data.status === 'online' ? 1 : 0,
+                            last_active: data.last_active || prev.last_active,
+                            // Ensure backward compatibility with UI that uses last_seen
+                            last_seen: data.status === 'offline' ? (data.last_active || new Date().toISOString()) : prev.last_seen
+                        };
+                    });
+                }
             });
 
             socket.current.on('message:new', async (data: any) => {
@@ -785,7 +804,8 @@ export default function ChatDetailScreen() {
                         type: data.message_type || 'text',
                         encrypted_payload: decryptedPayload,
                         local_file_path: data.media_url || undefined,
-                        status: 'delivered'
+                        status: 'delivered',
+                        timestamp: data.timestamp || data.created_at
                     });
 
                     // ✅ Merge directly into state — no fetchMessages() call to avoid double-fire
@@ -984,7 +1004,8 @@ export default function ChatDetailScreen() {
                                         type: msg.message_type || 'text',
                                         encrypted_payload: msg.encrypted_payload || msg.message_text,
                                         local_file_path: msg.media_url || undefined,
-                                        status: msg.status || 'delivered'
+                                        status: msg.status || 'delivered',
+                                        timestamp: msg.created_at || msg.timestamp
                                     });
                                 } catch (e) { /* Ignore duplicates or errors during insert */ }
                             }
@@ -1098,15 +1119,12 @@ export default function ChatDetailScreen() {
                 console.log(`[Chat ${id}] Unmounting/Blurring - Cleanup`);
                 abortController.abort();
                 clearInterval(interval);
+                heartbeatInterval && clearInterval(heartbeatInterval);
                 if (socket.current) {
                     socket.current.disconnect();
                     socket.current = null;
                 }
                 saveLastScrollPosition();
-                // We DO NOT reset messages here to avoid flash if navigating back briefly,
-                // BUT the goal is strict correctness. If we navigate BACK to list, we destroy.
-                // If we navigate FORWARD, we might keep it.
-                // For now, let's rely on the mount-reset logic.
             };
         }, [id, currentUser, isDbReady]) // Re-run deeply when ID changes
     );
@@ -2433,149 +2451,96 @@ export default function ChatDetailScreen() {
             />
 
             <View style={{ flex: 1, backgroundColor: Colors.background }}>
-                {Platform.OS === 'android' ? (
-                    <View style={{ flex: 1, backgroundColor: Colors.background }}>
-                        <FlashList
-                            key={id} // 4️⃣ Force re-mount on chat change
-                            ref={flatListRef}
-                            data={isReady ? mergedMessages : []}
-                            keyExtractor={(item) => String(item.id)}
-                            renderItem={renderMessage}
-                            estimatedItemSize={100}
-                            contentContainerStyle={{
-                                ...styles.listContent,
-                                paddingBottom: (relationshipStatus === 'blocked' ? 80 : keyboardHeight + inputHeight) + 20
-                            }}
-                            onScroll={(e) => { scrollOffset.current = e.nativeEvent.contentOffset.y; }}
-                            keyboardShouldPersistTaps="handled"
-                            ListEmptyComponent={
-                                isLoading || !isReady ? (
-                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                        <ActivityIndicator size="large" color={Colors.primary} />
-                                    </View>
-                                ) : (
-                                    <EmptyState
-                                        icon={MessageSquare}
-                                        title="No messages yet"
-                                        message="Start chatting!"
-                                    />
-                                )
-                            }
-                            showsVerticalScrollIndicator={false}
-                        />
-                        {relationshipStatus === 'blocked' ? (
-                            <View style={styles.blockedFooter}>
-                                <ThemedText style={styles.blockedText}>You have blocked this contact.</ThemedText>
-                                <TouchableOpacity style={styles.unblockButton} onPress={handleBlockUser}>
-                                    <ThemedText style={styles.unblockText}>Tap to unblock</ThemedText>
-                                </TouchableOpacity>
-                            </View>
-                        ) : ((targetUserProfile?.is_official == 1 || isOfficialParam === '1') && currentUser?.is_official != 1) ? (
-                            <View style={{ height: 60, justifyContent: 'center', alignItems: 'center', position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: Colors.surface, zIndex: 9999, elevation: 10, borderTopWidth: 1, borderTopColor: Colors.glassBorder }}>
-                                <ThemedText style={{ color: Colors.textSecondary, fontSize: 13, fontWeight: '600' }}>🚫 Only Vegarm can send messages</ThemedText>
-                            </View>
-                        ) : (
-                            <View style={[styles.inputContainer, { position: 'absolute', bottom: isPanelOpen ? 0 : keyboardHeight, left: 0, right: 0 }]} onLayout={(e) => setInputHeight(e.nativeEvent.layout.height)}>
-                                <ReplyPreview replyingToMessage={replyingToMessage} currentUser={currentUser} onCancel={() => setReplyingToMessage(null)} />
-                                <ChatInputBar
-                                    inputText={inputText}
-                                    editingMessage={editingMessage}
-                                    handleTyping={handleTyping}
-                                    handleAttachmentSelect={handleAttachmentSelect}
-                                    handlePickImage={handlePickImage}
-                                    handleSaveEdit={handleSaveEdit}
-                                    handleSend={handleSend}
-                                    handleCancelEdit={handleCancelEdit}
-                                    startRecording={startRecording}
-                                    stopRecording={stopRecording}
-                                    cancelRecording={cancelRecording}
-                                    recordingStatus={recordingStatus}
-                                    recordingDuration={recordingDuration}
-                                    isPanelOpen={isPanelOpen}
-                                    setIsPanelOpen={setIsPanelOpen}
-                                    panelActiveTab={panelActiveTab}
-                                    setPanelActiveTab={setPanelActiveTab}
-                                    isAttachmentPanelOpen={isAttachmentPanelOpen}
-                                    setIsAttachmentPanelOpen={setIsAttachmentPanelOpen}
-                                    isUploading={isUploading}
-                                    isSending={isSending}
-                                    inputRef={inputRef}
-                                    inputHeight={inputHeight}
-                                    setInputHeight={setInputHeight}
-                                    keyboardHeight={keyboardHeight}
-                                    onRequestSchedule={handleRequestSchedule}
-                                    isGroup={isGroup}
-                                    userRole={userRole}
-                                    permissions={permissions}
-                                    groupMembers={groupMembers}
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                >
+                    <FlashList
+                        key={id} // 4️⃣ Force re-mount on chat change
+                        ref={flatListRef}
+                        data={isReady ? mergedMessages : []}
+                        keyExtractor={(item) => String(item.id)}
+                        renderItem={renderMessage}
+                        estimatedItemSize={100}
+                        contentContainerStyle={{
+                            ...styles.listContent,
+                            paddingBottom: 20
+                        }}
+                        onScroll={(e) => { scrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                        keyboardShouldPersistTaps="handled"
+                        ListEmptyComponent={
+                            isLoading || !isReady ? (
+                                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                    <ActivityIndicator size="large" color={Colors.primary} />
+                                </View>
+                            ) : (
+                                <EmptyState
+                                    icon={MessageSquare}
+                                    title="No messages yet"
+                                    message="Start chatting!"
                                 />
-                            </View>
-                        )}
-                    </View>
-                ) : (
-                    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={90}>
-                        <FlashList
-                            key={id} // 4️⃣ Force re-mount on chat change
-                            ref={flatListRef}
-                            data={mergedMessages}
-                            keyExtractor={(item) => String(item.id)}
-                            renderItem={renderMessage}
-                            estimatedItemSize={100}
-                            contentContainerStyle={{
-                                ...styles.listContent,
-                                paddingBottom: 20
-                            }}
-                            onScroll={(e) => { scrollOffset.current = e.nativeEvent.contentOffset.y; }}
-                            ListEmptyComponent={
-                                !isLoading ? (
-                                    <EmptyState
-                                        icon={MessageSquare}
-                                        title="No messages yet"
-                                        message="Start chatting!"
-                                    />
-                                ) : (
-                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                        <ActivityIndicator size="large" color={Colors.primary} />
-                                    </View>
-                                )
-                            }
-                            showsVerticalScrollIndicator={false}
-                        />
-                        {relationshipStatus === 'blocked' ? (
-                            <View style={styles.blockedFooter}>
-                                <ThemedText style={styles.blockedText}>You have blocked this contact.</ThemedText>
-                                <TouchableOpacity style={styles.unblockButton} onPress={handleBlockUser}>
-                                    <ThemedText style={styles.unblockText}>Tap to unblock</ThemedText>
-                                </TouchableOpacity>
-                            </View>
-                        ) : ((targetUserProfile?.is_official == 1 || isOfficialParam === '1') && currentUser?.is_official != 1) ? (
-                            <View style={[styles.blockedFooter, { height: 60, justifyContent: 'center', alignItems: 'center' }]}>
-                                <ThemedText style={{ color: Colors.textSecondary, fontSize: 13 }}>🚫 Only Vegarm can send messages</ThemedText>
-                            </View>
-                        ) : (
-                            <View style={styles.inputContainer}>
-                                <ReplyPreview replyingToMessage={replyingToMessage} currentUser={currentUser} onCancel={() => setReplyingToMessage(null)} />
-                                <ChatInputBar
-                                    inputText={inputText} editingMessage={editingMessage} handleTyping={handleTyping}
-                                    handleAttachmentSelect={handleAttachmentSelect} handlePickImage={handlePickImage}
-                                    handleSaveEdit={handleSaveEdit} handleSend={handleSend} handleCancelEdit={handleCancelEdit}
-                                    startRecording={startRecording} stopRecording={stopRecording} cancelRecording={cancelRecording}
-                                    recordingStatus={recordingStatus} recordingDuration={recordingDuration}
-                                    isPanelOpen={isPanelOpen} setIsPanelOpen={setIsPanelOpen}
-                                    panelActiveTab={panelActiveTab} setPanelActiveTab={setPanelActiveTab}
-                                    isAttachmentPanelOpen={isAttachmentPanelOpen} setIsAttachmentPanelOpen={setIsAttachmentPanelOpen}
-                                    isUploading={isUploading} isSending={isSending} inputRef={inputRef} Platform={Platform}
-                                    onRequestSchedule={handleRequestSchedule}
-                                    inputHeight={inputHeight} setInputHeight={setInputHeight} keyboardHeight={keyboardHeight}
-                                    isGroup={isGroup}
-                                    userRole={userRole}
-                                    permissions={permissions}
-                                    groupMembers={groupMembers}
-                                />
-                            </View>
-                        )}
-                    </KeyboardAvoidingView>
-                )}
+                            )
+                        }
+                        showsVerticalScrollIndicator={false}
+                    />
+
+                    {relationshipStatus === 'blocked' ? (
+                        <View style={styles.blockedFooter}>
+                            <ThemedText style={styles.blockedText}>You have blocked this contact.</ThemedText>
+                            <TouchableOpacity style={styles.unblockButton} onPress={handleBlockUser}>
+                                <ThemedText style={styles.unblockText}>Tap to unblock</ThemedText>
+                            </TouchableOpacity>
+                        </View>
+                    ) : ((targetUserProfile?.is_official == 1 || isOfficialParam === '1') && currentUser?.is_official != 1) ? (
+                        <View style={{ height: 60, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.glassBorder }}>
+                            <ThemedText style={{ color: Colors.textSecondary, fontSize: 13, fontWeight: '600' }}>🚫 Only Vegarm can send messages</ThemedText>
+                        </View>
+                    ) : (
+                        <Animated.View
+                            style={[
+                                styles.inputContainer,
+                                {
+                                    transform: [{ translateY: isPanelOpen ? 0 : translateY }]
+                                }
+                            ]}
+                            onLayout={(e: any) => setInputHeight(e.nativeEvent.layout.height)}
+                        >
+                            <ReplyPreview replyingToMessage={replyingToMessage} currentUser={currentUser} onCancel={() => setReplyingToMessage(null)} />
+                            <ChatInputBar
+                                inputText={inputText}
+                                editingMessage={editingMessage}
+                                handleTyping={handleTyping}
+                                handleAttachmentSelect={handleAttachmentSelect}
+                                handlePickImage={handlePickImage}
+                                handleSaveEdit={handleSaveEdit}
+                                handleSend={handleSend}
+                                handleCancelEdit={handleCancelEdit}
+                                startRecording={startRecording}
+                                stopRecording={stopRecording}
+                                cancelRecording={cancelRecording}
+                                recordingStatus={recordingStatus}
+                                recordingDuration={recordingDuration}
+                                isPanelOpen={isPanelOpen}
+                                setIsPanelOpen={setIsPanelOpen}
+                                panelActiveTab={panelActiveTab}
+                                setPanelActiveTab={setPanelActiveTab}
+                                isAttachmentPanelOpen={isAttachmentPanelOpen}
+                                setIsAttachmentPanelOpen={setIsAttachmentPanelOpen}
+                                isUploading={isUploading}
+                                isSending={isSending}
+                                inputRef={inputRef}
+                                inputHeight={inputHeight}
+                                setInputHeight={setInputHeight}
+                                onRequestSchedule={handleRequestSchedule}
+                                isGroup={isGroup}
+                                userRole={userRole}
+                                permissions={permissions}
+                                groupMembers={groupMembers}
+                            />
+                        </Animated.View>
+                    )}
+                </KeyboardAvoidingView>
             </View>
 
             <ChatMediaPanel

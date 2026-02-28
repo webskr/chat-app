@@ -15,8 +15,10 @@ import { Config } from '../../constants/Config';
 import { useFocusEffect } from 'expo-router';
 import { formatChatTime } from '../../utils/time';
 import { EmptyState } from '../../components/EmptyState';
+import { SyncService } from '../../utils/SyncService';
 import { MessageSquare, Megaphone } from 'lucide-react-native';
 import { GroupDefaultIcon } from '../../components/icons/GroupDefaultIcon';
+import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 
 export default function ChatScreen() {
     const { user, setUnreadCount } = useUser();
@@ -28,12 +30,50 @@ export default function ChatScreen() {
     const fetchConversations = React.useCallback(async () => {
         if (!user) return;
         try {
+            // STEP 1: Load from local DB for instant UI
+            const localChats = await LocalDatabaseService.getConversations();
+            if (localChats.length > 0) {
+                setChats(localChats.map(c => ({
+                    ...c,
+                    // Map local DB fields to UI fields
+                    last_message: c.last_message_preview || c.last_message,
+                    last_message_time: c.last_message_time_real || c.last_message_time
+                })));
+                setIsLoading(false);
+            }
+
+            // STEP 2: Background sync from server to refresh metadata (names/avatars/unread)
             const response = await fetch(`${Config.API_URL}/chat/get_conversations.php?user_id=${user.id}`);
             const data = await response.json();
             if (response.ok) {
-                setChats(data);
-                const totalUnread = data.reduce((sum: number, chat: any) => sum + (Number(chat.unread_count) || Number(chat.unread_count_raw) || 0), 0);
-                // console.log('Index: fetchConversations totalUnread:', totalUnread, 'Detail:', data.map((c: any) => `${c.id}:${c.unread_count || c.unread_count_raw}`));
+                // Update local DB metadata for each chat
+                for (const chat of data) {
+                    const isGroup = chat.is_group == 1;
+                    const chatId = isGroup ? chat.group_id.toString() : `chat_${Math.min(Number(user.id), Number(chat.other_user_id))}_${Math.max(Number(user.id), Number(chat.other_user_id))}`;
+
+                    await LocalDatabaseService.updateChatMetadata({
+                        id: chatId,
+                        is_group: isGroup,
+                        other_user_id: chat.other_user_id?.toString(),
+                        other_username: chat.other_username,
+                        other_avatar_url: chat.other_avatar_url,
+                        other_avatar_id: chat.other_avatar_id,
+                        other_is_official: chat.other_is_official,
+                        group_name: chat.group_name,
+                        group_icon: chat.group_icon,
+                        unread_count: Number(chat.unread_count) || Number(chat.unread_count_raw) || 0
+                    });
+                }
+
+                // Refresh UI from local DB after metadata update
+                const refreshedChats = await LocalDatabaseService.getConversations();
+                setChats(refreshedChats.map(c => ({
+                    ...c,
+                    last_message: c.last_message_preview || c.last_message,
+                    last_message_time: c.last_message_time_real || c.last_message_time
+                })));
+
+                const totalUnread = refreshedChats.reduce((sum: number, chat: any) => sum + (Number(chat.unread_count) || 0), 0);
                 setUnreadCount(totalUnread);
             }
         } catch (error) {
@@ -47,11 +87,12 @@ export default function ChatScreen() {
         React.useCallback(() => {
             fetchConversations();
             markDelivered();
+            if (user) SyncService.syncMissedMessages(Number(user.id));
 
             const interval = setInterval(() => {
                 fetchConversations();
                 markDelivered();
-            }, 5000);
+            }, 10000); // 10s is safer with local cache
 
             return () => clearInterval(interval);
         }, [fetchConversations])

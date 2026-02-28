@@ -8,11 +8,15 @@ export const styles = StyleSheet.create({
     },
     listContent: {
         paddingVertical: 20,
-        gap: 2,
     },
     inputContainer: {
         width: '100%',
         backgroundColor: Colors.background,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
     modalOverlay: {
         flex: 1,

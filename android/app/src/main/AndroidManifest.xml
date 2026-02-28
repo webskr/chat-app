@@ -37,7 +37,6 @@
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="vegarm"/>
         <data android:scheme="com.skr.vegarm"/>
-        <data android:scheme="exp+vegarm"/>
       </intent-filter>
     </activity>
   </application>

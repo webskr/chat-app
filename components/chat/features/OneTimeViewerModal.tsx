@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Modal, View, StyleSheet, TouchableOpacity, Image, Platform, Dimensions, Text } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView, VideoPlayer } from 'expo-video';
 import { X } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,8 +12,24 @@ interface OneTimeViewerModalProps {
     onClose: () => void;
 }
 
+const VideoPlayerContent = ({ url }: { url: string }) => {
+    const videoPlayer = useVideoPlayer(url, (player: VideoPlayer) => {
+        player.loop = false;
+        player.play();
+    });
+
+    return (
+        <VideoView
+            player={videoPlayer}
+            style={styles.media}
+            contentFit="contain"
+            nativeControls={true}
+        />
+    );
+};
+
 export const OneTimeViewerModal = ({ visible, url, text, type, onClose }: OneTimeViewerModalProps) => {
-    if (!visible) return null; // Check visible first, url might be null for text
+    if (!visible) return null;
 
     return (
         <Modal
@@ -30,21 +46,8 @@ export const OneTimeViewerModal = ({ visible, url, text, type, onClose }: OneTim
                 </SafeAreaView>
 
                 <View style={styles.content}>
-                    {type === 'video' ? (
-                        <Video
-                            source={{ uri: url! }}
-                            style={styles.media}
-                            resizeMode={ResizeMode.CONTAIN}
-                            shouldPlay={true} // Auto-play
-                            useNativeControls={true} // Allow controls (pause/seek) but maybe we should disable seeking? Standard OTV usually allows linear playback.
-                            isLooping={false} // Don't loop
-                            onPlaybackStatusUpdate={(status: any) => {
-                                if (status.didJustFinish) {
-                                    // Optional: Close on finish? 
-                                    // For now, let user close manually to avoid abrupt experience.
-                                }
-                            }}
-                        />
+                    {type === 'video' && url ? (
+                        <VideoPlayerContent url={url} />
                     ) : type === 'text' ? (
                         <View style={styles.textContainer}>
                             <Text style={styles.textContent}>{text}</Text>

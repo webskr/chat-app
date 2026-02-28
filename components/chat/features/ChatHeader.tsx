@@ -85,7 +85,7 @@ export const ChatHeader = ({
                                         (avatar_url) ? `${Config.API_URL}/${avatar_url}` :
                                             getAvatarById(targetUserProfile?.avatar_id || avatar_id || id)
                         }
-                        online={!isGroup && !!targetUserProfile?.last_seen && (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000)}
+                        online={!isGroup && (!!targetUserProfile?.is_online || (!!targetUserProfile?.last_seen && (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000)))}
                         size={40}
                         fallbackComponent={isGroup ? <GroupDefaultIcon size={40} /> : undefined}
                     />
@@ -99,18 +99,18 @@ export const ChatHeader = ({
                             )}
                         </View>
 
-                        <ThemedText type="caption" style={{ color: String(id) === String(currentUser?.id) ? Colors.secondary : (isTyping ? Colors.primary : (targetUserProfile?.last_seen && (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000) ? Colors.online : Colors.textSecondary)) }}>
+                        <ThemedText type="caption" style={{ color: String(id) === String(currentUser?.id) ? Colors.secondary : (isTyping ? Colors.primary : (targetUserProfile?.is_online || (targetUserProfile?.last_seen && (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000)) ? Colors.online : Colors.textSecondary)) }}>
                             {String(id) === String(currentUser?.id)
                                 ? 'Personal Space'
                                 : isTyping
                                     ? 'Typing...'
                                     : isGroup
                                         ? 'Tap for group info'
-                                        : targetUserProfile?.last_seen
-                                            ? (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000
-                                                ? 'Online'
-                                                : `Last seen ${formatChatTime(targetUserProfile.last_seen)}`)
-                                            : 'Recently active'}
+                                        : (targetUserProfile?.is_online || (targetUserProfile?.last_seen && (new Date().getTime() - new Date(targetUserProfile.last_seen).getTime() < 60000))
+                                            ? 'Online'
+                                            : targetUserProfile?.last_seen
+                                                ? `Last seen ${formatChatTime(targetUserProfile.last_seen)}`
+                                                : 'Recently active')}
                         </ThemedText>
                     </View>
                 </TouchableOpacity>

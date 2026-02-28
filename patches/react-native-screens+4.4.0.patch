@@ -17,7 +17,7 @@ index dcbd10d..a98eb17 100644
 -export default codegenNativeComponent<NativeProps>('RNSFullWindowOverlay', {});
 +export default requireNativeComponent<NativeProps>('RNSFullWindowOverlay');
 diff --git a/node_modules/react-native-screens/src/fabric/ModalScreenNativeComponent.ts b/node_modules/react-native-screens/src/fabric/ModalScreenNativeComponent.ts
-index 8fcdefa..ec0c996 100644
+index 8fcdefa..41855ed 100644
 --- a/node_modules/react-native-screens/src/fabric/ModalScreenNativeComponent.ts
 +++ b/node_modules/react-native-screens/src/fabric/ModalScreenNativeComponent.ts
 @@ -1,115 +1,18 @@
@@ -133,12 +133,12 @@ index 8fcdefa..ec0c996 100644
 -  navigationBarTranslucent?: boolean;
 -  navigationBarHidden?: boolean;
 -  nativeBackButtonDismissalEnabled?: boolean;
-+  onAppear?: any;
-+  onDisappear?: any;
-+  onDismissed?: any;
-+  onNativeDismissCancelled?: any;
-+  onWillAppear?: any;
-+  onWillDisappear?: any;
++  onAppear?: (event: any) => void;
++  onDisappear?: (event: any) => void;
++  onDismissed?: (event: any) => void;
++  onNativeDismissCancelled?: (event: any) => void;
++  onWillAppear?: (event: any) => void;
++  onWillDisappear?: (event: any) => void;
 +  activityState?: any;
 +  stackPresentation?: any;
 +  stackAnimation?: any;
@@ -199,7 +199,7 @@ index dbb46fc..a2dcbe3 100644
 -export default codegenNativeComponent<NativeProps>('RNSScreenFooter', {});
 +export default requireNativeComponent<NativeProps>('RNSScreenFooter');
 diff --git a/node_modules/react-native-screens/src/fabric/ScreenNativeComponent.ts b/node_modules/react-native-screens/src/fabric/ScreenNativeComponent.ts
-index 37dbf94..8790240 100644
+index 37dbf94..f32b6d1 100644
 --- a/node_modules/react-native-screens/src/fabric/ScreenNativeComponent.ts
 +++ b/node_modules/react-native-screens/src/fabric/ScreenNativeComponent.ts
 @@ -1,115 +1,43 @@
@@ -291,18 +291,18 @@ index 37dbf94..8790240 100644
 -  sheetExpandsWhenScrolledToEdge?: WithDefault<boolean, false>;
 -  sheetInitialDetent?: WithDefault<Int32, 0>;
 -  sheetElevation?: WithDefault<Int32, 24>;
-+  onAppear?: any;
-+  onDisappear?: any;
-+  onDismissed?: any;
-+  onNativeDismissCancelled?: any;
-+  onWillAppear?: any;
-+  onWillDisappear?: any;
-+  onHeaderHeightChange?: any;
-+  onTransitionProgress?: any;
-+  onGestureCancel?: any;
-+  onHeaderBackButtonClicked?: any;
-+  onGestureDetectorStart?: any;
-+  onGestureDetectorConfirmed?: any;
++  onAppear?: (event: any) => void;
++  onDisappear?: (event: any) => void;
++  onDismissed?: (event: any) => void;
++  onNativeDismissCancelled?: (event: any) => void;
++  onWillAppear?: (event: any) => void;
++  onWillDisappear?: (event: any) => void;
++  onHeaderHeightChange?: (event: any) => void;
++  onTransitionProgress?: (event: any) => void;
++  onGestureCancel?: (event: any) => void;
++  onHeaderBackButtonClicked?: (event: any) => void;
++  onGestureDetectorStart?: (event: any) => void;
++  onGestureDetectorConfirmed?: (event: any) => void;
    customAnimationOnSwipe?: boolean;
 -  fullScreenSwipeEnabled?: boolean;
 -  fullScreenSwipeShadowEnabled?: WithDefault<boolean, true>;
@@ -368,7 +368,7 @@ index 906ae64..6b99e90 100644
 -);
 +export default requireNativeComponent<NativeProps>('RNSScreenNavigationContainer');
 diff --git a/node_modules/react-native-screens/src/fabric/ScreenStackHeaderConfigNativeComponent.ts b/node_modules/react-native-screens/src/fabric/ScreenStackHeaderConfigNativeComponent.ts
-index f47d82a..bab21fb 100644
+index f47d82a..31896e6 100644
 --- a/node_modules/react-native-screens/src/fabric/ScreenStackHeaderConfigNativeComponent.ts
 +++ b/node_modules/react-native-screens/src/fabric/ScreenStackHeaderConfigNativeComponent.ts
 @@ -1,82 +1,38 @@
@@ -420,8 +420,8 @@ index f47d82a..bab21fb 100644
 -  onAttached?: DirectEventHandler<OnAttachedEvent>;
 -  onDetached?: DirectEventHandler<OnDetachedEvent>;
 -  backgroundColor?: ColorValue;
-+  onAttached?: any;
-+  onDetached?: any;
++  onAttached?: (event: any) => void;
++  onDetached?: (event: any) => void;
 +  backgroundColor?: any;
    backTitle?: string;
    backTitleFontFamily?: string;
@@ -526,7 +526,7 @@ index 5547599..3223fbe 100644
 -export default codegenNativeComponent<NativeProps>('RNSScreenStack', {});
 +export default requireNativeComponent<NativeProps>('RNSScreenStack');
 diff --git a/node_modules/react-native-screens/src/fabric/SearchBarNativeComponent.ts b/node_modules/react-native-screens/src/fabric/SearchBarNativeComponent.ts
-index 467442a..cc719ca 100644
+index 467442a..a9d7ec3 100644
 --- a/node_modules/react-native-screens/src/fabric/SearchBarNativeComponent.ts
 +++ b/node_modules/react-native-screens/src/fabric/SearchBarNativeComponent.ts
 @@ -1,80 +1,34 @@
@@ -565,16 +565,16 @@ index 467442a..cc719ca 100644
 -  onChangeText?: DirectEventHandler<ChangeTextEvent> | null;
 -  hideWhenScrolling?: boolean;
 -  autoCapitalize?: WithDefault<AutoCapitalizeType, 'none'>;
-+  onSearchBlur?: any;
-+  onSearchFocus?: any;
-+  onSearchTextChange?: any;
-+  onSearchButtonPress?: any;
-+  onCancelButtonPress?: any;
-+  onSearchChange?: any;
-+  onSearchChangeText?: any;
-+  onSearchPress?: any;
-+  onClose?: any;
-+  onOpen?: any;
++  onSearchBlur?: (event: any) => void;
++  onSearchFocus?: (event: any) => void;
++  onSearchTextChange?: (event: any) => void;
++  onSearchButtonPress?: (event: any) => void;
++  onCancelButtonPress?: (event: any) => void;
++  onSearchChange?: (event: any) => void;
++  onSearchChangeText?: (event: any) => void;
++  onSearchPress?: (event: any) => void;
++  onClose?: (event: any) => void;
++  onOpen?: (event: any) => void;
 +  autoCapitalize?: any;
    placeholder?: string;
 -  placement?: WithDefault<SearchBarPlacement, 'stacked'>;

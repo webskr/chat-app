@@ -183,13 +183,24 @@ export const ChatInputBar = ({
     // Waveform Animation Loop
     useEffect(() => {
         if (recordingStatus === 'recording') {
+            // Pulse Animation
             Animated.loop(
                 Animated.sequence([
-                    Animated.timing(waveformAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-                    Animated.timing(waveformAnim, { toValue: 0, duration: 500, useNativeDriver: true })
+                    Animated.timing(micScale, { toValue: 1.15, duration: 600, useNativeDriver: true }),
+                    Animated.timing(micScale, { toValue: 1, duration: 600, useNativeDriver: true })
                 ])
             ).start();
+
+            // Waveform Animation
+            Animated.loop(
+                Animated.timing(waveformAnim, {
+                    toValue: 1,
+                    duration: 800,
+                    useNativeDriver: true
+                })
+            ).start();
         } else {
+            micScale.setValue(1);
             waveformAnim.setValue(0);
             resetAnimations();
         }
@@ -342,10 +353,38 @@ export const ChatInputBar = ({
                                     <View style={styles.recordingDot} />
                                     <ThemedText style={styles.timerText}>{formatDuration(recordingDuration)}</ThemedText>
                                     <View style={styles.waveformContainer}>
-                                        <Animated.View style={[styles.waveformBar, { height: 16, opacity: waveformAnim }]} />
-                                        <Animated.View style={[styles.waveformBar, { height: 24, opacity: waveformAnim }]} />
-                                        <Animated.View style={[styles.waveformBar, { height: 12, opacity: waveformAnim }]} />
-                                        <Animated.View style={[styles.waveformBar, { height: 20, opacity: waveformAnim }]} />
+                                        {[...Array(20)].map((_, i) => (
+                                            <Animated.View
+                                                key={i}
+                                                style={[
+                                                    styles.waveformBar,
+                                                    {
+                                                        height: 16,
+                                                        transform: [
+                                                            {
+                                                                scaleY: waveformAnim.interpolate({
+                                                                    // Use different offsets and multipliers to create a "scrambled" look
+                                                                    inputRange: [0, 0.5, 1],
+                                                                    outputRange: [
+                                                                        0.3 + ((i * 7) % 5) * 0.1,
+                                                                        1.5 - ((i * 3) % 4) * 0.2,
+                                                                        0.3 + ((i * 7) % 5) * 0.1
+                                                                    ]
+                                                                })
+                                                            }
+                                                        ],
+                                                        opacity: waveformAnim.interpolate({
+                                                            inputRange: [0, 0.5, 1],
+                                                            outputRange: [
+                                                                0.2 + ((i * 2) % 3) * 0.1,
+                                                                0.8 + ((i * 4) % 3) * 0.1,
+                                                                0.2 + ((i * 2) % 3) * 0.1
+                                                            ]
+                                                        })
+                                                    }
+                                                ]}
+                                            />
+                                        ))}
                                     </View>
                                 </View>
                                 <View style={styles.slideCancelContainer}>
@@ -395,11 +434,17 @@ export const ChatInputBar = ({
                             </TouchableOpacity>
                         ) : (
                             <Animated.View
-                                style={[styles.iconButton, { transform: [{ scale: micScale }, { translateX: micTranslateX }] }]}
+                                style={[
+                                    styles.iconButton,
+                                    { transform: [{ scale: micScale }, { translateX: micTranslateX }] }
+                                ]}
                                 {...panResponder.panHandlers}
                             >
-                                <View style={styles.micIconContainer}>
-                                    <Mic size={22} color={Colors.text} />
+                                <View style={[
+                                    styles.micIconContainer,
+                                    recordingStatus === 'recording' && { backgroundColor: 'red', borderRadius: 50 }
+                                ]}>
+                                    <Mic size={22} color={recordingStatus === 'recording' ? '#FFF' : Colors.text} />
                                 </View>
                             </Animated.View>
                         )}

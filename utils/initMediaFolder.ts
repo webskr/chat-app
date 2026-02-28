@@ -34,7 +34,8 @@ export async function initMediaFolder(): Promise<void> {
         const alreadyDone = await AsyncStorage.getItem(INIT_KEY);
         if (alreadyDone === 'true') return;
 
-        // Request write-only permission (API 33+ doesn't need READ_EXTERNAL_STORAGE)
+        // Request permissions — need WRITE_EXTERNAL_STORAGE on older, 
+        // but MediaLibrary.requestPermissionsAsync handles Scoped Storage on 33+
         const { status } = await MediaLibrary.requestPermissionsAsync(true);
         if (status !== 'granted') {
             console.log('[initMediaFolder] Permission not granted — will retry on next launch.');
@@ -56,14 +57,12 @@ export async function initMediaFolder(): Promise<void> {
 
         // createAssetAsync — this is the call that:
         //   1. Registers the app with Android's MediaStore
-        //   2. Creates/registers Android/media/com.skr.vegarm in the system
+        //   2. Creates/registers Android/media/com.skr.vegarm (EXTERNAL FILES DIR)
         //   3. Adds the file to the shared media store (visible in gallery)
         const asset = await MediaLibrary.createAssetAsync(placeholderPath);
         console.log('[initMediaFolder] Asset created, id:', asset.id);
 
         // Create the Vegarm album (or add to existing)
-        // IMPORTANT: Do NOT delete the asset after this — deleting it can cause
-        // Android to unregister the media directory on some OEM ROMs.
         let album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
         if (!album) {
             await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
@@ -73,15 +72,19 @@ export async function initMediaFolder(): Promise<void> {
             console.log('[initMediaFolder] ✅ Added placeholder to existing "Vegarm" album.');
         }
 
+        // Trigger a simple FileSystem check to force OS to create the media folder
+        // This is often needed on Android 11+ to ensure the directory is physically present
+        if (FileSystem.documentDirectory) {
+            const mediaDir = `${FileSystem.documentDirectory.replace('files/', 'media/')}com.skr.vegarm/`;
+            await FileSystem.makeDirectoryAsync(mediaDir, { intermediates: true }).catch(() => { });
+        }
+
         // Mark done — use the bumped key so old devices re-run with the new logic
         await AsyncStorage.setItem(INIT_KEY, 'true');
         console.log('[initMediaFolder] ✅ Android media directory registered successfully.');
 
     } catch (error: any) {
-        // Non-fatal — media saving will still work via saveMedia()
         console.warn('[initMediaFolder] Setup failed (non-fatal):', error?.message || error);
-
-        // Don't mark as done so it retries next launch
     }
 }
 

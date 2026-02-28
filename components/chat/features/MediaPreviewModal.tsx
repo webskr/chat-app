@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Modal, Image, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView, ActivityIndicator, FlatList, Dimensions } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView, VideoPlayer } from 'expo-video';
 import { BlurView } from 'expo-blur';
 import { X, Send, Timer, FileText, CheckCircle2 } from 'lucide-react-native';
 import { Colors } from '../../../constants/Colors';
@@ -21,6 +21,21 @@ interface MediaPreviewModalProps {
     onSend: (caption: string, isOneTime: boolean) => void;
     media: MediaItem[] | null;
 }
+
+const VideoPreviewItem = ({ uri }: { uri: string }) => {
+    const player = useVideoPlayer(uri, (player: VideoPlayer) => {
+        player.loop = true;
+        player.play();
+    });
+    return (
+        <VideoView
+            player={player}
+            style={styles.videoPreview}
+            nativeControls={true}
+            contentFit="contain"
+        />
+    );
+};
 
 export const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ visible, onClose, onSend, media }) => {
     const [caption, setCaption] = useState('');
@@ -51,13 +66,7 @@ export const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ visible, o
                 <Image source={{ uri: item.uri }} style={styles.imagePreview} resizeMode="contain" />
             )}
             {item.type === 'video' && (
-                <Video
-                    source={{ uri: item.uri }}
-                    style={styles.videoPreview}
-                    useNativeControls
-                    resizeMode={ResizeMode.CONTAIN}
-                    isLooping
-                />
+                <VideoPreviewItem uri={item.uri} />
             )}
             {item.type === 'document' && (
                 <View style={styles.documentPreview}>
