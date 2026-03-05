@@ -33,50 +33,58 @@ export class ApiService {
             }
         }
 
-        const response = await fetch(url, { ...fetchOptions, headers });
+        try {
+            const response = await fetch(url, { ...fetchOptions, headers });
 
-        if (response.status === 401 && !skipAuth) {
-            // Attempt to refresh token
-            if (!this.isRefreshing) {
-                this.isRefreshing = true;
-                try {
-                    const refreshToken = await SecureStoreHelper.getRefreshToken();
-                    if (!refreshToken) throw new Error('No refresh token available');
+            if (response.status === 401 && !skipAuth) {
+                // Attempt to refresh token
+                if (!this.isRefreshing) {
+                    this.isRefreshing = true;
+                    try {
+                        const refreshToken = await SecureStoreHelper.getRefreshToken();
+                        if (!refreshToken) throw new Error('No refresh token available');
 
-                    const refreshResponse = await fetch(`${Config.API_URL}/auth/refresh.php`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ refresh_token: refreshToken }),
-                    });
+                        const refreshResponse = await fetch(`${Config.API_URL}/auth/refresh.php`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ refresh_token: refreshToken }),
+                        });
 
-                    if (refreshResponse.ok) {
-                        const data = await refreshResponse.json();
-                        await SecureStoreHelper.setAccessToken(data.access_token);
-                        await SecureStoreHelper.setRefreshToken(data.refresh_token);
+                        if (refreshResponse.ok) {
+                            const data = await refreshResponse.json();
+                            await SecureStoreHelper.setAccessToken(data.access_token);
+                            await SecureStoreHelper.setRefreshToken(data.refresh_token);
+                            this.isRefreshing = false;
+                            this.onTokenRefreshed(data.access_token);
+                        } else {
+                            // Refresh failed, logout user
+                            await SecureStoreHelper.clearTokens();
+                            throw new Error('Refresh token invalid');
+                        }
+                    } catch (error) {
                         this.isRefreshing = false;
-                        this.onTokenRefreshed(data.access_token);
-                    } else {
-                        // Refresh failed, logout user
-                        await SecureStoreHelper.clearTokens();
-                        // You might want to trigger a global logout state here
-                        throw new Error('Refresh token invalid');
+                        throw error;
                     }
-                } catch (error) {
-                    this.isRefreshing = false;
-                    throw error;
                 }
+
+                // Return a promise that resolves when the token is refreshed
+                return new Promise((resolve, reject) => {
+                    this.addRefreshSubscriber(async (newToken) => {
+                        try {
+                            headers['Authorization'] = `Bearer ${newToken}`;
+                            resolve(await fetch(url, { ...fetchOptions, headers }));
+                        } catch (e) {
+                            reject(e);
+                        }
+                    });
+                });
             }
 
-            // Return a promise that resolves when the token is refreshed
-            return new Promise((resolve) => {
-                this.addRefreshSubscriber((newToken) => {
-                    headers['Authorization'] = `Bearer ${newToken}`;
-                    resolve(fetch(url, { ...fetchOptions, headers }));
-                });
-            });
+            return response;
+        } catch (error: any) {
+            console.error(`[ApiService] Network error for ${url}:`, error.message);
+            throw error;
         }
-
-        return response;
     }
 
     static async get(url: string, options: RequestOptions = {}) {

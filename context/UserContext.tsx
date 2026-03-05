@@ -9,6 +9,7 @@ import { SyncService } from '../utils/SyncService';
 import { AppState } from 'react-native';
 import { SecureStoreHelper } from '../utils/SecureStoreHelper';
 import { ApiService } from '../utils/ApiService';
+import { NetworkService } from '../utils/NetworkService';
 
 interface User {
     id: string;
@@ -81,6 +82,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const safeSync = async () => {
         // 0. DB Ready Guard (Silent)
         if (!isDbReady) return;
+
+        // 0.1 Network Guard
+        if (!NetworkService.getIsConnected()) {
+            console.log("[UserContext] 📵 Skip Sync: Device is offline");
+            return;
+        }
 
         // 1. Sync Lock
         if (isSyncingRef.current) return;
