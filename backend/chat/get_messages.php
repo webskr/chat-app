@@ -12,12 +12,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 include_once '../includes/db_connection.php';
 include_once 'otv_cleanup.php';
 include_once 'scheduled_message_service.php';
+require_once '../includes/auth_middleware.php';
+
+$authenticated_user_id = authenticate($pdo);
 
 // Lazy Execution: Process scheduled messages whenever someone fetches messages
 // This ensures messages are sent even if the CRON job is delayed or not set up
 processScheduledMessages($pdo);
 
-$me       = isset($_GET['sender_id']) ? (int)$_GET['sender_id'] : null;
+$me = $authenticated_user_id;
 $other_id = isset($_GET['receiver_id']) ? (int)$_GET['receiver_id'] : null;
 $group_id = isset($_GET['group_id']) ? (int)$_GET['group_id'] : null;
 $after_id = isset($_GET['after_id']) ? (int)$_GET['after_id'] : 0;

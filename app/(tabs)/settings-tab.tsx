@@ -6,21 +6,20 @@ import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { GlassCard } from '../../components/GlassCard';
 import {
-    User,
-    Bell,
-    Lock,
-    Palette,
-    LogOut,
-    ChevronRight,
-    Shield,
-    CircleHelp,
-    MoreVertical,
-    UserX,
-    UserPlus,
-    Sliders,
-    ChevronDown,
     Check,
-    MessageSquarePlus
+    MessageSquarePlus,
+    Database,
+    User,
+    UserPlus,
+    Lock,
+    Shield,
+    UserX,
+    Bell,
+    Sliders,
+    Palette,
+    MoreVertical,
+    ChevronRight,
+    LogOut
 } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
 import { router, useFocusEffect } from 'expo-router';
@@ -37,6 +36,7 @@ const SECTIONS = [
             { id: 'invite', icon: UserPlus, label: 'Invite Friends', type: 'link' },
             { id: 'privacy', icon: Lock, label: 'Privacy', type: 'link' },
             { id: 'security', icon: Shield, label: 'Security', type: 'link' },
+            { id: 'backup', icon: Database, label: 'Backup & Restore', type: 'link' },
             { id: 'blocked', icon: UserX, label: 'Blocked Contacts', type: 'link' },
         ],
     },
@@ -175,6 +175,7 @@ export default function SettingsScreen() {
                                             if (item.id === 'controls') router.push('/settings/controls');
                                             if (item.id === 'privacy') router.push('/settings/privacy');
                                             if (item.id === 'appearance') router.push('/appearance');
+                                            if (item.id === 'backup') router.push('/settings/backup');
                                             if (item.id === 'blocked') router.push('/settings/blocked');
                                             if (item.id === 'feedback') router.push('/settings/feedback');
                                         }}

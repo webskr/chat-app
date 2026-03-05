@@ -10,7 +10,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 }
 
 include_once '../includes/db_connection.php';
+require_once '../api/utils/rateLimiter.php';
+require_once '../includes/jwt_helper.php';
 
+$ip = $_SERVER['REMOTE_ADDR'];
+checkRateLimit($pdo, $ip, "login", 10, 60);
 
 $data = json_decode(file_get_contents("php://input"));
 
@@ -23,34 +27,44 @@ if (!empty($data->email) && !empty($data->password)) {
         $stmt = $pdo->prepare($query);
 
         $stmt->bindParam(':email', $email);
-        $stmt->bindParam(':username', $email); // Bind the same input to username parameter
+        $stmt->bindParam(':username', $email);
         $stmt->execute();
         $num = $stmt->rowCount();
 
         if ($num > 0) {
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            $id = $row['id'];
-            $username = $row['username'];
-            $display_name = $row['display_name'];
-            $email = $row['email'];
-            $password_hash = $row['password'];
-            $avatar_id = $row['avatar_id'];
-            $bio = $row['bio'];
-            $username_last_updated = $row['username_last_updated'];
+            
+            if (password_verify($password, $row['password'])) {
+                // Generate Tokens
+                $access_token = JWTHelper::generateAccessToken($row['id']);
+                $refresh_token = JWTHelper::generateRefreshToken();
+                $refresh_token_hash = password_hash($refresh_token, PASSWORD_DEFAULT);
+                $expiry = date('Y-m-d H:i:s', time() + 7 * 24 * 60 * 60); // 7 days
 
-            if (password_verify($password, $password_hash)) {
+                // Store Refresh Token
+                $refresh_stmt = $pdo->prepare("INSERT INTO refresh_tokens (user_id, token_hash, expires_at, device_info) VALUES (:user_id, :token_hash, :expires_at, :device_info)");
+                $refresh_stmt->execute([
+                    ':user_id' => $row['id'],
+                    ':token_hash' => $refresh_token_hash,
+                    ':expires_at' => $expiry,
+                    ':device_info' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown'
+                ]);
+
                 http_response_code(200);
                 ob_clean();
                 echo json_encode(array(
                     "message" => "Login successful.",
+                    "access_token" => $access_token,
+                    "refresh_token" => $refresh_token,
+                    "expires_in" => JWTHelper::getAccessTokenExpiry(),
                     "user" => array(
-                        "id" => $id,
-                        "username" => $username,
-                        "display_name" => $display_name,
-                        "email" => $email,
-                        "avatar_id" => $avatar_id,
-                        "bio" => $bio,
-                        "username_last_updated" => $username_last_updated,
+                        "id" => $row['id'],
+                        "username" => $row['username'],
+                        "display_name" => $row['display_name'],
+                        "email" => $row['email'],
+                        "avatar_id" => $row['avatar_id'],
+                        "bio" => $row['bio'],
+                        "username_last_updated" => $row['username_last_updated'],
                         "global_auto_delete_minutes" => $row['global_auto_delete_minutes'],
                         "last_seen" => $row['last_seen'],
                         "privacy_last_seen" => $row['privacy_last_seen'],

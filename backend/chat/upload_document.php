@@ -53,7 +53,12 @@ try {
     }
 
     // Generate safe filename
-    $sender_id = isset($_POST['sender_id']) ? $_POST['sender_id'] : '0';
+    $sender_id   = isset($_POST['sender_id'])   ? $_POST['sender_id']   : '0';
+    $receiver_id = isset($_POST['receiver_id']) ? $_POST['receiver_id'] : '0';
+
+    require_once __DIR__ . '/../api/utils/rateLimiter.php';
+    require_once __DIR__ . '/../includes/db_connection.php';
+    checkRateLimit($pdo, $sender_id, "upload_media", 5, 60);
     $date_str = date('dmYHis');
     $safe_name = preg_replace("/[^a-zA-Z0-9\-_]/", "", pathinfo($original_name, PATHINFO_FILENAME));
     $new_filename = "doc_" . $sender_id . "_" . $date_str . "_" . $safe_name . "." . $file_extension;

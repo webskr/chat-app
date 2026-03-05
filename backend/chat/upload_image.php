@@ -29,8 +29,16 @@ try {
     $check = getimagesize($_FILES["image"]["tmp_name"]);
     if ($check === false) throw new Exception("File is not a valid image");
 
-    $sender_id   = isset($_POST['sender_id'])   ? $_POST['sender_id']   : '0';
+    $sender_id   = $authenticated_user_id;
     $receiver_id = isset($_POST['receiver_id']) ? $_POST['receiver_id'] : '0';
+
+    require_once __DIR__ . '/../api/utils/rateLimiter.php';
+    require_once __DIR__ . '/../includes/db_connection.php';
+    require_once __DIR__ . '/../includes/auth_middleware.php';
+
+    $authenticated_user_id = authenticate($pdo);
+    checkRateLimit($pdo, $authenticated_user_id, "upload_media", 5, 60);
+
     $date_str    = date('dmY');
     $original_name = pathinfo($_FILES["image"]["name"], PATHINFO_FILENAME);
     $safe_name     = preg_replace("/[^a-zA-Z0-9\-_]/", "", $original_name);

@@ -7,6 +7,8 @@ import { LocalDatabaseService } from '../utils/LocalDatabaseService';
 import { initMediaFolder } from '../utils/initMediaFolder';
 import { SyncService } from '../utils/SyncService';
 import { AppState } from 'react-native';
+import { SecureStoreHelper } from '../utils/SecureStoreHelper';
+import { ApiService } from '../utils/ApiService';
 
 interface User {
     id: string;
@@ -34,13 +36,16 @@ interface User {
 
 interface UserContextType {
     user: User | null;
-    setUser: (user: User | null) => void;
+    setUser: (user: User | null, tokens?: { access_token: string, refresh_token: string }) => Promise<void>;
     updateUserProfile: (data: Partial<User>) => Promise<void>;
     reloadUser: () => Promise<void>;
     isLoading: boolean;
     isDbReady: boolean;
     unreadCount: number;
     setUnreadCount: (count: number) => void;
+    activeChatId: string | null;
+    setActiveChatId: (id: string | null) => void;
+    safeSync: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -50,36 +55,78 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
     const [isDbReady, setIsDbReady] = useState(false);
     const isSyncingRef = React.useRef(false); // Guard against concurrent syncs
+    const lastSyncTimeRef = React.useRef(0); // Throttle syncs (3000ms)
+    const userRef = React.useRef<User | null>(null);
+    const [activeChatId, setActiveChatIdState] = useState<string | null>(null);
+    const activeChatIdRef = React.useRef<string | null>(null);
+    const [appState, setAppState] = useState(AppState.currentState);
+
+    // Keep userRef and activeChatIdRef in sync
+    useEffect(() => {
+        userRef.current = user;
+    }, [user]);
+
+    useEffect(() => {
+        activeChatIdRef.current = activeChatId;
+        // Sync with LocalDatabaseService if possible
+        try {
+            (LocalDatabaseService as any).activeChatId = activeChatId;
+        } catch (e) { }
+    }, [activeChatId]);
+
+    const setActiveChatId = (id: string | null) => {
+        setActiveChatIdState(id);
+    };
+
+    const safeSync = async () => {
+        // 0. DB Ready Guard (Silent)
+        if (!isDbReady) return;
+
+        // 1. Sync Lock
+        if (isSyncingRef.current) return;
+
+        // 2. Throttle Guard (3s)
+        const now = Date.now();
+        if (now - lastSyncTimeRef.current < 3000) {
+            return;
+        }
+
+        // 3. User Ready Guard
+        if (!userRef.current?.id) return;
+
+        console.log("[UserContext] 🚀 Smart Sync Triggered");
+        isSyncingRef.current = true;
+
+        try {
+            await SyncService.syncEverything(Number(userRef.current.id));
+            lastSyncTimeRef.current = Date.now();
+        } catch (error) {
+            console.error("[UserContext] safeSync error:", error);
+        } finally {
+            isSyncingRef.current = false;
+        }
+    };
 
     useEffect(() => {
         loadUser();
     }, []); // Only on mount
 
     useEffect(() => {
-        if (!user) return;
+        if (appState === 'active' && isDbReady && user?.id) {
+            console.log("[UserContext] 🛡️ Smart Sync Gate Opened");
+            safeSync();
+        }
+    }, [appState, isDbReady, user?.id]);
 
-        // AppState listener for background -> foreground sync
-        const subscription = AppState.addEventListener('change', async nextAppState => {
-            if (nextAppState === 'active') {
-                if (isSyncingRef.current) {
-                    console.log("[UserContext] Sync already in progress, skipping AppState trigger.");
-                    return;
-                }
-
-                console.log("[UserContext] App became active, triggering sync...");
-                isSyncingRef.current = true;
-                try {
-                    await SyncService.syncMissedMessages(Number(user.id));
-                } finally {
-                    isSyncingRef.current = false;
-                }
-            }
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', nextAppState => {
+            setAppState(nextAppState);
         });
 
         return () => {
             subscription.remove();
         };
-    }, [user?.id]); // Depend on ID specifically to avoid unnecessary listener swaps
+    }, []);
 
     const loadUser = async () => {
         try {
@@ -94,14 +141,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 await LocalDatabaseService.initDB(String(parsedUser.id));
                 setIsDbReady(true);
 
-                // Trigger sync on initial load with guard
-                if (!isSyncingRef.current) {
-                    isSyncingRef.current = true;
-                    SyncService.syncMissedMessages(Number(parsedUser.id)).finally(() => {
-                        isSyncingRef.current = false;
-                        console.log("[UserContext] Initial sync complete.");
-                    });
-                }
+                // Check for tokens
+                const token = await SecureStoreHelper.getAccessToken();
+                console.log(`[UserContext] Access token exists: ${!!token}`);
 
                 console.log("[UserContext] isDbReady set to true.");
                 // 🗂️ Ensure Android/media/com.skr.vegarm folder exists
@@ -123,7 +165,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             const currentUserStr = await AsyncStorage.getItem('user');
             if (currentUserStr) {
                 const currentUser = JSON.parse(currentUserStr);
-                const response = await fetch(`${Config.API_URL}/users/get_user.php?user_id=${currentUser.id}`);
+                const response = await ApiService.get(`${Config.API_URL}/users/get_user.php?user_id=${currentUser.id}`);
                 if (response.ok) {
                     const freshUser = await response.json();
                     if (freshUser && freshUser.id) {
@@ -136,10 +178,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const setUser = async (newUser: User | null) => {
+    const setUser = async (newUser: User | null, tokens?: { access_token: string, refresh_token: string }) => {
         try {
             if (newUser) {
                 await AsyncStorage.setItem('user', JSON.stringify(newUser));
+
+                if (tokens) {
+                    await SecureStoreHelper.setAccessToken(tokens.access_token);
+                    await SecureStoreHelper.setRefreshToken(tokens.refresh_token);
+                }
 
                 // Register Device Token
                 // We do this in background to not block UI
@@ -147,17 +194,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                     registerForPushNotificationsAsync().then(token => {
                         if (token) {
                             console.log('Updating device token:', token);
-                            fetch(`${Config.API_URL}/auth/update_token.php`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ user_id: newUser.id, token })
-                            }).catch(err => console.error("Token update failed", err));
+                            ApiService.post(`${Config.API_URL}/auth/update_token.php`, { user_id: newUser.id, token })
+                                .catch(err => console.error("Token update failed", err));
                         }
                     }).catch(err => console.error("Token registration failed", err));
                 }
 
             } else {
                 await AsyncStorage.removeItem('user');
+                await SecureStoreHelper.clearTokens();
                 LocalDatabaseService.resetConnection();
             }
             setUserState(newUser);
@@ -183,7 +228,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const [unreadCount, setUnreadCount] = useState(0);
 
     return (
-        <UserContext.Provider value={{ user, setUser, updateUserProfile, reloadUser, isLoading, isDbReady, unreadCount, setUnreadCount }}>
+        <UserContext.Provider value={{
+            user, setUser, updateUserProfile, reloadUser, isLoading, isDbReady,
+            unreadCount, setUnreadCount, activeChatId, setActiveChatId, safeSync
+        }}>
             {children}
         </UserContext.Provider>
     );

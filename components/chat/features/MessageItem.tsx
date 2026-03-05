@@ -1,4 +1,4 @@
-﻿import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Image as RNImage, Platform, Vibration, Pressable, ActivityIndicator } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
 import Animated, {
@@ -8,9 +8,13 @@ import Animated, {
     withSpring,
     runOnJS,
     interpolate,
-    Extrapolation
+    Extrapolation,
+    withTiming,
+    withDelay,
+    useDerivedValue,
+    interpolateColor
 } from 'react-native-reanimated';
-import { MessageSquare, Check, CheckCheck, Timer, ShieldAlert, Trash2, Forward } from 'lucide-react-native';
+import { MessageSquare, Check, CheckCheck, Timer, ShieldAlert, Trash2, Forward, RefreshCcw, AlertCircle } from 'lucide-react-native';
 import { Colors } from '../../../constants/Colors';
 import { ThemedText } from '../../../components/ThemedText';
 import { Avatar } from '../../../components/Avatar';
@@ -53,7 +57,8 @@ export const MessageItem = React.memo(({
     selectionMode,
     onSelect,
     selectedCount,
-    groupMembers
+    groupMembers,
+    highlighted
 }: any) => {
     const swipeableRef = useRef<any>(null);
 
@@ -80,9 +85,8 @@ export const MessageItem = React.memo(({
         item.message_type === 'voice' ||
         !!item.is_forwarded ||
         !!item.reply_to_message_id ||
-        !!item.is_deleted;
-
-    if (!hasContent) return null;
+        !!item.is_deleted ||
+        !!item.deleted_for_everyone;
 
     const translateX = useSharedValue(0);
     const SWIPE_THRESHOLD = 60;
@@ -111,6 +115,23 @@ export const MessageItem = React.memo(({
         transform: [{ translateX: translateX.value }],
     }));
 
+    const highlightAnim = useSharedValue(0);
+    useEffect(() => {
+        if (highlighted) {
+            highlightAnim.value = withTiming(1, { duration: 400 }, () => {
+                highlightAnim.value = withDelay(1500, withTiming(0, { duration: 1000 }));
+            });
+        }
+    }, [highlighted]);
+
+    const highlightAnimatedStyle = useAnimatedStyle(() => ({
+        backgroundColor: interpolateColor(
+            highlightAnim.value,
+            [0, 1],
+            ['transparent', 'rgba(255, 215, 0, 0.3)']
+        )
+    }));
+
     const animatedIconStyle = useAnimatedStyle(() => {
         const opacity = interpolate(translateX.value, [0, SWIPE_THRESHOLD], [0, 1], Extrapolation.CLAMP);
         const scale = interpolate(translateX.value, [0, SWIPE_THRESHOLD], [0.5, 1], Extrapolation.CLAMP);
@@ -119,6 +140,8 @@ export const MessageItem = React.memo(({
             transform: [{ scale }],
         };
     });
+
+    if (!hasContent) return null;
 
     const handlePress = () => {
         if (selectionMode) {
@@ -143,7 +166,7 @@ export const MessageItem = React.memo(({
             onGestureEvent={onGestureEvent}
             activeOffsetX={[0, 10]} // Only trigger on right swipe
             failOffsetY={[-20, 20]}  // Fail if there's significant vertical movement
-            enabled={!selectionMode && !item.is_deleted}
+            enabled={!selectionMode && !item.is_deleted && !item.deleted_for_everyone}
         >
             <Animated.View style={[styles.swipeWrapper]}>
                 {/* Swipe Action Icon (Visible when swiping) */}
@@ -151,7 +174,7 @@ export const MessageItem = React.memo(({
                     <Forward size={24} color={Colors.primary} />
                 </Animated.View>
 
-                <Animated.View style={[animatedContentStyle]}>
+                <Animated.View style={[animatedContentStyle, highlightAnimatedStyle]}>
                     <View style={[
                         styles.messageRow,
                         isMe ? styles.myRow : styles.friendRow,
@@ -179,7 +202,7 @@ export const MessageItem = React.memo(({
                                                 <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
                                             </TouchableOpacity>
                                         ))}
-                                        {isMe && !item.is_deleted && (
+                                        {isMe && !item.is_deleted && !item.deleted_for_everyone && (
                                             <TouchableOpacity style={styles.deleteButton} onPress={() => onDelete(item.id)}>
                                                 <Trash2 size={20} color={Colors.error} />
                                             </TouchableOpacity>
@@ -244,7 +267,13 @@ export const MessageItem = React.memo(({
                                     </TouchableOpacity>
                                 )}
 
-                                {!!item.is_deleted ? null : (
+                                {!!item.is_deleted || !!item.deleted_for_everyone ? (
+                                    <View style={styles.deletedContainer}>
+                                        <ThemedText style={[styles.messageText, styles.deletedText]}>
+                                            🚫 This message was deleted
+                                        </ThemedText>
+                                    </View>
+                                ) : (
                                     !!isOneTime && (!!item.media_url || item.message_text === '🔒 One-Time Message' || item.status === 'seen') ? (
                                         <TouchableOpacity
                                             style={styles.otvContent}
@@ -319,7 +348,7 @@ export const MessageItem = React.memo(({
                                                 });
                                             })}
                                         </View>
-                                        {!item.is_deleted && !!extractFirstUrl(item.message_text) && (
+                                        {!(item.is_deleted || item.deleted_for_everyone) && !!extractFirstUrl(item.message_text) && (
                                             <LinkPreview url={extractFirstUrl(item.message_text)!} isMe={isMe} />
                                         )}
                                     </View>
@@ -340,7 +369,13 @@ export const MessageItem = React.memo(({
                                             {item.status === 'seen' ? <CheckCheck size={16} color={Colors.read} /> :
                                                 item.status === 'delivered' ? <CheckCheck size={16} color={Colors.textSecondary} /> :
                                                     item.status === 'sending' ? <Timer size={14} color={Colors.textSecondary} /> :
-                                                        <Check size={16} color={Colors.textSecondary} />}
+                                                        item.status === 'pending' ? <RefreshCcw size={14} color={Colors.textSecondary} /> :
+                                                            item.status === 'failed' ? (
+                                                                <TouchableOpacity onPress={() => onSend(item)}>
+                                                                    <AlertCircle size={16} color={Colors.error} />
+                                                                </TouchableOpacity>
+                                                            ) :
+                                                                <Check size={16} color={Colors.textSecondary} />}
                                         </View>
                                     )}
                                 </View>
@@ -463,5 +498,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         width: 40,
         zIndex: 0
+    },
+    deletedContainer: {
+        paddingVertical: 4,
+    },
+    deletedText: {
+        fontStyle: 'italic',
+        opacity: 0.7,
+        fontSize: 14,
     },
 });

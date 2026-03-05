@@ -11,6 +11,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 }
 
 include_once '../includes/db_connection.php';
+require_once '../api/utils/rateLimiter.php';
+require_once '../includes/auth_middleware.php';
+
+$authenticated_user_id = authenticate($pdo);
 
 $data = json_decode(file_get_contents("php://input"));
 
@@ -21,7 +25,11 @@ if (empty($data->sender_id) || (empty($data->receiver_id) && empty($data->group_
     exit();
 }
 
-$sender_id = $data->sender_id;
+$sender_id = $authenticated_user_id;
+
+// Rate Limit: 20 messages per 10 seconds per user
+checkRateLimit($pdo, $sender_id, "send_message", 20, 10);
+
 $receiver_id = !empty($data->receiver_id) ? $data->receiver_id : null;
 $group_id = !empty($data->group_id) ? $data->group_id : null;
 $is_group = !empty($group_id);

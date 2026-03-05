@@ -85,9 +85,10 @@ io.on("connection", (socket) => {
             userToSockets.set(userId, new Set());
             // First socket for this user -> notify backend and broadcast online
             notifyBackendStatus(userId, true);
-            io.emit("user:status_change", { user_id: userId, status: 'online' });
+            io.emit("user_online", { user_id: userId, status: 'online' });
         }
         userToSockets.get(userId).add(socket.id);
+        socket.join(`user_${userId}`);
 
         console.log(`User ${userId} identified on socket ${socket.id}`);
     });
@@ -99,13 +100,13 @@ io.on("connection", (socket) => {
     });
 
     // Handle typing start
-    socket.on("typing_start", ({ room, user }) => {
-        socket.to(room).emit("typing_start", { user });
+    socket.on("typing:start", ({ room, user }) => {
+        socket.to(room).emit("typing:start", { user });
     });
 
     // Handle typing stop
-    socket.on("typing_stop", ({ room, user }) => {
-        socket.to(room).emit("typing_stop", { user });
+    socket.on("typing:stop", ({ room, user }) => {
+        socket.to(room).emit("typing:stop", { user });
     });
 
     // --- ZERO KNOWLEDGE REALTIME ROUTING ---
@@ -146,7 +147,7 @@ io.on("connection", (socket) => {
                     // Last socket for this user -> notify backend and broadcast offline
                     userToSockets.delete(userId);
                     notifyBackendStatus(userId, false);
-                    io.emit("user:status_change", { user_id: userId, status: 'offline', last_active: new Date().toISOString() });
+                    io.emit("user_offline", { user_id: userId, status: 'offline', last_active: new Date().toISOString() });
                 }
             }
             socketToUser.delete(socket.id);

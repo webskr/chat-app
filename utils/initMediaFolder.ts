@@ -75,8 +75,13 @@ export async function initMediaFolder(): Promise<void> {
         // Trigger a simple FileSystem check to force OS to create the media folder
         // This is often needed on Android 11+ to ensure the directory is physically present
         if (FileSystem.documentDirectory) {
-            const mediaDir = `${FileSystem.documentDirectory.replace('files/', 'media/')}com.skr.vegarm/`;
+            const baseMediaDir = FileSystem.documentDirectory.replace('files/', 'media/') + 'com.skr.vegarm/';
+            const mediaDir = `${baseMediaDir}media/`;
+            const backupsDir = `${baseMediaDir}backups/`;
+
             await FileSystem.makeDirectoryAsync(mediaDir, { intermediates: true }).catch(() => { });
+            await FileSystem.makeDirectoryAsync(backupsDir, { intermediates: true }).catch(() => { });
+            console.log('[initMediaFolder] Folders ensured:', { mediaDir, backupsDir });
         }
 
         // Mark done — use the bumped key so old devices re-run with the new logic

@@ -83,18 +83,101 @@ export class E2EEService {
     }
 
     /**
-     * Saves the private key to the device's SecureStore
+     * Saves a versioned private key to the device's SecureStore
      */
-    static async savePrivateKey(userId: string, keyPair: KeyPair): Promise<void> {
-        await SecureStore.setItemAsync(`${KEY_ALIAS_PREFIX}${userId}_priv`, keyPair.privateKey);
-        await SecureStore.setItemAsync(`${KEY_ALIAS_PREFIX}${userId}_pub`, keyPair.publicKey);
+    static async savePrivateKey(userId: string, privateKey: string, version: number): Promise<void> {
+        await SecureStore.setItemAsync(`${KEY_ALIAS_PREFIX}${userId}_priv_v${version}`, privateKey);
     }
 
     /**
-     * Loads the private key from SecureStore
+     * Loads a specific version of a private key from SecureStore
      */
-    static async loadPrivateKey(userId: string): Promise<string | null> {
-        return await SecureStore.getItemAsync(`${KEY_ALIAS_PREFIX}${userId}_priv`);
+    static async loadPrivateKey(userId: string, version: number): Promise<string | null> {
+        return await SecureStore.getItemAsync(`${KEY_ALIAS_PREFIX}${userId}_priv_v${version}`);
+    }
+
+    /**
+     * Saves the current key version for the user
+     */
+    static async setCurrentKeyVersion(userId: string, version: number): Promise<void> {
+        await SecureStore.setItemAsync(`${KEY_ALIAS_PREFIX}${userId}_current_v`, version.toString());
+    }
+
+    /**
+     * Gets the current key version for the user
+     */
+    static async getCurrentKeyVersion(userId: string): Promise<number> {
+        const v = await SecureStore.getItemAsync(`${KEY_ALIAS_PREFIX}${userId}_current_v`);
+        return v ? parseInt(v) : 1;
+    }
+
+    /**
+     * Records the last rotation time
+     */
+    static async setLastRotationTime(userId: string, timestamp: number): Promise<void> {
+        await SecureStore.setItemAsync(`${KEY_ALIAS_PREFIX}${userId}_rotation_time`, timestamp.toString());
+    }
+
+    /**
+     * Gets the last rotation time
+     */
+    static async getLastRotationTime(userId: string): Promise<number> {
+        const t = await SecureStore.getItemAsync(`${KEY_ALIAS_PREFIX}${userId}_rotation_time`);
+        return t ? parseInt(t) : 0;
+    }
+
+    /**
+     * Checks if key rotation is needed (periodically, first login, etc.)
+     */
+    static async checkRotationNeeded(userId: string): Promise<boolean> {
+        const lastRotation = await this.getLastRotationTime(userId);
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+
+        // If never rotated or 30 days passed
+        if (lastRotation === 0 || (Date.now() - lastRotation) > thirtyDaysMs) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Generates and uploads a new key pair, incrementing the version.
+     */
+    static async rotateKeys(userId: string, Config: any): Promise<number> {
+        console.log(`[E2EE] Rotating keys for user ${userId}...`);
+
+        const currentVersion = await this.getCurrentKeyVersion(userId);
+        const newVersion = currentVersion + 1;
+
+        const newKeyPair = await this.generateKeyPair();
+
+        // 1. Save locally
+        await this.savePrivateKey(userId, newKeyPair.privateKey, newVersion);
+        await this.setCurrentKeyVersion(userId, newVersion);
+        await this.setLastRotationTime(userId, Date.now());
+
+        // 2. Upload to server
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/upload_rotated_key.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    key_version: newVersion,
+                    public_key: newKeyPair.publicKey
+                })
+            });
+
+            if (response.ok) {
+                console.log(`[E2EE] Successfully rotated to version ${newVersion}`);
+            } else {
+                console.warn(`[E2EE] Key rotated locally but server upload failed. Status: ${response.status}`);
+            }
+        } catch (err) {
+            console.error(`[E2EE] Key rotation server upload error:`, err);
+        }
+
+        return newVersion;
     }
 
     /**

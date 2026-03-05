@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton, Animated } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 // @ts-ignore
@@ -55,48 +55,72 @@ import { ScheduleConfirmationModal } from '../../components/chat/features/Schedu
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { E2EEService } from '../../utils/E2EEService';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
+import { MediaUploadService } from '../../utils/MediaUploadService';
+import { NetworkService } from '../../utils/NetworkService';
 
 export default function ChatDetailScreen() {
-    const { id, user: otherUsername, avatar_id, avatar_url, is_group: isGroupParam, is_official: isOfficialParam } = useLocalSearchParams<{ id: string, user: string, avatar_id: string, avatar_url?: string, is_group?: string, is_official?: string }>();
-    const { user: currentUser, isDbReady } = useUser();
+    // 1. Params & Context Hooks
+    const { id, user: otherUsername, avatar_id, avatar_url, is_group: isGroupParam, is_official: isOfficialParam, highlightMessageId } = useLocalSearchParams<{
+        id: string,
+        user: string,
+        avatar_id: string,
+        avatar_url?: string,
+        is_group?: string,
+        is_official?: string,
+        highlightMessageId?: string
+    }>();
+    const { user: currentUser, isDbReady, safeSync, setActiveChatId } = useUser();
 
-    // Parse isGroup correctly
-    const isGroup = isGroupParam === '1' || isGroupParam === 'true';
-
-    // Core State
+    // 2. Core State Hooks
     const [messages, setMessages] = useState<any[]>([]);
     const [inputText, setInputText] = useState('');
     const [replyingToMessage, setReplyingToMessage] = useState<any>(null);
     const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
     const [selectedMessageIds, setSelectedMessageIds] = useState<number[]>([]);
-    const isSelectionMode = selectedMessageIds.length > 0;
     const [isLoading, setIsLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [failedMessages, setFailedMessages] = useState<any[]>([]);
+    const [isReady, setIsReady] = useState(false);
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [isMuted, setIsMuted] = useState(false);
+    const [groupMembers, setGroupMembers] = useState<any[]>([]);
+    const [relationshipStatus, setRelationshipStatus] = useState<string | null>(null);
+    const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
+    const [inputHeight, setInputHeight] = useState(60);
+    const [permissions, setPermissions] = useState({ allow_member_send_messages: true });
+    const [hasMore, setHasMore] = useState(true);
+    const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
-    // UI State
+    // 3. UI & Modal State Hooks
     const [menuVisible, setMenuVisible] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
     const [messageOptionsVisible, setMessageOptionsVisible] = useState(false);
     const [selectedMessageForOptions, setSelectedMessageForOptions] = useState<any>(null);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-    const [canDeleteForEachOther, setCanDeleteForEachOther] = useState(false); // Renamed for clarity, logic to follow
-    const lastSentRef = useRef<{ text: string, media: string | null, type: string, time: number } | null>(null);
-
-    // 1️⃣ Strict State Reset on Chat Change
-    useEffect(() => {
-        setMessages([]);
-        setIsLoading(true);
-        setFailedMessages([]);
-        setReplyingToMessage(null);
-        setSelectedMessageIds([]);
-        setInputText('');
-        setRelationshipStatus(null);
-        setTargetUserProfile(null);
-    }, [id]);
-
-    // Generic Action Modal State
+    const [canDeleteForEachOther, setCanDeleteForEachOther] = useState(false);
+    const [editingMessage, setEditingMessage] = useState<any>(null);
+    const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+    const [isFullScreenVisible, setIsFullScreenVisible] = useState(false);
+    const [isEditorVisible, setIsEditorVisible] = useState(false);
+    const [editorImageUri, setEditorImageUri] = useState<string | null>(null);
+    const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+    const [previewMedia, setPreviewMedia] = useState<{ type: 'image' | 'video' | 'document'; uri: string; name?: string; mimeType?: string; size?: number; duration?: number }[] | null>(null);
+    const [otvUrl, setOtvUrl] = useState<string | null>(null);
+    const [otvText, setOtvText] = useState<string | null>(null);
+    const [otvType, setOtvType] = useState<'image' | 'video' | 'text'>('image');
+    const [otvVisible, setOtvVisible] = useState(false);
+    const [isPanelOpen, setIsPanelOpen] = useState(false);
+    const [isAttachmentPanelOpen, setIsAttachmentPanelOpen] = useState(false);
+    const [isMediaSearching, setIsMediaSearching] = useState(false);
+    const [panelActiveTab, setPanelActiveTab] = useState<'emoji' | 'gif' | 'sticker'>('emoji');
+    const [panelHeight, setPanelHeight] = useState(380);
+    const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
+    const [pendingScheduleTime, setPendingScheduleTime] = useState<Date | null>(null);
+    const [pendingScheduleText, setPendingScheduleText] = useState('');
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [datePickerMode, setDatePickerMode] = useState<'date' | 'time'>('date');
+    const [presenceMap, setPresenceMap] = useState<Record<string, { isOnline: boolean, lastActive?: string, isTyping: boolean }>>({});
     const [actionModalConfig, setActionModalConfig] = useState<{
         visible: boolean;
         title: string;
@@ -112,46 +136,8 @@ export default function ChatDetailScreen() {
         onConfirm: () => { },
     });
 
-    const [editingMessage, setEditingMessage] = useState<any>(null);
-    const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
-    const [isFullScreenVisible, setIsFullScreenVisible] = useState(false);
-    const [isEditorVisible, setIsEditorVisible] = useState(false);
-    const [editorImageUri, setEditorImageUri] = useState<string | null>(null);
-
-    // Media Preview State
-    const [isPreviewVisible, setIsPreviewVisible] = useState(false);
-    const [previewMedia, setPreviewMedia] = useState<{ type: 'image' | 'video' | 'document'; uri: string; name?: string; mimeType?: string; size?: number; duration?: number }[] | null>(null);
-
-    // OTV Viewer State
-    const [otvUrl, setOtvUrl] = useState<string | null>(null);
-    const [otvText, setOtvText] = useState<string | null>(null);
-    const [otvType, setOtvType] = useState<'image' | 'video' | 'text'>('image');
-    const [otvVisible, setOtvVisible] = useState(false);
-
-
-
-    // Media Panel State
-    const [isPanelOpen, setIsPanelOpen] = useState(false);
-    const [isAttachmentPanelOpen, setIsAttachmentPanelOpen] = useState(false);
-    const [isMediaSearching, setIsMediaSearching] = useState(false);
-    const isMediaSearchingRef = useRef(false);
-    const [panelActiveTab, setPanelActiveTab] = useState<'emoji' | 'gif' | 'sticker'>('emoji');
-
-    const [panelHeight, setPanelHeight] = useState(380);
-
-    // Schedule State
-    const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
-    const [pendingScheduleTime, setPendingScheduleTime] = useState<Date | null>(null);
-    const [pendingScheduleText, setPendingScheduleText] = useState('');
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [datePickerMode, setDatePickerMode] = useState<'date' | 'time'>('date');
-
-    // Data State
-    const [relationshipStatus, setRelationshipStatus] = useState<string | null>(null);
-    const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
-    const sharedSecretCache = useRef<Map<string, Buffer>>(new Map());
-
-    // Refs
+    // 4. Ref Hooks
+    const lastSentRef = useRef<{ text: string, media: string | null, type: string, time: number } | null>(null);
     const flatListRef = useRef<FlashList<any>>(null);
     const inputRef = useRef<TextInput>(null);
     const isAtBottomRef = useRef(true);
@@ -159,236 +145,41 @@ export default function ChatDetailScreen() {
     const appState = useRef(AppState.currentState);
     const socket = useRef<Socket | null>(null);
     const typingTimeout = useRef<NodeJS.Timeout | null>(null);
+    const lastTypingEmit = useRef<number>(0);
+    const typingStopTimer = useRef<NodeJS.Timeout | null>(null);
+    const autoHideTypingTimers = useRef<Record<string, NodeJS.Timeout>>({});
     const recentMessages = useRef<number[]>([]);
-    const currentIdRef = useRef(id); // 5️⃣ Race condition protection
-    if (currentIdRef.current !== id) currentIdRef.current = id;
-    const isFetchingRef = useRef(false); // 🔒 Prevent concurrent fetchMessages calls
-
-    // ✅ Deduplication helper — keyed by temp_id for locals, by id for confirmed.
-    // This prevents temp numeric IDs from colliding with real server IDs.
-    const deduplicateMessages = (msgs: any[]): any[] => {
-        // Step 1: Separate optimistic (local) from confirmed (server) messages
-        const confirmed = new Map<string, any>();
-        const localOnly = new Map<string, any>();
-
-        for (const m of msgs) {
-            if (m.is_local) {
-                // Local/optimistic: key by temp_id (unique client-side timestamp)
-                const tempKey = `temp_${m.temp_id ?? m.id}`;
-                localOnly.set(tempKey, m);
-            } else {
-                // Server-confirmed: key by real server id
-                const serverKey = String(m.id);
-                if (!confirmed.has(serverKey)) {
-                    confirmed.set(serverKey, m);
-                }
-            }
-        }
-
-        // Step 2: Remove local messages whose temp_id was confirmed by server
-        for (const [, m] of confirmed) {
-            if (m.temp_id) {
-                const tempKey = `temp_${m.temp_id}`;
-                localOnly.delete(tempKey);
-            }
-        }
-
-        // Step 3: Merge confirmed + remaining unconfirmed locals, sort by created_at
-        const merged = [...confirmed.values(), ...localOnly.values()];
-        merged.sort((a, b) => {
-            const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-            const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-            return ta - tb;
-        });
-        return merged;
-    };
-    // ─────────────────────────────────────────────────────────────────────────
-    // ✅ SAFE STATE UPDATER
-    // ALL message state mutations must go through safeSetMessages.
-    // It deduplicates on every write so duplicate keys can NEVER reach the list.
-    // ─────────────────────────────────────────────────────────────────────────
-    const safeSetMessages = useCallback(
-        (updater: any[] | ((prev: any[]) => any[])) => {
-            setMessages(prev => {
-                const next = typeof updater === 'function' ? updater(prev) : updater;
-                return deduplicateMessages(next);
-            });
-        },
-        // deduplicateMessages is defined inline so it's stable per render;
-        // no deps needed here — it captures only pure Map/sort logic.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        []
-    );
-
-    const [inputHeight, setInputHeight] = useState(60);
+    const isMounted = useRef(true);
+    const currentIdRef = useRef(id);
+    const isFetchingRef = useRef(false);
+    const isMediaSearchingRef = useRef(false);
+    const sharedSecretCache = useRef<Map<string, Buffer>>(new Map());
     const translateY = useRef(new Animated.Value(0)).current;
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // 🔍 STEP 1 — DEV-ONLY duplicate ID logger
-    // Fires whenever messages changes and prints any duplicate keys it finds.
-    // Zero cost in production (guarded by __DEV__).
-    // ─────────────────────────────────────────────────────────────────────────
+    // --- Network & Connectivity Logic ---
     useEffect(() => {
-        if (!__DEV__) return;
-        const seen = new Map<string, number>();
-        const duplicates: string[] = [];
-        messages.forEach(m => {
-            const key = String(m.id);
-            const count = (seen.get(key) ?? 0) + 1;
-            seen.set(key, count);
-            if (count === 2) duplicates.push(key); // log once when first duplicate appears
+        NetworkService.init().then(() => {
+            if (!NetworkService.getIsConnected()) {
+                console.log("[Chat] Initial network state: Offline");
+            }
         });
-        if (duplicates.length > 0) {
-            console.warn(
-                `[DuplicateKey] ⚠️ ${duplicates.length} duplicate message ID(s) detected:`,
-                duplicates,
-                '\nFull message ids:',
-                messages.map(m => ({ id: m.id, temp_id: m.temp_id, is_local: m.is_local, text: m.message_text?.slice(0, 20) }))
-            );
-        }
-    }, [messages]);
 
-    const [userRole, setUserRole] = useState<string | null>(null);
-
-    const [permissions, setPermissions] = useState({
-        allow_member_send_messages: true,
-        // Add others if needed locally, but mainly we need send_messages here
-    });
-
-    const [groupMembers, setGroupMembers] = useState<any[]>([]);
-
-    useEffect(() => {
-        // Fetch group details if it's a group
-        if (isGroup && currentUser) {
-            fetchGroupRole();
-            fetchGroupMembers();
-        }
-    }, [id, isGroup, currentUser]);
-
-    const fetchGroupMembers = async () => {
-        try {
-            const response = await fetch(`${Config.API_URL}/chat/get_group_details.php?group_id=${id}&user_id=${currentUser?.id}`);
-            const data = await response.json();
-            if (response.ok && data.members) {
-                setGroupMembers(data.members);
-            }
-        } catch (e) {
-            console.error("Failed to fetch members", e);
-        }
-    };
-
-    const fetchGroupRole = async () => {
-        try {
-            const response = await fetch(`${Config.API_URL}/chat/get_group_role.php?group_id=${id}&user_id=${currentUser?.id}`);
-            const data = await response.json();
-            if (response.ok) {
-                setUserRole(data.role);
-                if (data.permissions) {
-                    setPermissions({
-                        allow_member_send_messages: !!data.permissions.send_messages
-                    });
-                }
-            }
-        } catch (e) {
-            console.error("Failed to fetch role", e);
-        }
-    };
-    const [isTyping, setIsTyping] = useState(false);
-    const [isMuted, setIsMuted] = useState(false);
-
-    // Fetch initial mute status & Auto-Mute Self Chat
-    useEffect(() => {
-        if (!currentUser || !id) return;
-        const checkMuteStatus = async () => {
-            try {
-                // TODO: Update check_mute.php to support groups if needed
-                const response = await fetch(`${Config.API_URL}/chat/check_mute.php?user_id=${currentUser.id}&target_id=${id}`);
-                const data = await response.json();
-                if (response.ok) {
-                    setIsMuted(data.is_muted);
-
-                    // Auto-mute Note to Self if not muted
-                    if (String(id) === String(currentUser.id) && !data.is_muted) {
-                        await fetch(`${Config.API_URL}/chat/mute_chat.php`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ user_id: currentUser.id, target_id: id, action: 'mute' })
-                        });
-                        setIsMuted(true);
-                    }
-                }
-            } catch (e) {
-                console.error("Check mute error", e);
-            }
-        };
-        checkMuteStatus();
-    }, [currentUser, id]);
-
-    const handleMuteToggle = () => {
-        if (!currentUser) return;
-        const action = isMuted ? 'unmute' : 'mute';
-
-        setActionModalConfig({
-            visible: true,
-            title: isMuted ? 'Unmute Notifications?' : 'Mute Notifications?',
-            description: isMuted
-                ? 'You will receive notifications for new messages in this chat.'
-                : 'You will not receive notifications for new messages in this chat.',
-            confirmText: isMuted ? 'Unmute' : 'Mute',
-            isDestructive: false,
-            icon: <BellOff size={24} color={Colors.text} />,
-            onConfirm: async () => {
-                setActionModalConfig(prev => ({ ...prev, visible: false }));
-                try {
-                    const response = await fetch(`${Config.API_URL}/chat/mute_chat.php`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ user_id: currentUser.id, target_id: id, action: action })
-                    });
-                    const data = await response.json();
-                    if (response.ok && data.success) {
-                        setIsMuted(!isMuted);
-                    } else {
-                        Alert.alert("Error", data.message || "Failed to update mute status.");
-                    }
-                } catch (e) {
-                    Alert.alert("Error", "Network error.");
+        const unsubscribe = NetworkService.subscribe((connected) => {
+            if (connected) {
+                console.log("[Chat] Back online! Triggering retries...");
+                if (currentUser?.id) {
+                    SyncService.retryPendingMessages(Number(currentUser.id), (msg) => handleSend(msg.message_text, msg.media_url, msg.message_type, true, false, null, { local_db_id: msg.local_db_id, temp_id: msg.temp_id }));
                 }
             }
         });
-    };
 
-    const handleUnfriend = () => {
-        setActionModalConfig({
-            visible: true,
-            title: 'Unfriend User?',
-            description: 'Are you sure you want to unfriend this user? This will remove them from your friends list and DELETE ALL CHAT HISTORY, IMAGES, AND FILES PERMANENTLY.',
-            confirmText: 'Unfriend & Delete',
-            isDestructive: true,
-            icon: <UserMinus size={24} color="#EF4444" />,
-            onConfirm: async () => {
-                if (!currentUser) return;
-                setActionModalConfig(prev => ({ ...prev, visible: false }));
-                try {
-                    const response = await fetch(`${Config.API_URL}/users/handle_relationship.php`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ user_id: currentUser.id, target_id: id, action: 'unfriend' })
-                    });
-                    const data = await response.json();
-                    if (response.ok) {
-                        router.replace('/(tabs)/chats');
-                    } else {
-                        Alert.alert("Error", data.message || "Failed to unfriend.");
-                    }
-                } catch (e) {
-                    Alert.alert("Error", "Network error.");
-                }
-            }
-        });
-    };
+        return unsubscribe;
+    }, [currentUser]);
 
-    // Hooks
+    // Fix Race Condition Ref
+    if (currentIdRef.current !== id) currentIdRef.current = id;
+
+    // 5. Custom Hooks
     const {
         isLocked, setIsLocked, isAuthenticated, setIsAuthenticated,
         showLockSetup, setShowLockSetup, showUnlockPrompt, setShowUnlockPrompt,
@@ -404,7 +195,136 @@ export default function ChatDetailScreen() {
 
     usePermissions();
 
-    // Sync Media Panel Search state
+    // 6. Basic Parsing (After hooks to ensure they are top-level)
+    const isGroup = isGroupParam === '1' || isGroupParam === 'true';
+    const isSelectionMode = selectedMessageIds.length > 0;
+
+    // 7. Helper Functions (Non-Hooks)
+    const deduplicateMessages = (msgs: any[]): any[] => {
+        const confirmed = new Map<string, any>();
+        const localOnly = new Map<string, any>();
+
+        for (const m of msgs) {
+            if (!m) continue;
+            // Local messages don't have a numeric server ID or have is_local=true
+            const isLocal = m.is_local || !m.id || isNaN(Number(m.id)) || (typeof m.id === 'string' && (m.id.startsWith('temp_') || m.id.startsWith('sock_') && !m.server_id));
+
+            if (isLocal) {
+                const tempKey = `temp_${m.temp_id ?? m.id}`;
+                // Keep the one with media if exists (more complete information)
+                if (!localOnly.has(tempKey) || m.media_url) {
+                    localOnly.set(tempKey, m);
+                }
+            } else {
+                const serverKey = String(m.id);
+                // Keep the one with latest status (seen > delivered > sent)
+                const existing = confirmed.get(serverKey);
+                if (!existing || m.status === 'seen' || (m.status === 'delivered' && existing.status !== 'seen')) {
+                    confirmed.set(serverKey, m);
+                }
+            }
+        }
+
+        // Remove local versions if server confirmed version exists
+        for (const [, m] of confirmed) {
+            if (m.temp_id) {
+                localOnly.delete(`temp_${m.temp_id}`);
+            }
+        }
+
+        const merged = [...confirmed.values(), ...localOnly.values()];
+        merged.sort((a, b) => {
+            const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+            // Descending order for inverted list (newest first)
+            return tb - ta;
+        });
+        return merged;
+    };
+
+    const safeSetMessages = useCallback(
+        (updater: any[] | ((prev: any[]) => any[])) => {
+            if (!isMounted.current) return;
+            setMessages(prev => {
+                const next = typeof updater === 'function' ? updater(prev) : updater;
+                return deduplicateMessages(next);
+            });
+        },
+        []
+    );
+
+    // 8. Effect Hooks
+    useEffect(() => {
+        safeSetMessages([]);
+        setIsLoading(true);
+        setFailedMessages([]);
+        setReplyingToMessage(null);
+        setSelectedMessageIds([]);
+        setInputText('');
+        setRelationshipStatus(null);
+        setTargetUserProfile(null);
+    }, [id]);
+
+    useEffect(() => {
+        if (!__DEV__) return;
+        const seen = new Map<string, number>();
+        const duplicates: string[] = [];
+        messages.forEach(m => {
+            const key = String(m.id);
+            const count = (seen.get(key) ?? 0) + 1;
+            seen.set(key, count);
+            if (count === 2) duplicates.push(key);
+        });
+        if (duplicates.length > 0) {
+            console.warn(`[DuplicateKey] ⚠️ ${duplicates.length} duplicate detected:`, duplicates);
+        }
+    }, [messages]);
+
+    useEffect(() => {
+        if (isGroup && currentUser) {
+            fetchGroupRole();
+            fetchGroupMembers();
+        }
+    }, [id, isGroup, currentUser]);
+
+    useEffect(() => {
+        if (!currentUser || !id) return;
+        const checkMuteStatus = async () => {
+            try {
+                const response = await fetch(`${Config.API_URL}/chat/check_mute.php?user_id=${currentUser.id}&target_id=${id}`);
+                const data = await response.json();
+                if (response.ok) {
+                    setIsMuted(data.is_muted);
+                    if (String(id) === String(currentUser.id) && !data.is_muted) {
+                        await fetch(`${Config.API_URL}/chat/mute_chat.php`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user_id: currentUser.id, target_id: id, action: 'mute' })
+                        });
+                        setIsMuted(true);
+                    }
+                }
+            } catch (e) { console.error("Check mute error", e); }
+        };
+        checkMuteStatus();
+    }, [currentUser, id]);
+
+    useEffect(() => {
+        if (isDbReady && isReady && currentUser) {
+            // Mark all currently unread messages as seen when entering the chat
+            updateMessageStatus('seen');
+
+            // ✅ Emit batch seen receipt via socket
+            if (socket.current) {
+                socket.current.emit('message:seen', {
+                    room: isGroup ? `group_${id}` : `user_${id}`,
+                    chat_id: isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`,
+                    sender_id: currentUser.id
+                });
+            }
+        }
+    }, [isDbReady, isReady, id, currentUser]);
+
     useEffect(() => {
         if (!isPanelOpen) {
             setIsMediaSearching(false);
@@ -412,36 +332,6 @@ export default function ChatDetailScreen() {
         }
     }, [isPanelOpen]);
 
-    // Notification Handler 
-    useFocusEffect(
-        React.useCallback(() => {
-            Notifications.setNotificationHandler({
-                handleNotification: async (notification) => {
-                    const data = notification.request.content.data;
-                    if (String(data?.conversation_id) === String(id)) {
-                        return {
-                            shouldShowAlert: false, shouldPlaySound: false, shouldSetBadge: false,
-                            shouldShowBanner: false, shouldShowList: false
-                        };
-                    }
-                    return {
-                        shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false,
-                        shouldShowBanner: true, shouldShowList: true
-                    };
-                },
-            });
-            return () => {
-                Notifications.setNotificationHandler({
-                    handleNotification: async () => ({
-                        shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false,
-                        shouldShowBanner: true, shouldShowList: true
-                    }),
-                });
-            };
-        }, [id])
-    );
-
-    // Keyboard Listeners
     useEffect(() => {
         const showSubscription = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
             const height = e.endCoordinates.height;
@@ -449,18 +339,10 @@ export default function ChatDetailScreen() {
                 setPanelHeight(height);
                 if (!isMediaSearchingRef.current) setIsPanelOpen(false);
             }
-            Animated.timing(translateY, {
-                toValue: -height,
-                duration: 250,
-                useNativeDriver: true
-            }).start();
+            Animated.timing(translateY, { toValue: -height, duration: 250, useNativeDriver: true }).start();
         });
         const hideSubscription = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
-            Animated.timing(translateY, {
-                toValue: 0,
-                duration: 250,
-                useNativeDriver: true
-            }).start();
+            Animated.timing(translateY, { toValue: 0, duration: 250, useNativeDriver: true }).start();
         });
         return () => {
             showSubscription.remove();
@@ -468,14 +350,12 @@ export default function ChatDetailScreen() {
         };
     }, []);
 
-    // 1️⃣ Strict State Reset & Unified Data Fetching
-    const [isReady, setIsReady] = useState(false);
+    // 9. Focus Effect Hooks
 
     // Handlers & Logic - Defined BEFORE useFocusEffect to be used inside
-    const updateLastSeen = async (signal?: AbortSignal) => {
+    async function updateLastSeen(signal?: AbortSignal) {
         if (!currentUser) return;
         try {
-            // Heartbeat to keep last_active and is_online fresh
             await fetch(`${Config.API_URL}/users/update_online_status.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -485,128 +365,77 @@ export default function ChatDetailScreen() {
         } catch (e: any) {
             if (e.name !== 'AbortError') console.error("Heartbeat update error", e);
         }
-    };
+    }
 
-    const fetchMessages = async (signal?: AbortSignal) => {
+    async function fetchMessages(signal?: AbortSignal) {
         if (!currentUser) return;
-        // 🔒 Prevent concurrent calls (socket + polling racing)
         if (isFetchingRef.current) return;
         isFetchingRef.current = true;
 
-        let url = `${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}`;
-        if (isGroup) url += `&group_id=${id}`;
-        else url += `&receiver_id=${id}`;
+        const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
 
         try {
+            // 1. Load initial messages from Local DB immediately
+            let localRows: any[] = [];
+            if (highlightMessageId) {
+                localRows = await LocalDatabaseService.getMessagesUpToId(chatId, highlightMessageId);
+                // Fallback if not found or empty
+                if (localRows.length === 0) {
+                    localRows = await LocalDatabaseService.getLocalMessages(chatId, 30);
+                }
+            } else {
+                localRows = await LocalDatabaseService.getLocalMessages(chatId, 30);
+            }
+
+            const initialMessages = localRows.map(mapDatabaseRowToMessage);
+
+            safeSetMessages(initialMessages);
+            setHasMore(localRows.length >= 30);
+            setIsLoading(false);
+            setIsReady(true);
+
+            // If we have a highlight ID, scroll to it after rendering
+            if (highlightMessageId) {
+                setTimeout(() => {
+                    const index = localRows.findIndex((r: any) => String(r.id) === String(highlightMessageId) || String(r.server_id) === String(highlightMessageId));
+                    if (index !== -1 && flatListRef.current) {
+                        flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+                    }
+                }, 800);
+            }
+
+            // 2. Sync from Server (Fetch new messages)
+            let url = `${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}`;
+            if (isGroup) url += `&group_id=${id}`;
+            else url += `&receiver_id=${id}`;
+
             const response = await fetch(url, { signal });
             if (signal?.aborted) return;
             let data = await response.json();
 
-            // 5️⃣ Race Condition Check
-            if (currentIdRef.current !== id) {
-                console.log('Ignored stale messages for:', id);
-                return;
-            }
+            if (currentIdRef.current !== id) return;
 
-            if (response.ok) {
-                // --- E2EE DECRYPTION ---
-                try {
-                    if (!isGroup) {
-                        const otherId = String(id);
-                        let sharedSecret = sharedSecretCache.current.get(otherId);
-
-                        if (!sharedSecret) {
-                            const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
-                            if (myPrivateKey) {
-                                const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`, { signal });
-                                if (keyRes.ok) {
-                                    const keys = await keyRes.json();
-                                    if (keys && keys.identity_key) {
-                                        sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
-                                        sharedSecretCache.current.set(otherId, sharedSecret);
-                                    }
-                                }
-                            }
-                        }
-
-                        if (sharedSecret) {
-                            data = data.map((msg: any) => {
-                                if (msg.message_type === 'text' && msg.message_text && msg.message_text.includes(':')) {
-                                    try {
-                                        const decryptedText = E2EEService.decryptMessage(msg.message_text, sharedSecret);
-                                        msg.message_text = decryptedText;
-                                        msg.encrypted_payload = decryptedText;
-                                    } catch (e) { /* Fallback */ }
-                                }
-                                return msg;
-                            });
-                        }
-                    }
-                } catch (err) {
-                    console.error("Polling decryption failed:", err);
-                }
-                // --- END DECRYPTION ---
-
-                // --- MERGE INTO LOCAL DB ---
-                if (data && data.length > 0) {
-                    const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-                    for (const msg of data) {
-                        try {
-                            await LocalDatabaseService.insertMessage({
-                                server_id: msg.id.toString(),
-                                chat_id: chatId,
-                                sender_id: msg.sender_id.toString(),
-                                receiver_id: msg.receiver_id?.toString(),
-                                type: msg.message_type || 'text',
-                                encrypted_payload: msg.encrypted_payload || msg.message_text,
-                                local_file_path: msg.media_url || undefined,
-                                status: msg.status || 'delivered',
-                                timestamp: msg.created_at || msg.timestamp
-                            });
-                        } catch (e) { }
-                    }
+            if (response.ok && data && data.length > 0) {
+                for (const msg of data) {
+                    try {
+                        await LocalDatabaseService.insertMessage({
+                            server_id: msg.id.toString(),
+                            chat_id: chatId,
+                            sender_id: msg.sender_id.toString(),
+                            receiver_id: msg.receiver_id?.toString(),
+                            type: msg.message_type || 'text',
+                            encrypted_payload: msg.encrypted_payload || msg.message_text,
+                            local_file_path: msg.media_url || undefined,
+                            status: msg.status || 'delivered',
+                            timestamp: msg.created_at || msg.timestamp
+                        });
+                    } catch (e) { }
                 }
 
-                // Load UI from secure local DB
-                const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-                const localRows = await LocalDatabaseService.getLocalMessages(chatId);
-                const serverMessages = localRows.map(r => {
-                    let msgText = r.encrypted_payload;
-                    let mediaUrl = r.local_file_path;
-                    let msgType = r.type;
-                    let e2e_media = null;
-
-                    if (msgText && msgText.startsWith('{') && msgText.includes('"media"')) {
-                        try {
-                            const parsed = JSON.parse(msgText);
-                            if (parsed.media) {
-                                msgText = parsed.content;
-                                e2e_media = parsed.media;
-                                msgType = parsed.media.mimeType && parsed.media.mimeType.includes('video') ? 'video' : 'image';
-                            }
-                        } catch (e) { }
-                    }
-
-                    return {
-                        id: r.server_id ? parseInt(r.server_id) : r.id,
-                        is_local: false, // ✅ confirmed server message
-                        local_db_id: r.id,
-                        sender_id: r.sender_id,
-                        receiver_id: r.receiver_id,
-                        message_text: msgText,
-                        media_url: mediaUrl,
-                        e2e_media: e2e_media,
-                        message_type: msgType,
-                        status: r.status,
-                        created_at: r.timestamp
-                    };
-                });
-
-                // ✅ MERGE: keep pending optimistic messages, let safeSetMessages deduplicate
-                safeSetMessages(prev => {
-                    const localOnly = prev.filter(m => m.is_local === true);
-                    return [...serverMessages, ...localOnly];
-                });
+                // Refresh initial view with synced messages
+                const updatedRows = await LocalDatabaseService.getLocalMessages(chatId, 30);
+                safeSetMessages(updatedRows.map(mapDatabaseRowToMessage));
+                setHasMore(updatedRows.length === 30);
 
                 if (AppState.currentState === 'active') {
                     const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
@@ -616,29 +445,97 @@ export default function ChatDetailScreen() {
         } catch (error: any) {
             if (error.name !== 'AbortError') console.error('Error fetching messages:', error);
         } finally {
-            isFetchingRef.current = false; // 🔓 Always release the guard
+            isFetchingRef.current = false;
         }
+    }
+
+    const mapDatabaseRowToMessage = (r: any) => {
+        let msgText = r.encrypted_payload;
+        let mediaUrl = r.local_file_path;
+        let msgType = r.type;
+        let e2e_media = null;
+
+        if (msgText && msgText.startsWith('{') && msgText.includes('"media"')) {
+            try {
+                const parsed = JSON.parse(msgText);
+                if (parsed.media) {
+                    msgText = parsed.content;
+                    e2e_media = parsed.media;
+                    msgType = parsed.media.mimeType && parsed.media.mimeType.includes('video') ? 'video' : 'image';
+                }
+            } catch (e) { }
+        }
+
+        return {
+            id: r.server_id ? parseInt(r.server_id) : r.id,
+            is_local: false,
+            local_db_id: r.id,
+            sender_id: r.sender_id,
+            receiver_id: r.receiver_id,
+            message_text: msgText,
+            media_url: mediaUrl,
+            e2e_media: e2e_media,
+            message_type: msgType,
+            status: r.status,
+            is_deleted: r.is_deleted === 1,
+            deleted_for_everyone: r.deleted_for_everyone === 1,
+            created_at: r.timestamp
+        };
     };
 
-    const updateMessageStatus = async (status: 'delivered' | 'seen', messageIds: (string | number)[] = []) => {
-        if (!currentUser) return;
+    async function fetchOlderMessages() {
+        if (!hasMore || isLoadingOlder || !currentUser) return;
+        setIsLoadingOlder(true);
+
+        const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+
+        // Use the timestamp of the last message (oldest in the inverted list)
+        const oldestMessage = messages[messages.length - 1];
+        if (!oldestMessage || !oldestMessage.created_at) {
+            setIsLoadingOlder(false);
+            return;
+        }
 
         try {
-            // [Sync] Use reliable reporting with offline retry queue
-            // The backend (message_delivered.php / message_seen.php) will now handle the real-time Socket.io emission to the sender.
+            const olderRows = await LocalDatabaseService.getLocalMessages(chatId, 30, oldestMessage.created_at);
+            if (olderRows.length > 0) {
+                const olderMessages = olderRows.map(mapDatabaseRowToMessage);
+                safeSetMessages(prev => [...prev, ...olderMessages]);
+                setHasMore(olderRows.length === 30);
+            } else {
+                setHasMore(false);
+            }
+        } catch (error) {
+            console.error('Error fetching older messages:', error);
+        } finally {
+            setIsLoadingOlder(false);
+        }
+    }
+
+    async function updateMessageStatus(status: 'delivered' | 'seen', messageIds: (string | number)[] = []) {
+        if (!id || !currentUser) return;
+        try {
+            const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+
+            // Update locally first for immediate feedback
+            if (status === 'seen' && messageIds) {
+                await LocalDatabaseService.markMessagesSeenLocally(messageIds);
+            }
+
             await SyncService.reportStatus(
                 Number(currentUser.id),
                 Number(id),
-                isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`,
+                chatId,
                 status,
-                isGroup
+                isGroup,
+                messageIds
             );
         } catch (error) {
             console.error(`[ChatDetail] Error reporting ${status}:`, error);
         }
-    };
+    }
 
-    const fetchRelationshipStatus = async (signal?: AbortSignal) => {
+    async function fetchRelationshipStatus(signal?: AbortSignal) {
         if (!currentUser || isGroup) return;
         try {
             const response = await fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal });
@@ -651,19 +548,14 @@ export default function ChatDetailScreen() {
         } catch (error: any) {
             if (error.name !== 'AbortError') console.error('Error fetching relationship:', error);
         }
-    };
+    }
 
-    const fetchGroupDetails = async (signal?: AbortSignal) => {
+    async function fetchGroupDetails(signal?: AbortSignal) {
         if (!isGroup) return;
-        setTargetUserProfile({
-            id: id,
-            username: otherUsername || 'Group',
-            avatar_url: avatar_url,
-            is_group: true
-        });
-    };
+        setTargetUserProfile({ id: id, username: otherUsername || 'Group', avatar_url: avatar_url, is_group: true });
+    }
 
-    const fetchTargetUserProfile = async (signal?: AbortSignal) => {
+    async function fetchTargetUserProfile(signal?: AbortSignal) {
         if (!currentUser || isGroup) return;
         try {
             const response = await fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal });
@@ -680,28 +572,28 @@ export default function ChatDetailScreen() {
         } catch (e: any) {
             if (e.name !== 'AbortError') console.error("Profile fetch error", e);
         }
-    };
+    }
 
     useFocusEffect(
         React.useCallback(() => {
             if (!currentUser || !id || !isDbReady) return;
 
-            // --- HEARTBEAT ---
-            // Update last_active every 30 seconds while user is in this chat
-            const heartbeatInterval = setInterval(() => {
-                updateLastSeen();
-            }, 30000);
-            updateLastSeen(); // Initial heartbeat
+            // 1. Notifications Setup & Clean Unread
+            Notifications.setNotificationHandler({
+                handleNotification: async (notification) => {
+                    const data = notification.request.content.data;
+                    if (String(data?.conversation_id) === String(id)) return { shouldShowAlert: false, shouldPlaySound: false, shouldSetBadge: false, shouldShowBanner: false, shouldShowList: false };
+                    return { shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true };
+                },
+            });
+            updateMessageStatus('seen');
 
-            // Reset State Synchronously on Focus/Mount if ID changed (handled by dependency array)
-            // But we also need to handle the case where we push a new ID.
-            // React key={id} in Stack.Screen usually handles this by calculating a fresh component, 
-            // but if we are reusing the screen, we must reset.
+            // 2. Heartbeat & Presence
+            const heartbeatInterval = setInterval(() => updateLastSeen(), 30000);
+            updateLastSeen();
 
             setIsLoading(true);
-            setIsReady(false); // Render Guard
-
-            // AbortController for this effect session
+            setIsReady(false);
             const abortController = new AbortController();
             const signal = abortController.signal;
 
@@ -713,35 +605,129 @@ export default function ChatDetailScreen() {
             });
 
             socket.current.on('connect', () => {
-                const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                const chatId = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
                 console.log(`[Socket] Connected. Joining room: ${chatId}`);
                 socket.current?.emit('join_room', chatId);
 
-                // Identify the user for online status tracking
-                socket.current?.emit('user:identify', currentUser.id);
+                if (currentUser) {
+                    socket.current?.emit('user:identify', currentUser.id);
+                    socket.current?.emit('user_online', { user_id: currentUser.id });
+                }
 
-                // [Sync] Trigger offline sync on reconnect
+                // [Sync] Trigger offline sync on reconnect using safeSync (lock + throttle)
                 SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, chatId);
-                SyncService.syncMissedMessages(Number(currentUser.id)).then(() => {
+                safeSync().then(() => {
                     // Force UI refresh after global sync to catch any messages for this chat
                     fetchMessages();
+
+                    // [Retry] Trigger auto-retry for failed messages
+                    SyncService.retryPendingMessages(Number(currentUser.id), resendMessage);
                 });
             });
 
+            // Set active chat ID for unread count logic
+            const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+            setActiveChatId(chatId);
+            LocalDatabaseService.markChatRead(chatId).catch(() => { });
+
             // Listen for user status changes (online/offline)
-            socket.current.on('user:status_change', (data: { user_id: string, status: 'online' | 'offline', last_active?: string }) => {
-                if (String(data.user_id) === String(id) && !isGroup) {
-                    setTargetUserProfile((prev: any) => {
-                        if (!prev) return prev;
-                        return {
-                            ...prev,
-                            is_online: data.status === 'online' ? 1 : 0,
-                            last_active: data.last_active || prev.last_active,
-                            // Ensure backward compatibility with UI that uses last_seen
-                            last_seen: data.status === 'offline' ? (data.last_active || new Date().toISOString()) : prev.last_seen
-                        };
-                    });
+            socket.current.on('user_online', (data: { user_id: string }) => {
+                setPresenceMap(prev => ({
+                    ...prev,
+                    [data.user_id]: {
+                        ...prev[data.user_id],
+                        isOnline: true,
+                        isTyping: prev[data.user_id]?.isTyping || false
+                    }
+                }));
+            });
+
+            socket.current.on('user_offline', (data: { user_id: string, last_active?: string }) => {
+                setPresenceMap(prev => ({
+                    ...prev,
+                    [data.user_id]: {
+                        ...prev[data.user_id],
+                        isOnline: false,
+                        lastActive: data.last_active,
+                        isTyping: false
+                    }
+                }));
+            });
+
+            socket.current.on('typing:start', (data: { user: string }) => {
+                const userId = String(data.user);
+
+                // Auto-hide if no event for 3s
+                if (autoHideTypingTimers.current[userId]) {
+                    clearTimeout(autoHideTypingTimers.current[userId]);
                 }
+
+                autoHideTypingTimers.current[userId] = setTimeout(() => {
+                    setPresenceMap(prev => {
+                        const newState = {
+                            ...prev,
+                            [userId]: { ...prev[userId], isTyping: false }
+                        };
+
+                        if (isGroup) {
+                            const typingMembers = Object.keys(newState)
+                                .filter(uid => uid !== String(id) && newState[uid]?.isTyping && groupMembers.some(m => String(m.user_id) === uid));
+
+                            newState[String(id)] = {
+                                ...newState[String(id)],
+                                isTyping: typingMembers.length > 0,
+                                typingMembers: typingMembers.map(uid => groupMembers.find(m => String(m.user_id) === uid)?.username).filter(Boolean)
+                            } as any;
+                        }
+                        return newState;
+                    });
+                }, 3000);
+
+                setPresenceMap(prev => {
+                    const newState = {
+                        ...prev,
+                        [userId]: { ...prev[userId], isTyping: true }
+                    };
+
+                    // If group, update synthetic group status
+                    if (isGroup) {
+                        const typingMembers = Object.keys(newState)
+                            .filter(uid => uid !== String(id) && newState[uid]?.isTyping && groupMembers.some(m => String(m.user_id) === uid));
+
+                        newState[String(id)] = {
+                            ...newState[String(id)],
+                            isOnline: true,
+                            isTyping: typingMembers.length > 0,
+                            typingMembers: typingMembers.map(uid => groupMembers.find(m => String(m.user_id) === uid)?.username).filter(Boolean)
+                        } as any;
+                    }
+                    return newState;
+                });
+            });
+
+            socket.current.on('typing:stop', (data: { user: string }) => {
+                const userId = String(data.user);
+                if (autoHideTypingTimers.current[userId]) {
+                    clearTimeout(autoHideTypingTimers.current[userId]);
+                }
+                setPresenceMap(prev => {
+                    const newState = {
+                        ...prev,
+                        [userId]: { ...prev[userId], isTyping: false }
+                    };
+
+                    if (isGroup) {
+                        const typingMembers = Object.keys(newState)
+                            .filter(uid => uid !== String(id) && newState[uid]?.isTyping && groupMembers.some(m => String(m.user_id) === uid));
+
+                        newState[String(id)] = {
+                            ...newState[String(id)],
+                            isTyping: typingMembers.length > 0,
+                            typingMembers: typingMembers.map(uid => groupMembers.find(m => String(m.user_id) === uid)?.username).filter(Boolean)
+                        } as any;
+                    }
+                    return newState;
+                });
             });
 
             socket.current.on('message:new', async (data: any) => {
@@ -771,123 +757,174 @@ export default function ChatDetailScreen() {
                     if (!isGroup && data.message_type === 'text' && data.encrypted_payload && data.encrypted_payload.includes(':')) {
                         try {
                             const otherId = String(data.sender_id);
-                            let sharedSecret = sharedSecretCache.current.get(otherId);
+                            const msgKeyVersion = data.key_version || 1;
+                            const cacheKey = `${otherId}_v${msgKeyVersion}`;
+
+                            let sharedSecret = sharedSecretCache.current.get(cacheKey);
 
                             if (!sharedSecret) {
-                                console.log(`[Socket] Fetching keys for ${otherId} to derive secret...`);
-                                const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
-                                const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${otherId}`);
+                                console.log(`[Socket] Fetching specific key version ${msgKeyVersion} for ${otherId}...`);
+                                // We need our private key (version 1 logic for now, but should ideally be tracked)
+                                // Actually, for incoming messages, it depends on which of our public keys they used.
+                                // BUT in this simplified rotation, we always encrypt for the receiver's LATEST key.
+                                // So IF we are the receiver (current user), the sender used OUR latest key version at that time.
+                                // The sender should have included the key_version they used.
+
+                                const myVersion = msgKeyVersion; // Assume sender uses this version of OUR key
+                                const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id, myVersion);
+
+                                const keyRes = await fetch(`${Config.API_URL}/chat/get_latest_key.php?user_id=${otherId}`);
                                 if (keyRes.ok && myPrivateKey) {
                                     const keys = await keyRes.json();
-                                    if (keys && keys.identity_key) {
-                                        sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
-                                        sharedSecretCache.current.set(otherId, sharedSecret);
+                                    if (keys && keys.public_key) {
+                                        sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.public_key);
+                                        sharedSecretCache.current.set(cacheKey, sharedSecret);
                                     }
                                 }
                             }
 
                             if (sharedSecret) {
                                 decryptedPayload = E2EEService.decryptMessage(data.encrypted_payload, sharedSecret);
-                                console.log(`[Socket] Decrypted message successfully.`);
+                                console.log(`[Socket] Decrypted message using key v${msgKeyVersion}`);
                             }
                         } catch (e) { console.error("Realtime decryption failed", e); }
                     }
 
-                    // Use real server message_id if available (emitted by sender after server confirms)
+                    // Use real server message_id if available
                     const realId = data.message_id ?? data.temp_id ?? `sock_${Date.now()}`;
 
-                    await LocalDatabaseService.insertMessage({
-                        server_id: String(realId),
-                        chat_id: chatId,
-                        sender_id: data.sender_id.toString(),
-                        receiver_id: isGroup ? undefined : currentUser.id.toString(),
-                        type: data.message_type || 'text',
-                        encrypted_payload: decryptedPayload,
-                        local_file_path: data.media_url || undefined,
-                        status: 'delivered',
-                        timestamp: data.timestamp || data.created_at
+                    // ✅ Standard De-duplication Check BEFORE state update
+                    safeSetMessages(prev => {
+                        const alreadyExists = prev.some(m => String(m.id) === String(realId) || (m.temp_id && String(m.temp_id) === String(data.temp_id)));
+                        if (alreadyExists) return prev;
+
+                        const incomingMsg = {
+                            id: realId,
+                            temp_id: data.temp_id,
+                            sender_id: data.sender_id,
+                            receiver_id: isGroup ? null : currentUser.id,
+                            message_text: decryptedPayload,
+                            media_url: data.media_url || null,
+                            message_type: data.message_type || 'text',
+                            status: 'delivered',
+                            is_local: false,
+                            created_at: data.timestamp || new Date().toISOString(),
+                        };
+                        return [...prev, incomingMsg];
                     });
 
-                    // ✅ Merge directly into state — no fetchMessages() call to avoid double-fire
-                    const incomingMsg = {
-                        id: realId,
-                        temp_id: data.temp_id,
-                        sender_id: data.sender_id,
-                        receiver_id: isGroup ? null : currentUser.id,
-                        message_text: decryptedPayload,
-                        media_url: data.media_url || null,
-                        message_type: data.message_type || 'text',
-                        status: 'delivered',
-                        is_local: false,
-                        created_at: data.timestamp || new Date().toISOString(),
-                    };
-                    safeSetMessages(prev => [...prev, incomingMsg]);
-
-                    // Mark as seen automatically if chat is open
-                    if (AppState.currentState === 'active') {
-                        updateMessageStatus('seen', [realId]);
+                    // ✅ Emit message:delivered back to sender
+                    if (socket.current) {
+                        socket.current.emit('message:delivered', {
+                            room: isGroup ? `group_${id}` : `user_${data.sender_id}`,
+                            message_ids: [realId],
+                            chat_id: chatId,
+                            sender_id: currentUser.id
+                        });
                     }
 
+                    // Mark as seen automatically if chat is open and focused
+                    if (AppState.currentState === 'active' && isMounted.current) {
+                        updateMessageStatus('seen', [realId]);
+                        // ✅ Also emit message:seen via socket
+                        if (socket.current) {
+                            socket.current.emit('message:seen', {
+                                room: isGroup ? `group_${id}` : `user_${data.sender_id}`,
+                                message_ids: [realId],
+                                chat_id: chatId,
+                                sender_id: currentUser.id
+                            });
+                        }
+                    }
+
+
                 } catch (e) {
-                    console.error("Socket insert error", e);
+                    console.error("Socket: message:new handling error", e);
                 }
             });
 
-            socket.current.on('message:delivered', (data: any) => {
-                // If it's for another room we don't care (server isolates rooms but good to be safe)
-                // For 1-on-1, room is our own user room.
-                safeSetMessages(prev => prev.map(m =>
-                    (data.message_ids && data.message_ids.includes(m.id)) || !data.message_ids
-                        ? { ...m, status: m.status === 'seen' ? 'seen' : 'delivered' }
-                        : m
-                ));
-            });
+            if (socket.current) {
+                socket.current.on('message:delivered', async (data: any) => {
+                    console.log(`[Socket] Received message:delivered for ${data.message_ids?.length || 'all'} messages`);
 
-            socket.current.on('message:read', (data: any) => {
-                safeSetMessages(prev => prev.map(m =>
-                    (data.message_ids && data.message_ids.includes(m.id)) || !data.message_ids
-                        ? { ...m, status: 'seen' }
-                        : m
-                ));
-            });
+                    // 1. Update UI
+                    safeSetMessages(prev => prev.map(m =>
+                        (data.message_ids && data.message_ids.map(String).includes(String(m.id))) || !data.message_ids
+                            ? { ...m, status: m.status === 'seen' ? 'seen' : 'delivered' }
+                            : m
+                    ));
 
-            socket.current.on('message:delete', async (data: any) => {
-                try {
-                    const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-                    const localRows = await LocalDatabaseService.getLocalMessages(chatId);
-                    const matchingRow = localRows.find(r => r.server_id === String(data.message_id));
-
-                    if (matchingRow) {
-                        if (matchingRow.local_file_path && matchingRow.local_file_path.startsWith('file://')) {
+                    // 2. Update Local DB
+                    if (data.message_ids && currentUser) {
+                        for (const msgId of data.message_ids) {
                             try {
-                                const FileSystem = require('expo-file-system');
-                                await FileSystem.deleteAsync(matchingRow.local_file_path, { idempotent: true });
+                                const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                                const localRows = await LocalDatabaseService.getLocalMessages(chatId, 100);
+                                const matchingRow = localRows.find(r => r.server_id === String(msgId));
+                                if (matchingRow) {
+                                    await LocalDatabaseService.updateMessageStatus(matchingRow.id, 'delivered');
+                                }
                             } catch (e) { }
                         }
-                        await LocalDatabaseService.markMessageDeletedForEveryone(String(data.message_id));
                     }
-                } catch (e) { }
+                });
 
-                safeSetMessages(prev => prev.map(m => m.id === data.message_id || String(m.id) === String(data.message_id)
-                    ? { ...m, message_text: '🚫 This message was deleted', media_url: null, message_type: 'deleted' }
-                    : m
-                ));
-            });
+                socket.current.on('message:seen', async (data: any) => {
+                    console.log(`[Socket] Received message:seen for ${data.message_ids?.length || 'all'} messages`);
 
-            socket.current.on('typing_start', (data: any) => {
-                const isRelevant = isGroup
-                    ? String(data.user) !== String(currentUser.id)
-                    : String(data.user) === String(id);
-                if (isRelevant) setIsTyping(true);
-            });
+                    // 1. Update UI
+                    safeSetMessages(prev => prev.map(m =>
+                        (data.message_ids && data.message_ids.map(String).includes(String(m.id))) || !data.message_ids
+                            ? { ...m, status: 'seen' }
+                            : m
+                    ));
 
-            socket.current.on('typing_stop', (data: any) => {
-                const isRelevant = isGroup
-                    ? String(data.user) !== String(currentUser.id)
-                    : String(data.user) === String(id);
-                if (isRelevant) setIsTyping(false);
-            });
-            // --- END REAL-TIME SOCKET SETUP ---
+                    // 2. Update Local DB
+                    if (!currentUser) return;
+                    try {
+                        const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                        if (data.message_ids) {
+                            for (const msgId of data.message_ids) {
+                                const localRows = await LocalDatabaseService.getLocalMessages(chatId, 100);
+                                const matchingRow = localRows.find(r => r.server_id === String(msgId));
+                                if (matchingRow) {
+                                    await LocalDatabaseService.updateMessageStatus(matchingRow.id, 'seen');
+                                }
+                            }
+                        } else {
+                            await LocalDatabaseService.markAllMessagesSeen(chatId);
+                        }
+                    } catch (e) { }
+                });
+
+                socket.current.on('message:delete', async (data: any) => {
+                    try {
+                        const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                        const localRows = await LocalDatabaseService.getLocalMessages(chatId);
+                        const matchingRow = localRows.find(r => r.server_id === String(data.message_id));
+
+                        if (matchingRow) {
+                            if (matchingRow.local_file_path && matchingRow.local_file_path.startsWith('file://')) {
+                                try {
+                                    const FileSystem = require('expo-file-system');
+                                    await FileSystem.deleteAsync(matchingRow.local_file_path, { idempotent: true });
+                                } catch (e) { }
+                            }
+                            await LocalDatabaseService.markMessageDeletedForEveryone(String(data.message_id));
+                        }
+                    } catch (e) { }
+
+                    safeSetMessages(prev => prev.map(m => m.id === data.message_id || String(m.id) === String(data.message_id)
+                        ? { ...m, message_text: '🚫 This message was deleted', media_url: null, message_type: 'deleted', deleted_for_everyone: true }
+                        : m
+                    ));
+                });
+
+                // Remove old typing handlers
+                // socket.current.on('typing_start', ...
+                // socket.current.on('typing_stop', ...
+                // --- END REAL-TIME SOCKET SETUP ---
+            }
 
             const fetchData = async () => {
                 const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
@@ -926,7 +963,9 @@ export default function ChatDetailScreen() {
                             e2e_media: e2e_media,
                             message_type: msgType,
                             status: r.status,
-                            created_at: r.timestamp
+                            is_deleted: r.is_deleted === 1,
+                            deleted_for_everyone: r.deleted_for_everyone === 1,
+                            created_at: r.timestamp,
                         };
                     });
                     // ✅ Initial load: safeSetMessages deduplicates automatically
@@ -961,7 +1000,8 @@ export default function ChatDetailScreen() {
                                 let sharedSecret = sharedSecretCache.current.get(otherId);
 
                                 if (!sharedSecret) {
-                                    const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
+                                    const myVersion = await E2EEService.getCurrentKeyVersion(currentUser.id);
+                                    const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id, myVersion);
                                     if (myPrivateKey) {
                                         const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
                                         if (keyRes.ok) {
@@ -1105,28 +1145,54 @@ export default function ChatDetailScreen() {
                 }
             };
 
-            fetchData();
+            const fetchPresenceState = async () => {
+                const ids = isGroup ? groupMembers.map(m => m.user_id).join(',') : id;
+                if (!ids) return;
+                try {
+                    const res = await fetch(`${Config.API_URL}/chat/get_presence.php?ids=${ids}`, { signal });
+                    if (res.ok) {
+                        const data = await res.json();
+                        const newMap: any = {};
+                        data.forEach((p: any) => {
+                            newMap[String(p.id)] = {
+                                isOnline: !!p.is_online,
+                                lastActive: p.last_active,
+                                isTyping: false
+                            };
+                        });
+                        setPresenceMap(prev => ({ ...prev, ...newMap }));
+                    }
+                } catch (e) { }
+            };
 
-            // Polling (Interval) - Cleaned up
+            fetchData();
+            fetchPresenceState();
+
+            // Fallback Polling (Interval) - Much slower now that we have WebSockets and Unified Sync
             const interval = setInterval(() => {
                 if (AppState.currentState === 'active') {
-                    fetchMessages();
+                    // Only sync incrementally, don't fetch all messages
+                    SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, chatId);
                     updateLastSeen();
                 }
-            }, 3000);
+            }, 30000); // 30s interval is enough for fallback
 
             return () => {
-                console.log(`[Chat ${id}] Unmounting/Blurring - Cleanup`);
+                isMounted.current = false;
                 abortController.abort();
                 clearInterval(interval);
-                heartbeatInterval && clearInterval(heartbeatInterval);
+                clearInterval(heartbeatInterval);
+                setActiveChatId(null);
                 if (socket.current) {
                     socket.current.disconnect();
                     socket.current = null;
                 }
+                Notifications.setNotificationHandler({
+                    handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true }),
+                });
                 saveLastScrollPosition();
             };
-        }, [id, currentUser, isDbReady]) // Re-run deeply when ID changes
+        }, [id, currentUser, isDbReady])
     );
 
     const handleSend = async (messageText: string = inputText, mediaPath: string | null = null, mediaType: 'text' | 'image' | 'video' | 'audio' | 'voice' | 'document' | 'gif' | 'sticker' = 'text', isRetry = false, isOneTime = false, scheduledAt: Date | null = null, extraMeta: any = {}) => {
@@ -1179,21 +1245,29 @@ export default function ChatDetailScreen() {
                 reply_type: replyingToMessage?.message_type,
                 reply_media_url: replyingToMessage?.media_url
             };
-            // ✅ safeSetMessages deduplicates — rapid taps can never cause duplicate optimistic messages
-            safeSetMessages(prev => [...prev, localMessage]);
+            if (!isRetry) {
+                // ✅ safeSetMessages deduplicates — rapid taps can never cause duplicate optimistic messages
+                safeSetMessages(prev => [...prev, localMessage]);
+            }
 
             // --- LOCAL DB INSERT ---
             try {
-                const dbId = await LocalDatabaseService.insertMessage({
-                    chat_id: isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`,
-                    sender_id: currentUser.id.toString(),
-                    receiver_id: isGroup ? undefined : id.toString(),
-                    type: newMessage.message_type,
-                    encrypted_payload: undefined,
-                    local_file_path: mediaPath || undefined,
-                    status: 'sending'
-                });
-                (newMessage as any).local_db_id = dbId;
+                if (!isRetry) {
+                    const dbId = await LocalDatabaseService.insertMessage({
+                        temp_id: newMessage.temp_id.toString(),
+                        chat_id: isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`,
+                        sender_id: currentUser.id.toString(),
+                        receiver_id: isGroup ? undefined : id.toString(),
+                        type: newMessage.message_type,
+                        encrypted_payload: newMessage.message_text || undefined,
+                        local_file_path: mediaPath || undefined,
+                        status: 'sending',
+                        retry_count: 0
+                    });
+                    (newMessage as any).local_db_id = dbId;
+                } else {
+                    (newMessage as any).local_db_id = extraMeta.local_db_id;
+                }
             } catch (err) {
                 console.error("Local DB Insert Error", err);
             }
@@ -1219,17 +1293,25 @@ export default function ChatDetailScreen() {
             }
 
             // --- E2EE SCRAMBLE ---
+            let currentKeyVersion = 1;
             try {
                 if (!isGroup && (messageText || isMediaE2E)) {
-                    const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id);
+                    // 1. Get our latest private key version
+                    const myVersion = await E2EEService.getCurrentKeyVersion(currentUser.id);
+                    const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id, myVersion);
+
                     if (myPrivateKey) {
-                        const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
+                        // 2. Fetch receiver's latest public key and version
+                        const keyRes = await fetch(`${Config.API_URL}/chat/get_latest_key.php?user_id=${id}`);
                         if (keyRes.ok) {
                             const keys = await keyRes.json();
-                            if (keys && keys.identity_key) {
-                                const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
+                            if (keys && keys.public_key) {
+                                currentKeyVersion = keys.key_version;
+                                const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.public_key);
+                                // Include version in ciphertext metadata prefix if desired, 
+                                // but we'll mainly use the explicit key_version field in the payload.
                                 messageText = await E2EEService.encryptMessage(payloadToEncrypt || " ", sharedSecret);
-                                console.log("Message dynamically encrypted for transit.");
+                                console.log(`[E2EE] Message encrypted using receiver key v${currentKeyVersion}`);
                             }
                         }
                     }
@@ -1244,6 +1326,7 @@ export default function ChatDetailScreen() {
                 message: messageText,
                 reply_to_message_id: newMessage.reply_to_message_id,
                 is_one_time: isOneTime ? 1 : 0,
+                key_version: !isGroup ? currentKeyVersion : null,
                 scheduled_at: scheduledAt ? scheduledAt.toISOString() : null
             };
 
@@ -1281,7 +1364,15 @@ export default function ChatDetailScreen() {
                     // --- LOCAL DB UPDATE ---
                     if ((newMessage as any).local_db_id) {
                         try {
-                            await LocalDatabaseService.updateMessageStatus((newMessage as any).local_db_id, 'sent');
+                            await LocalDatabaseService.updateMessageStatusAndRetry((newMessage as any).local_db_id, 'sent', 0);
+                            if (!isGroup) {
+                                (newMessage as any).key_version = currentKeyVersion;
+                                // Update local DB with the key version used
+                                await LocalDatabaseService.getDB().execute(
+                                    `UPDATE messages SET key_version = ? WHERE id = ?`,
+                                    [currentKeyVersion, (newMessage as any).local_db_id]
+                                );
+                            }
                             if (data.message_id) {
                                 await LocalDatabaseService.updateServerId((newMessage as any).local_db_id, String(data.message_id));
                             }
@@ -1299,6 +1390,7 @@ export default function ChatDetailScreen() {
                                         temp_id: tempId,
                                         is_local: false,
                                         status: 'sent',
+                                        retry_count: 0,
                                         created_at: data.created_at || m.created_at,
                                     }
                                     : m
@@ -1308,11 +1400,10 @@ export default function ChatDetailScreen() {
 
                     // --- REALTIME SOCKET FORWARDING ---
                     if (socket.current) {
-                        const targetRoom = isGroup ? `group_${id}` : `user_${id}`;
+                        const targetRoom = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
                         socket.current.emit("message:new", {
                             room: targetRoom,
                             sender_id: currentUser.id,
-                            // Send BOTH the real server id AND temp_id so receiver can deduplicate
                             message_id: data.message_id,
                             temp_id: tempId,
                             encrypted_payload: messageText,
@@ -1320,21 +1411,63 @@ export default function ChatDetailScreen() {
                             message_type: newMessage.message_type,
                             reply_to_message_id: newMessage.reply_to_message_id,
                             is_one_time: newMessage.is_one_time,
-                            media_url: newMessage.media_url
+                            media_url: newMessage.media_url,
+                            key_version: !isGroup ? currentKeyVersion : null
                         });
                     }
                 }
                 return data.message_id;
             } else {
-                if (!scheduledAt) setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed' }]);
+                if (!scheduledAt) {
+                    handleSendFailure(newMessage, tempId);
+                }
             }
         } catch (error) {
             console.error('Error sending message:', error);
-            if (!scheduledAt) setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed' }]);
+            if (!scheduledAt) {
+                handleSendFailure(newMessage, tempId);
+            }
         } finally {
             setIsSending(false);
         }
-        return null;
+    };
+
+    const handleSendFailure = async (newMessage: any, tempId: number) => {
+        const isOnline = NetworkService.getIsConnected();
+        const status = isOnline ? 'failed' : 'pending';
+        const newRetryCount = (newMessage.retry_count || 0) + 1;
+
+        if ((newMessage as any).local_db_id) {
+            await LocalDatabaseService.updateMessageStatusAndRetry((newMessage as any).local_db_id, status, status === 'failed' ? newRetryCount : (newMessage.retry_count || 0));
+        }
+
+        safeSetMessages(prev => prev.map(m => (m.id === tempId || m.temp_id === tempId) ? { ...m, status: status, retry_count: newRetryCount } : m));
+
+        if (status === 'failed') {
+            setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed', retry_count: newRetryCount }]);
+        }
+    };
+
+    const resendMessage = async (message: any) => {
+        console.log("Resending message:", message.id);
+
+        // Update state to 'sending'
+        safeSetMessages(prev => prev.map(m => m.id === message.id ? { ...m, status: 'sending' } : m));
+        if (message.local_db_id) {
+            await LocalDatabaseService.updateMessageStatus(message.local_db_id, 'sending');
+        }
+
+        // Re-call handleSend but avoid adding a new local message
+        // We'll pass the existing message data
+        // Actually, it's cleaner to reuse the core logic but without the local push
+        // Let's modify handleSend to accept an optional existing local_db_id or similar
+        // For now, I will just call handleSend with isRetry=true which already handles some logic
+        return handleSend(message.message_text, message.media_url, message.message_type, true, !!message.is_one_time, null, {
+            reply_to_message_id: message.reply_to_message_id,
+            retry_count: message.retry_count,
+            local_db_id: message.local_db_id,
+            temp_id: message.temp_id || message.id
+        });
     };
 
 
@@ -1342,18 +1475,34 @@ export default function ChatDetailScreen() {
         setInputText(text);
         if (!socket.current || !currentUser) return;
 
-        // Always send to the other user's personal room
-        const targetRoom = isGroup ? `group_${id}` : `user_${id}`;
+        const targetRoom = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+        const now = Date.now();
 
         if (text.length > 0) {
-            socket.current.emit('typing_start', { room: targetRoom, user: currentUser.id });
-            if (typingTimeout.current) clearTimeout(typingTimeout.current);
-            typingTimeout.current = setTimeout(() => {
-                socket.current?.emit('typing_stop', { room: targetRoom, user: currentUser.id });
-            }, 2000);
+            // Throttled typing:start (max once per 2s)
+            if (now - lastTypingEmit.current > 2000) {
+                socket.current.emit('typing:start', { room: targetRoom, user: currentUser.id });
+                lastTypingEmit.current = now;
+
+                // Optional: Update last_typing in DB via API (lightweight)
+                fetch(`${Config.API_URL}/users/update_online_status.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: currentUser.id, is_typing: 1 })
+                }).catch(() => { });
+            }
+
+            // Reset idle timer for typing:stop
+            if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
+            typingStopTimer.current = setTimeout(() => {
+                socket.current?.emit('typing:stop', { room: targetRoom, user: currentUser.id });
+                lastTypingEmit.current = 0; // Reset throttle
+            }, 1500);
         } else {
-            if (typingTimeout.current) clearTimeout(typingTimeout.current);
-            socket.current.emit('typing_stop', { room: targetRoom, user: currentUser.id });
+            // Immediate stop if text cleared
+            if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
+            socket.current.emit('typing:stop', { room: targetRoom, user: currentUser.id });
+            lastTypingEmit.current = 0;
         }
     };
 
@@ -1602,65 +1751,93 @@ export default function ChatDetailScreen() {
 
             let uploadResult: any = { success: false };
             let messageId: number | string | null = null;
+            let finalUri = item.uri;
+            let thumbnailUrl: string | undefined = undefined;
+            let fileSize = item.size;
 
             try {
+                // --- COMPRESSION & THUMBNAIL OPTIMIZATION ---
                 if (item.type === 'image') {
-                    // ── Standard image upload via FormData ──
-                    uploadResult = await uploadImage({
-                        uri: item.uri,
-                        type: item.mimeType || 'image/jpeg',
-                        fileName: item.name || item.uri.split('/').pop() || 'image.jpg',
+                    finalUri = await MediaUploadService.compressImage(item.uri);
+                    const sizeCheck = await MediaUploadService.validateFileSize(finalUri);
+                    if (!sizeCheck.valid) {
+                        Alert.alert('File too large', 'Even after compression, the image exceeds 20MB.');
+                        continue;
+                    }
+                    fileSize = sizeCheck.size;
+                } else if (item.type === 'video') {
+                    const sizeCheck = await MediaUploadService.validateFileSize(item.uri);
+                    if (!sizeCheck.valid) {
+                        Alert.alert('File too large', 'The video exceeds the 20MB limit.');
+                        continue;
+                    }
+                    fileSize = sizeCheck.size;
+
+                    // Generate thumbnail
+                    const thumb = await MediaUploadService.getVideoThumbnail(item.uri);
+                    if (thumb) {
+                        const thumbUpload = await MediaUploadService.uploadMedia(thumb, 'image', currentUser.id, id, {
+                            fileName: `thumb_${Date.now()}.jpg`,
+                        });
+                        if (thumbUpload.success) {
+                            thumbnailUrl = thumbUpload.media_url;
+                        }
+                    }
+                }
+
+                if (item.type === 'image') {
+                    uploadResult = await MediaUploadService.uploadMedia(finalUri, 'image', currentUser.id, id, {
+                        fileName: item.name || 'image.jpg',
+                        mimeType: 'image/jpeg'
                     });
                     if (uploadResult?.success) {
-                        const mediaUrl = uploadResult.media_url || uploadResult.image_path;
-                        messageId = await handleSend(itemCaption, mediaUrl, 'image', false, isOneTime, null, {
-                            file_size: item.size,
+                        messageId = await handleSend(itemCaption, uploadResult.media_url, 'image', false, isOneTime, null, {
+                            file_size: fileSize,
                         });
                     }
                 } else if (item.type === 'video') {
-                    // ── Standard video upload via FormData ──
-                    uploadResult = await uploadVideo({
-                        uri: item.uri,
-                        mimeType: item.mimeType || 'video/mp4',
-                        fileName: item.name || item.uri.split('/').pop() || 'video.mp4',
-                        duration: item.duration,
-                        fileSize: item.size,
+                    uploadResult = await MediaUploadService.uploadMedia(item.uri, 'video', currentUser.id, id, {
+                        fileName: item.name || 'video.mp4',
+                        duration: item.duration ? Math.ceil(item.duration / 1000) : undefined,
+                        mimeType: item.mimeType || 'video/mp4'
                     });
                     if (uploadResult?.success) {
-                        const mediaUrl = uploadResult.media_url || uploadResult.video_path;
-                        messageId = await handleSend(itemCaption, mediaUrl, 'video', false, isOneTime, null, {
-                            file_size: item.size,
+                        messageId = await handleSend(itemCaption, uploadResult.media_url, 'video', false, isOneTime, null, {
+                            file_size: fileSize,
                             duration: item.duration ? Math.ceil(item.duration / 1000) : undefined,
+                            thumbnail_url: thumbnailUrl
                         });
                     }
                 } else if (item.type === 'document') {
-                    // ── Standard document upload via FormData ──
-                    uploadResult = await uploadDocument({
-                        uri: item.uri,
-                        name: item.name || 'document',
-                        mimeType: item.mimeType || 'application/octet-stream',
-                        size: item.size,
+                    const sizeCheck = await MediaUploadService.validateFileSize(item.uri);
+                    if (!sizeCheck.valid) {
+                        Alert.alert('File too large', 'The document exceeds the 20MB limit.');
+                        continue;
+                    }
+                    fileSize = sizeCheck.size;
+
+                    uploadResult = await MediaUploadService.uploadMedia(item.uri, 'document', currentUser.id, id, {
+                        fileName: item.name || 'document',
+                        mimeType: item.mimeType || 'application/octet-stream'
                     });
                     if (uploadResult?.success) {
-                        const mediaUrl = uploadResult.media_url || uploadResult.file_path;
-                        messageId = await handleSend(itemCaption, mediaUrl, 'document', false, isOneTime, null, {
-                            file_size: item.size,
+                        messageId = await handleSend(itemCaption, uploadResult.media_url, 'document', false, isOneTime, null, {
+                            file_size: fileSize,
                             file_name: item.name,
                             mime_type: item.mimeType,
                         });
                     }
                 }
             } catch (err) {
-                console.error(`[MediaPreviewSend] Upload failed for ${item.type}:`, err);
+                console.error(`[MediaPreviewSend] Optimized upload failed for ${item.type}:`, err);
             }
 
-            if (messageId && item.uri) {
+            if (messageId && finalUri) {
                 try {
-                    await MediaStorageService.copyToCache(item.uri, messageId, item.type as any);
+                    await MediaStorageService.copyToCache(finalUri, messageId, item.type as any);
                 } catch (e) { /* non-fatal */ }
             }
         }
-        // ✅ Do NOT call fetchMessages() here — socket or next poll will merge new messages
     };
 
     const lastVoiceUploadRef = useRef<{ uri: string, time: number } | null>(null);
@@ -1784,8 +1961,8 @@ export default function ChatDetailScreen() {
                 body: JSON.stringify({ message_id: editingMessage.id, user_id: currentUser?.id, new_text: newText })
             });
             if (response.ok && socket.current) {
-                const roomId = `chat_${Math.min(Number(currentUser?.id), Number(id))}_${Math.max(Number(currentUser?.id), Number(id))}`;
-                socket.current.emit('edit_message', { room: roomId, message_id: editingMessage.id, new_text: newText });
+                const targetRoom = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                socket.current.emit('edit_message', { room: targetRoom, message_id: editingMessage.id, new_text: newText });
             }
         } catch (error) {
             console.error('Save edit failed', error);
@@ -1801,6 +1978,94 @@ export default function ChatDetailScreen() {
         setPendingScheduleTime(date);
         setPendingScheduleText(text);
         setScheduleModalVisible(true);
+    };
+
+    async function fetchGroupRole() {
+        if (!currentUser || !id || !isGroup) return;
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/get_group_details.php?group_id=${id}&user_id=${currentUser.id}`);
+            const data = await response.json();
+            if (response.ok) {
+                setUserRole(data.my_role);
+                setPermissions({
+                    allow_member_send_messages: !!data.allow_member_send_messages,
+                    // @ts-ignore - Adding other permissions if they exist in state but not yet used
+                    allow_member_edit_info: !!data.allow_member_edit_info,
+                    allow_member_add_members: !!data.allow_member_add_members,
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching group role:', error);
+        }
+    }
+
+    async function fetchGroupMembers() {
+        if (!id || !isGroup) return;
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/get_group_details.php?group_id=${id}`);
+            const data = await response.json();
+            if (response.ok && data.members) {
+                setGroupMembers(data.members);
+            }
+        } catch (error) {
+            console.error('Error fetching group members:', error);
+        }
+    }
+
+    const handleMuteToggle = async () => {
+        if (!currentUser || !id) return;
+        const action = isMuted ? 'unmute' : 'mute';
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/mute_chat.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: currentUser.id,
+                    target_id: id,
+                    action: action,
+                    is_group: isGroup ? 1 : 0
+                })
+            });
+            if (response.ok) {
+                setIsMuted(!isMuted);
+                setMenuVisible(false);
+            }
+        } catch (error) {
+            console.error('Error toggling mute:', error);
+        }
+    };
+
+    const handleUnfriend = async () => {
+        if (!currentUser || !id || isGroup) return;
+
+        setActionModalConfig({
+            visible: true,
+            title: 'Unfriend User?',
+            description: `Are you sure you want to remove ${otherUsername} from your friends?`,
+            confirmText: 'Unfriend',
+            isDestructive: true,
+            icon: <UserMinus size={24} color="#EF4444" />,
+            onConfirm: async () => {
+                setActionModalConfig(prev => ({ ...prev, visible: false }));
+                try {
+                    const response = await fetch(`${Config.API_URL}/users/handle_relationship.php`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            user_id: currentUser.id,
+                            target_id: id,
+                            action: 'unfriend'
+                        })
+                    });
+                    if (response.ok) {
+                        fetchRelationshipStatus();
+                        Alert.alert("Success", "User removed from friends.");
+                    }
+                } catch (error) {
+                    console.error('Error unfriending user:', error);
+                }
+            }
+        });
     };
 
     const handleConfirmSchedule = () => {
@@ -2053,7 +2318,7 @@ export default function ChatDetailScreen() {
 
                 if (type === 'for_me') {
                     // 1. Update UI
-                    setMessages(prev => prev.filter(m => m.id !== idLocal));
+                    safeSetMessages(prev => prev.filter(m => m.id !== idLocal));
 
                     // 2. Update Local DB
                     if (localRow) {
@@ -2068,8 +2333,8 @@ export default function ChatDetailScreen() {
                     });
                 } else if (type === 'everyone') {
                     // 1. Update UI
-                    setMessages(prev => prev.map(m => m.id === idLocal
-                        ? { ...m, message_text: '🚫 This message was deleted', media_url: null, message_type: 'deleted' }
+                    safeSetMessages(prev => prev.map(m => m.id === idLocal
+                        ? { ...m, message_text: '🚫 This message was deleted', media_url: null, message_type: 'deleted', deleted_for_everyone: true }
                         : m
                     ));
 
@@ -2094,8 +2359,9 @@ export default function ChatDetailScreen() {
 
                     // 5. Emit Socket
                     if (socket.current) {
+                        const targetRoom = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
                         socket.current.emit("message:delete", {
-                            room: isGroup ? `group_${id}` : `user_${id}`,
+                            room: targetRoom,
                             message_id: idLocal
                         });
                     }
@@ -2302,7 +2568,7 @@ export default function ChatDetailScreen() {
                 const { message_text, media_url } = res.data;
 
                 // Update Local State
-                setMessages(prev => prev.map(m => m.id === messageId ? {
+                safeSetMessages(prev => prev.map(m => m.id === messageId ? {
                     ...m,
                     status: 'seen',
                     message_text: message_text || m.message_text,
@@ -2326,7 +2592,7 @@ export default function ChatDetailScreen() {
                 }
             } else {
                 if (res.message === 'Already seen.') {
-                    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'seen' } : m));
+                    safeSetMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'seen' } : m));
                 }
             }
         } catch (e) {
@@ -2391,6 +2657,7 @@ export default function ChatDetailScreen() {
                 onSelect={handleSelectMessage}
                 selectedCount={selectedMessageIds.length}
                 groupMembers={groupMembers}
+                highlighted={highlightMessageId && (String(item.id) === String(highlightMessageId) || String(item.server_id) === String(highlightMessageId))}
             />
         );
     }, [
@@ -2401,52 +2668,46 @@ export default function ChatDetailScreen() {
         setReplyingToMessage
     ]);
 
-    if (isCheckingLock) {
-        return <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}><Timer size={32} color={Colors.primary} /></View>;
+    // ── STEP 5: Stable deduplicated data array for FlashList ────────────────────
+    const mergedMessages = deduplicateMessages([...messages, ...failedMessages]);
+
+    // ── STEP 6: Conditional Rendering (AFTER all hooks) ────────────────────────
+    if (isCheckingLock || !isDbReady) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
+                    <ActivityIndicator size="large" color={Colors.primary} />
+                </View>
+            </SafeAreaView>
+        );
     }
 
     if (isLocked && !isAuthenticated) {
         return <ChatLockScreen unlockPin={unlockPin} setUnlockPin={setUnlockPin} handleEntryUnlock={handleEntryUnlock} />;
     }
 
-    // ── STEP 5: Stable deduplicated data array for FlashList ────────────────────
-    // NEVER spread [...messages, ...failedMessages] directly into data= because
-    // a retried failed message can appear in BOTH arrays simultaneously, causing
-    // duplicate keys. mergedMessages is always safe to pass to keyExtractor.
-    const mergedMessages = deduplicateMessages([...messages, ...failedMessages]);
-
     return (
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <ChatHeader
                 id={id}
-                otherUsername={String(id) === String(currentUser?.id) ? 'Note to self' : otherUsername}
+                otherUsername={otherUsername}
                 avatar_id={avatar_id}
                 avatar_url={avatar_url}
                 isGroup={isGroup}
                 currentUser={currentUser}
                 targetUserProfile={targetUserProfile}
-                isTyping={isTyping}
+                presence={presenceMap[String(id)]}
                 relationshipStatus={relationshipStatus}
                 menuVisible={menuVisible}
                 setMenuVisible={setMenuVisible}
                 modalVisible={modalVisible}
-                setModalVisible={(visible: boolean) => {
-                    if (isGroup) {
-                        router.push({
-                            pathname: '/chat/group_info',
-                            params: { id: id }
-                        });
-                    } else {
-                        setModalVisible(visible);
-                    }
-                }}
-                menuItems={menuItems} fetchRelationshipStatus={fetchRelationshipStatus}
-                // Selection Props
+                setModalVisible={setModalVisible}
+                menuItems={menuItems}
+                fetchRelationshipStatus={fetchRelationshipStatus}
                 selectionMode={isSelectionMode}
                 selectedCount={selectedMessageIds.length}
-                onCancelSelection={handleCancelSelection}
+                onCancelSelection={() => setSelectedMessageIds([])}
                 onDeleteSelected={handleDeleteSelected}
-                onForwardSelected={handleForwardSelected}
                 onCopySelected={handleCopySelected}
             />
 
@@ -2460,6 +2721,7 @@ export default function ChatDetailScreen() {
                         key={id} // 4️⃣ Force re-mount on chat change
                         ref={flatListRef}
                         data={isReady ? mergedMessages : []}
+                        inverted={true}
                         keyExtractor={(item) => String(item.id)}
                         renderItem={renderMessage}
                         estimatedItemSize={100}
@@ -2468,6 +2730,8 @@ export default function ChatDetailScreen() {
                             paddingBottom: 20
                         }}
                         onScroll={(e) => { scrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                        onEndReached={fetchOlderMessages}
+                        onEndReachedThreshold={0.1}
                         keyboardShouldPersistTaps="handled"
                         ListEmptyComponent={
                             isLoading || !isReady ? (
@@ -2481,6 +2745,13 @@ export default function ChatDetailScreen() {
                                     message="Start chatting!"
                                 />
                             )
+                        }
+                        ListFooterComponent={
+                            isLoadingOlder ? (
+                                <View style={{ paddingVertical: 10 }}>
+                                    <ActivityIndicator size="small" color={Colors.primary} />
+                                </View>
+                            ) : null
                         }
                         showsVerticalScrollIndicator={false}
                     />
@@ -2512,10 +2783,7 @@ export default function ChatDetailScreen() {
                                 editingMessage={editingMessage}
                                 handleTyping={handleTyping}
                                 handleAttachmentSelect={handleAttachmentSelect}
-                                handlePickImage={handlePickImage}
-                                handleSaveEdit={handleSaveEdit}
                                 handleSend={handleSend}
-                                handleCancelEdit={handleCancelEdit}
                                 startRecording={startRecording}
                                 stopRecording={stopRecording}
                                 cancelRecording={cancelRecording}

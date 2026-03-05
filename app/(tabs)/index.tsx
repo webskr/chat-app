@@ -21,60 +21,39 @@ import { GroupDefaultIcon } from '../../components/icons/GroupDefaultIcon';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 
 export default function ChatScreen() {
-    const { user, setUnreadCount } = useUser();
+    const { user, setUnreadCount, safeSync } = useUser();
     const [chats, setChats] = React.useState<any[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [searchQuery, setSearchQuery] = React.useState('');
     // const hasNavigatedRef = React.useRef(false); // REMOVED
 
-    const fetchConversations = React.useCallback(async () => {
+    const fetchConversations = React.useCallback(async (syncWithServer = false) => {
         if (!user) return;
         try {
             // STEP 1: Load from local DB for instant UI
             const localChats = await LocalDatabaseService.getConversations();
-            if (localChats.length > 0) {
-                setChats(localChats.map(c => ({
-                    ...c,
-                    // Map local DB fields to UI fields
-                    last_message: c.last_message_preview || c.last_message,
-                    last_message_time: c.last_message_time_real || c.last_message_time
-                })));
-                setIsLoading(false);
-            }
+            setChats(localChats.map(c => ({
+                ...c,
+                last_message: c.last_message_preview || c.last_message,
+                last_message_time: c.last_message_time_real || c.last_message_time
+            })));
 
-            // STEP 2: Background sync from server to refresh metadata (names/avatars/unread)
-            const response = await fetch(`${Config.API_URL}/chat/get_conversations.php?user_id=${user.id}`);
-            const data = await response.json();
-            if (response.ok) {
-                // Update local DB metadata for each chat
-                for (const chat of data) {
-                    const isGroup = chat.is_group == 1;
-                    const chatId = isGroup ? chat.group_id.toString() : `chat_${Math.min(Number(user.id), Number(chat.other_user_id))}_${Math.max(Number(user.id), Number(chat.other_user_id))}`;
+            const totalUnread = localChats.reduce((sum: number, chat: any) => sum + (Number(chat.unread_count) || 0), 0);
+            setUnreadCount(totalUnread);
+            setIsLoading(false);
 
-                    await LocalDatabaseService.updateChatMetadata({
-                        id: chatId,
-                        is_group: isGroup,
-                        other_user_id: chat.other_user_id?.toString(),
-                        other_username: chat.other_username,
-                        other_avatar_url: chat.other_avatar_url,
-                        other_avatar_id: chat.other_avatar_id,
-                        other_is_official: chat.other_is_official,
-                        group_name: chat.group_name,
-                        group_icon: chat.group_icon,
-                        unread_count: Number(chat.unread_count) || Number(chat.unread_count_raw) || 0
-                    });
-                }
-
-                // Refresh UI from local DB after metadata update
+            // STEP 2: Background sync from server (Unified Sync)
+            if (syncWithServer) {
+                await SyncService.syncEverything(user.id);
+                // Refresh local UI after sync
                 const refreshedChats = await LocalDatabaseService.getConversations();
                 setChats(refreshedChats.map(c => ({
                     ...c,
                     last_message: c.last_message_preview || c.last_message,
                     last_message_time: c.last_message_time_real || c.last_message_time
                 })));
-
-                const totalUnread = refreshedChats.reduce((sum: number, chat: any) => sum + (Number(chat.unread_count) || 0), 0);
-                setUnreadCount(totalUnread);
+                const refreshUnread = refreshedChats.reduce((sum: number, chat: any) => sum + (Number(chat.unread_count) || 0), 0);
+                setUnreadCount(refreshUnread);
             }
         } catch (error) {
             console.error('Error fetching conversations:', error);
@@ -85,32 +64,19 @@ export default function ChatScreen() {
 
     useFocusEffect(
         React.useCallback(() => {
-            fetchConversations();
-            markDelivered();
-            if (user) SyncService.syncMissedMessages(Number(user.id));
+            fetchConversations(true); // Sync on focus
+            if (user) safeSync();
 
+            // Instead of 10s polling, we rely on WebSockets (handled by UserContext/safeSync)
+            // and the 30s heartbeat in SyncService if implemented.
+            // For now, let's keep a very slow fallback polling (e.g. 60s) or remove it.
             const interval = setInterval(() => {
-                fetchConversations();
-                markDelivered();
-            }, 10000); // 10s is safer with local cache
+                fetchConversations(true);
+            }, 60000); // Reduced polling to 60s as a safety fallback
 
             return () => clearInterval(interval);
-        }, [fetchConversations])
+        }, [fetchConversations, user, safeSync])
     );
-
-    // Auto-redirection logic removed as per user request to always show chat list
-    const markDelivered = async () => {
-        if (!user) return;
-        try {
-            await fetch(`${Config.API_URL}/chat/mark_delivered.php`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: user.id })
-            });
-        } catch (error) {
-            console.error('Error marking delivered:', error);
-        }
-    };
 
     const filteredChats = React.useMemo(() => {
         return chats.filter(chat => {
@@ -177,7 +143,7 @@ export default function ChatScreen() {
                                     if (!item.last_message) return 'No messages yet';
 
                                     // Handle JSON previews (for E2EE messages)
-                                    if (item.last_message.startsWith('{') && item.last_message.endsWith('}')) {
+                                    if (typeof item.last_message === 'string' && item.last_message.startsWith('{') && item.last_message.endsWith('}')) {
                                         try {
                                             const parsed = JSON.parse(item.last_message);
                                             if (parsed.content) return parsed.content;
@@ -197,10 +163,10 @@ export default function ChatScreen() {
                                 })()}
                             </ThemedText>
 
-                            {(item.unread_count > 0 || (item.unread_count_raw > 0)) && (
+                            {Number(item.unread_count) > 0 && (
                                 <View style={styles.badgeContainer}>
                                     <ThemedText style={styles.badgeText}>
-                                        {item.unread_count || item.unread_count_raw}
+                                        {item.unread_count}
                                     </ThemedText>
                                 </View>
                             )}

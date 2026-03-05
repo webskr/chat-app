@@ -11,6 +11,8 @@ import { useUser } from '../../context/UserContext';
 import { E2EEService } from '../../utils/E2EEService';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 
+import { ApiService } from '../../utils/ApiService';
+
 export default function LoginScreen() {
     const { setUser } = useUser();
     const [email, setEmail] = useState('');
@@ -30,29 +32,29 @@ export default function LoginScreen() {
         setIsLoading(true);
         try {
             console.log(`Attempting login to: ${Config.API_URL}/auth/login.php`);
-            const response = await fetch(`${Config.API_URL}/auth/login.php`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
-            });
+            const response = await ApiService.post(`${Config.API_URL}/auth/login.php`, { email, password }, { skipAuth: true });
 
             const data = await response.json();
 
-            // ... inside handleLogin ...
             if (response.ok) {
-                await setUser(data.user);
+                await setUser(data.user, {
+                    access_token: data.access_token,
+                    refresh_token: data.refresh_token
+                });
                 setIsLoading(false);
                 setIsSuccess(true);
                 setLastError('');
 
-                // --- E2EE KEY INITIALIZATION ---
+                // --- E2EE KEY INITIALIZATION & ROTATION ---
                 try {
                     // Check if device already has keys for this user
-                    const existingKey = await E2EEService.loadPrivateKey(data.user.id);
+                    const currentVersion = await E2EEService.getCurrentKeyVersion(data.user.id);
+                    const existingKey = await E2EEService.loadPrivateKey(data.user.id, currentVersion);
+
                     if (!existingKey) {
                         console.log("Generating new E2EE keys for device...");
                         const identityKeyPair = await E2EEService.generateKeyPair();
-                        const signedPreKeyPair = await E2EEService.generateKeyPair(); // Simplified for now
+                        const signedPreKeyPair = await E2EEService.generateKeyPair();
 
                         // Generate a batch of One-Time Pre-Keys
                         const oneTimePreKeys = [];
@@ -61,18 +63,17 @@ export default function LoginScreen() {
                             oneTimePreKeys.push({
                                 key_id: i,
                                 public_key: otk.publicKey,
-                                private_key: otk.privateKey // We would typically save these securely too
+                                private_key: otk.privateKey
                             });
                         }
 
-                        await E2EEService.savePrivateKey(data.user.id, identityKeyPair);
-
-
-                        // ... other imports ...
+                        // Save locally v1
+                        await E2EEService.savePrivateKey(data.user.id, identityKeyPair.privateKey, 1);
+                        await E2EEService.setCurrentKeyVersion(data.user.id, 1);
+                        await E2EEService.setLastRotationTime(data.user.id, Date.now());
 
                         // Upload public keys to server
                         await fetch(`${Config.API_URL}/chat/upload_keys.php`, {
-                            // ... existing key upload logic ...
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -83,10 +84,16 @@ export default function LoginScreen() {
                                 one_time_pre_keys: oneTimePreKeys.map(k => ({ key_id: k.key_id, public_key: k.public_key }))
                             })
                         });
-                        console.log("E2EE Keys uploaded successfully.");
+                        console.log("E2EE Keys v1 initialized successfully.");
+                    } else {
+                        // Keys exist, check if rotation is needed
+                        const needsRotation = await E2EEService.checkRotationNeeded(data.user.id);
+                        if (needsRotation) {
+                            await E2EEService.rotateKeys(data.user.id, Config);
+                        }
                     }
                 } catch (cryptoErr) {
-                    console.error("Failed to initialize E2EE keys:", cryptoErr);
+                    console.error("Failed to initialize or rotate E2EE keys:", cryptoErr);
                 }
                 // --- END E2EE SETUP ---
 

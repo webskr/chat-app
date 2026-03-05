@@ -17,6 +17,7 @@ export class LocalDatabaseService {
     private static isInitializing = false;
     private static initPromise: Promise<void> | null = null;
     private static DB_FILENAME = 'vegram_encrypted.sqlite';
+    public static activeChatId: string | null = null;
 
     private static async deleteDatabase() {
         const sqliteDir = `${FileSystem.documentDirectory}SQLite/`;
@@ -121,6 +122,7 @@ export class LocalDatabaseService {
                     CREATE TABLE IF NOT EXISTS messages (
                         id              INTEGER PRIMARY KEY AUTOINCREMENT,
                         server_id       TEXT UNIQUE,
+                        temp_id         TEXT,
                         chat_id         TEXT NOT NULL,
                         sender_id       TEXT NOT NULL,
                         receiver_id     TEXT,
@@ -128,9 +130,39 @@ export class LocalDatabaseService {
                         encrypted_payload TEXT,
                         local_file_path TEXT,
                         status          TEXT NOT NULL DEFAULT 'sending',
+                        retry_count     INTEGER DEFAULT 0,
+                        is_deleted      INTEGER DEFAULT 0,
+                        deleted_for_everyone INTEGER DEFAULT 0,
+                        deleted_at      DATETIME,
                         timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP
                     );
                 `);
+
+                // Migration: Add key_version for rotation
+                try {
+                    await this.db.execute(`ALTER TABLE messages ADD COLUMN key_version INTEGER;`);
+                } catch (e) { }
+
+                // Migration: Add temp_id if it doesn't exist
+                try {
+                    await this.db.execute(`ALTER TABLE messages ADD COLUMN temp_id TEXT;`);
+                } catch (e) { /* Ignore if column exists */ }
+
+                // Migration: Add retry_count if it doesn't exist (for existing DBs)
+                try {
+                    await this.db.execute(`ALTER TABLE messages ADD COLUMN retry_count INTEGER DEFAULT 0;`);
+                } catch (e) { /* Ignore if column exists */ }
+
+                // Migration: Add deletion columns
+                try {
+                    await this.db.execute(`ALTER TABLE messages ADD COLUMN is_deleted INTEGER DEFAULT 0;`);
+                } catch (e) { }
+                try {
+                    await this.db.execute(`ALTER TABLE messages ADD COLUMN deleted_for_everyone INTEGER DEFAULT 0;`);
+                } catch (e) { }
+                try {
+                    await this.db.execute(`ALTER TABLE messages ADD COLUMN deleted_at DATETIME;`);
+                } catch (e) { }
 
                 await this.db.execute(`
                     CREATE TABLE IF NOT EXISTS chats (
@@ -165,6 +197,10 @@ export class LocalDatabaseService {
                 await this.db.execute('CREATE INDEX IF NOT EXISTS idx_server_id ON messages(server_id);');
                 await this.db.execute('CREATE INDEX IF NOT EXISTS idx_chats_last_time ON chats(last_message_time);');
 
+                // Search indexes
+                await this.db.execute('CREATE INDEX IF NOT EXISTS idx_messages_text ON messages(encrypted_payload);');
+                await this.db.execute('CREATE INDEX IF NOT EXISTS idx_messages_chat_time ON messages(chat_id, timestamp);');
+
                 await this.db.execute(`
                     CREATE TABLE IF NOT EXISTS settings (
                         key TEXT PRIMARY KEY,
@@ -198,6 +234,24 @@ export class LocalDatabaseService {
         return this.db;
     }
 
+    static getDBPath(): string {
+        const sqliteDir = `${FileSystem.documentDirectory}SQLite/`;
+        return sqliteDir + this.DB_FILENAME;
+    }
+
+    static async closeDB(): Promise<void> {
+        if (this.db) {
+            try {
+                this.db.close();
+                this.db = null;
+                this.isInitialized = false;
+                this.initPromise = null;
+            } catch (e) {
+                console.error("[LocalDatabaseService] Error closing DB:", e);
+            }
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // insertMessage — THE safe insert used by BOTH socket handler and
     // fetchMessages.  Never throws on duplicate; instead:
@@ -216,7 +270,10 @@ export class LocalDatabaseService {
         encrypted_payload?: string;
         local_file_path?: string;
         status: string;
+        retry_count?: number;
         timestamp?: string; // Optional: use server time if provided
+        temp_id?: string;
+        key_version?: number;
     }): Promise<number> {
         const db = this.getDB();
 
@@ -228,9 +285,9 @@ export class LocalDatabaseService {
             if (msg.server_id) {
                 const result = await db.execute(
                     `INSERT INTO messages
-                        (server_id, chat_id, sender_id, receiver_id, type,
-                         encrypted_payload, local_file_path, status, timestamp)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (server_id, temp_id, chat_id, sender_id, receiver_id, type,
+                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                      ON CONFLICT(server_id) DO UPDATE SET
                          status            = CASE
                                                 WHEN messages.status = 'seen' THEN 'seen'
@@ -239,9 +296,12 @@ export class LocalDatabaseService {
                                             END,
                          encrypted_payload = COALESCE(messages.encrypted_payload, excluded.encrypted_payload),
                          local_file_path   = COALESCE(messages.local_file_path,   excluded.local_file_path),
+                         retry_count       = excluded.retry_count,
+                         key_version       = COALESCE(messages.key_version, excluded.key_version),
                          timestamp         = COALESCE(excluded.timestamp, messages.timestamp)`,
                     [
                         msg.server_id,
+                        msg.temp_id || null,
                         msg.chat_id,
                         msg.sender_id,
                         msg.receiver_id || null,
@@ -249,6 +309,8 @@ export class LocalDatabaseService {
                         msg.encrypted_payload || null,
                         msg.local_file_path || null,
                         msg.status,
+                        msg.retry_count || 0,
+                        msg.key_version || null,
                         finalTimestamp
                     ]
                 );
@@ -257,10 +319,11 @@ export class LocalDatabaseService {
                 // Path B — optimistic / local message (no server_id yet)
                 const result = await db.execute(
                     `INSERT INTO messages
-                        (server_id, chat_id, sender_id, receiver_id, type,
-                         encrypted_payload, local_file_path, status, timestamp)
-                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        (server_id, temp_id, chat_id, sender_id, receiver_id, type,
+                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp)
+                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
+                        msg.temp_id || null,
                         msg.chat_id,
                         msg.sender_id,
                         msg.receiver_id || null,
@@ -268,6 +331,8 @@ export class LocalDatabaseService {
                         msg.encrypted_payload || null,
                         msg.local_file_path || null,
                         msg.status,
+                        msg.retry_count || 0,
+                        msg.key_version || null,
                         finalTimestamp
                     ]
                 );
@@ -298,6 +363,7 @@ export class LocalDatabaseService {
                                           END,
                     unread_count        = CASE
                                             WHEN excluded.last_message_sender != chats.other_user_id THEN chats.unread_count
+                                            WHEN ? = chats.id THEN 0
                                             WHEN excluded.last_message_time > chats.last_message_time OR chats.last_message_time IS NULL THEN chats.unread_count + 1
                                             ELSE chats.unread_count
                                           END`,
@@ -306,7 +372,8 @@ export class LocalDatabaseService {
                     msg.encrypted_payload || (msg.type === 'image' ? '📷 Image' : (msg.type === 'video' ? '🎥 Video' : '📎 Attachment')),
                     finalTimestamp,
                     msg.sender_id,
-                    0 // Default unread_count for new row
+                    0, // Default unread_count for new row
+                    this.activeChatId || 'NONE'
                 ]
             );
 
@@ -362,25 +429,134 @@ export class LocalDatabaseService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // getLocalMessages — returns messages ordered by timestamp.
-    // Excludes rows that have neither server_id nor encrypted_payload
-    // (pure ghost rows that got cleaned up incorrectly).
+    // getLocalMessages — returns messages ordered by timestamp DESC.
+    // Supports pagination via limit and beforeTimestamp cursor.
     // ─────────────────────────────────────────────────────────────────────────
-    static async getLocalMessages(chat_id: string): Promise<any[]> {
+    static async getLocalMessages(chat_id: string, limit: number = 30, beforeTimestamp?: string): Promise<any[]> {
         const db = this.getDB();
-        const result = await db.execute(
-            `SELECT * FROM messages
-             WHERE chat_id = ?
-               AND (server_id IS NOT NULL OR encrypted_payload IS NOT NULL OR local_file_path IS NOT NULL)
-             ORDER BY timestamp ASC`,
-            [chat_id]
-        );
+        let query = `SELECT * FROM messages 
+                     WHERE chat_id = ? 
+                       AND is_deleted = 0
+                       AND (server_id IS NOT NULL OR encrypted_payload IS NOT NULL OR local_file_path IS NOT NULL)`;
+        const params: any[] = [chat_id];
+
+        if (beforeTimestamp) {
+            query += ` AND timestamp < ?`;
+            params.push(beforeTimestamp);
+        }
+
+        query += ` ORDER BY timestamp DESC LIMIT ?`;
+        params.push(limit);
+
+        const result = await db.execute(query, params);
         return (result.rows || []) as any[];
     }
 
     static async updateMessageStatus(id: number, status: string): Promise<void> {
         const db = this.getDB();
         await db.execute(`UPDATE messages SET status = ? WHERE id = ?`, [status, id]);
+    }
+
+    static async updateMessageStatusAndRetry(id: number, status: string, retry_count: number): Promise<void> {
+        const db = this.getDB();
+        await db.execute(`UPDATE messages SET status = ?, retry_count = ? WHERE id = ?`, [status, retry_count, id]);
+    }
+
+    // ── Search Implementation ────────────────────────────────────────────────
+
+    /**
+     * Search messages inside a specific chat.
+     */
+    static async searchMessages(chatId: string, query: string, limit: number = 30, offset: number = 0): Promise<any[]> {
+        const db = this.getDB();
+        const result = await db.execute(
+            `SELECT id, chat_id, sender_id, encrypted_payload, timestamp, type, status
+             FROM messages
+             WHERE chat_id = ? 
+               AND type = 'text'
+               AND is_deleted = 0
+               AND encrypted_payload LIKE '%' || ? || '%'
+             ORDER BY timestamp DESC
+             LIMIT ? OFFSET ?`,
+            [chatId, query, limit, offset]
+        );
+        return (result.rows || []) as any[];
+    }
+
+    /**
+     * Search messages across all chats (Global Search).
+     * Includes chat metadata for display.
+     */
+    static async searchGlobalMessages(query: string, limit: number = 30, offset: number = 0): Promise<any[]> {
+        const db = this.getDB();
+        const result = await db.execute(
+            `SELECT 
+                m.id, m.chat_id, m.sender_id, m.encrypted_payload, m.timestamp, m.type, m.status,
+                c.other_username, c.group_name, c.other_avatar_url, c.group_icon, c.is_group,
+                c.other_avatar_id, c.other_is_official
+             FROM messages m
+             JOIN chats c ON m.chat_id = c.id
+             WHERE m.type = 'text'
+               AND m.is_deleted = 0
+               AND m.encrypted_payload LIKE '%' || ? || '%'
+             ORDER BY m.timestamp DESC
+             LIMIT ? OFFSET ?`,
+            [query, limit, offset]
+        );
+        return (result.rows || []) as any[];
+    }
+
+    /**
+     * Fetch messages from the latest down to (and including) a specific message ID.
+     * Useful for jumping to a message from search.
+     */
+    static async getMessagesUpToId(chatId: string, messageId: number | string): Promise<any[]> {
+        const db = this.getDB();
+
+        // 1. Get the timestamp of the target message
+        const targetRes = await db.execute(
+            `SELECT timestamp FROM messages WHERE (id = ? OR server_id = ?) AND chat_id = ?`,
+            [messageId, messageId, chatId]
+        );
+
+        if (!targetRes.rows || targetRes.rows.length === 0) return [];
+        const targetTimestamp = targetRes.rows[0].timestamp;
+
+        // 2. Fetch all messages newer than or equal to this timestamp
+        // We add a small limit safety but usually it's fine
+        const result = await db.execute(
+            `SELECT * FROM messages 
+             WHERE chat_id = ? 
+               AND is_deleted = 0
+               AND timestamp >= ?
+             ORDER BY timestamp DESC
+             LIMIT 200`,
+            [chatId, targetTimestamp]
+        );
+
+        return (result.rows || []) as any[];
+    }
+
+    static async markMessagesSeenLocally(messageIds: (string | number)[]): Promise<void> {
+        if (messageIds.length === 0) return;
+        const db = this.getDB();
+        const placeholders = messageIds.map(() => '?').join(',');
+        await db.execute(
+            `UPDATE messages SET status = 'seen' WHERE server_id IN (${placeholders}) AND status != 'seen'`,
+            messageIds.map(id => id.toString())
+        );
+    }
+
+    static async getFailedMessages(): Promise<any[]> {
+        const db = this.getDB();
+        // Return both 'failed' and 'pending' messages, ordered chronologically, with a retry limit
+        const result = await db.execute(
+            `SELECT * FROM messages 
+             WHERE (status = 'failed' OR status = 'pending') 
+               AND retry_count < 5 
+             ORDER BY timestamp ASC`
+        );
+        return (result.rows || []) as any[];
     }
 
     static async updateMessageMediaUrl(server_id: string, local_file_path: string): Promise<void> {
@@ -393,14 +569,21 @@ export class LocalDatabaseService {
 
     static async deleteMessageLocal(local_id: number): Promise<void> {
         const db = this.getDB();
-        await db.execute(`DELETE FROM messages WHERE id = ?`, [local_id]);
+        await db.execute(`UPDATE messages SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?`, [local_id]);
+    }
+
+    static async markMessageDeletedForMe(local_id: number): Promise<void> {
+        return this.deleteMessageLocal(local_id);
     }
 
     static async markMessageDeletedForEveryone(server_id: string): Promise<void> {
         const db = this.getDB();
         await db.execute(
             `UPDATE messages
-             SET type = 'deleted', encrypted_payload = '🚫 This message was deleted', local_file_path = NULL
+             SET deleted_for_everyone = 1, 
+                 encrypted_payload = '🚫 This message was deleted', 
+                 local_file_path = NULL,
+                 deleted_at = CURRENT_TIMESTAMP
              WHERE server_id = ?`,
             [server_id]
         );
@@ -508,6 +691,10 @@ export class LocalDatabaseService {
         const db = this.getDB();
         await db.execute(`UPDATE chats SET unread_count = 0 WHERE id = ?`, [chatId]);
         await db.execute(`UPDATE messages SET status = 'seen' WHERE chat_id = ? AND status != 'seen'`, [chatId]);
+    }
+
+    static async markAllMessagesSeen(chatId: string): Promise<void> {
+        return this.markChatRead(chatId);
     }
 
     // ── Session Management ────────────────────────────────────────────────────

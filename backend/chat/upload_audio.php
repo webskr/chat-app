@@ -20,8 +20,11 @@ if (!isset($_FILES['audio']) || $_FILES['audio']['error'] !== UPLOAD_ERR_OK) {
 }
 
 $file = $_FILES['audio'];
-$sender_id = isset($_POST['sender_id']) ? $_POST['sender_id'] : 'unknown';
-$receiver_id = isset($_POST['receiver_id']) ? $_POST['receiver_id'] : 'unknown';
+$sender_id = isset($_POST['sender_id']) ? $_POST['sender_id'] : '0';
+$receiver_id = isset($_POST['receiver_id']) ? $_POST['receiver_id'] : '0';
+
+require_once __DIR__ . '/../api/utils/rateLimiter.php';
+checkRateLimit($pdo, $sender_id, "upload_media", 5, 60);
 
 // Validate file type (m4a, mp4, aac, etc.) - simplified for demo
 $allowed_extensions = ['m4a', 'mp4', 'aac', 'wav', 'mp3'];
