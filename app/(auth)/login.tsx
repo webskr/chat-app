@@ -12,6 +12,7 @@ import { E2EEService } from '../../utils/E2EEService';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 
 import { ApiService } from '../../utils/ApiService';
+import { initMediaFolder } from '../../utils/initMediaFolder';
 
 export default function LoginScreen() {
     const { setUser } = useUser();
@@ -34,7 +35,16 @@ export default function LoginScreen() {
             console.log(`Attempting login to: ${Config.API_URL}/auth/login.php`);
             const response = await ApiService.post(`${Config.API_URL}/auth/login.php`, { email, password }, { skipAuth: true });
 
-            const data = await response.json();
+            let data;
+            let rawText = '';
+            try {
+                rawText = await response.text();
+                data = JSON.parse(rawText);
+            } catch (parseError) {
+                console.error("Non-JSON response received:", parseError);
+                console.error("RAW HTML RESPONSE FROM SERVER:", rawText);
+                throw new Error("Server returned an invalid response. Please check your network connection or Config IP.");
+            }
 
             if (response.ok) {
                 await setUser(data.user, {
@@ -101,6 +111,8 @@ export default function LoginScreen() {
                 try {
                     console.log("Initializing secure local database...");
                     await LocalDatabaseService.initDB(data.token || data.user.id.toString());
+                    // 🗂️ Trigger upfront permissions & media folder setup
+                    initMediaFolder().catch(() => { });
                 } catch (dbErr) {
                     console.error("Failed to initialize local DB:", dbErr);
                 }

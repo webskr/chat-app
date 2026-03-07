@@ -17,7 +17,10 @@ const GOOGLE_CONFIG = {
     scopes: ['https://www.googleapis.com/auth/drive.appdata'],
 };
 
+import { useUser } from '../../context/UserContext';
+
 export default function BackupSettingsScreen() {
+    const { user } = useUser();
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [lastBackup, setLastBackup] = useState<string | null>(null);
@@ -34,6 +37,11 @@ export default function BackupSettingsScreen() {
     };
 
     const handleCreateBackup = async () => {
+        if (!user?.id) {
+            Alert.alert("Error", "User not found. Please log in again.");
+            return;
+        }
+
         Alert.prompt(
             "Backup Password",
             "Create a password to encrypt your backup. You will need this to restore.",
@@ -48,9 +56,7 @@ export default function BackupSettingsScreen() {
                         }
                         try {
                             setLoading(true);
-                            // In reality, get current userId from Session/Auth context
-                            const userId = "user123";
-                            const path = await BackupService.createBackup(password, userId);
+                            const path = await BackupService.createBackup(password, String(user.id));
 
                             const now = new Date().toLocaleString();
                             await AsyncStorage.setItem(LAST_BACKUP_KEY, now);

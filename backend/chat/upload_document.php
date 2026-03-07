@@ -58,7 +58,12 @@ try {
 
     require_once __DIR__ . '/../api/utils/rateLimiter.php';
     require_once __DIR__ . '/../includes/db_connection.php';
-    checkRateLimit($pdo, $sender_id, "upload_media", 5, 60);
+    require_once __DIR__ . '/../includes/auth_middleware.php';
+
+    $authenticated_user_id = authenticate($pdo);
+    checkRateLimit($pdo, $authenticated_user_id, "upload_media", 5, 60);
+
+    $sender_id = $authenticated_user_id;
     $date_str = date('dmYHis');
     $safe_name = preg_replace("/[^a-zA-Z0-9\-_]/", "", pathinfo($original_name, PATHINFO_FILENAME));
     $new_filename = "doc_" . $sender_id . "_" . $date_str . "_" . $safe_name . "." . $file_extension;

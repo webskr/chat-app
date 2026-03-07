@@ -33,9 +33,9 @@ export class SyncService {
             for (const msg of messages) {
                 // Duplicate prevention is handled by the "ON CONFLICT(server_id) DO UPDATE" in LocalDatabaseService.insertMessage
                 await LocalDatabaseService.insertMessage({
-                    server_id: msg.id.toString(),
+                    server_id: msg.id?.toString(),
                     chat_id: chatId,
-                    sender_id: msg.sender_id.toString(),
+                    sender_id: msg.sender_id?.toString(),
                     receiver_id: msg.receiver_id?.toString(),
                     type: msg.message_type || 'text',
                     encrypted_payload: msg.encrypted_payload || msg.message_text,
@@ -79,24 +79,44 @@ export class SyncService {
         try {
             const lastSync = await LocalDatabaseService.getLastSyncTime();
 
-            const response = await ApiService.post(`${Config.API_URL}/chat/sync.php`, {
-                user_id: userId,
-                last_sync_time: lastSync
-            });
+            let response: Response;
+            try {
+                response = await ApiService.post(`${Config.API_URL}/chat/sync.php`, {
+                    user_id: userId,
+                    last_sync_time: lastSync
+                });
+            } catch (networkError: any) {
+                // Network-level failure (no connection, DNS failure, auth throw, etc.)
+                console.warn(`[Sync] Network/auth error reaching sync.php: ${networkError?.message}`);
+                return;
+            }
 
-            if (!response.ok) throw new Error('Unified sync fetch failed');
+            if (!response.ok) {
+                // Log the actual HTTP status and body for easy diagnosis
+                let body = '';
+                try { body = await response.text(); } catch (_) { }
+                console.warn(`[Sync] sync.php returned HTTP ${response.status}: ${body.substring(0, 300)}`);
+                return; // Graceful non-throw - will retry on next safeSync cycle
+            }
 
-            const data = await response.json();
-            const { messages, conversations, presence, sync_time } = data;
+            let data: any;
+            try {
+                data = await response.json();
+            } catch (parseError) {
+                console.warn('[Sync] sync.php response is not valid JSON. Possible PHP error output contaminating response.');
+                return;
+            }
+
+            const { messages = [], conversations = [], presence = [], sync_time } = data;
 
             console.log(`[Sync] Synchronizing ${messages.length} messages and ${conversations.length} conversations...`);
 
             // 1. Update Messages
             for (const msg of messages) {
                 await LocalDatabaseService.insertMessage({
-                    server_id: msg.id.toString(),
+                    server_id: msg.id?.toString(),
                     chat_id: msg.chat_id,
-                    sender_id: msg.sender_id.toString(),
+                    sender_id: msg.sender_id?.toString(),
                     receiver_id: msg.receiver_id?.toString(),
                     type: msg.message_type || 'text',
                     encrypted_payload: msg.message_text,
@@ -109,11 +129,12 @@ export class SyncService {
             for (const conv of conversations) {
                 const chatId = conv.is_group
                     ? String(conv.group_id)
-                    : "chat_" + Math.min(Number(userId), Number(conv.other_user_id)) + "_" + Math.max(Number(userId), Number(conv.other_user_id));
+                    : "chat_" + Math.min(Number(userId), Number(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id))) + "_" + Math.max(Number(userId), Number(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id)));
 
                 await LocalDatabaseService.updateChatMetadata({
                     id: chatId,
                     is_group: !!conv.is_group,
+                    other_user_id: conv.is_group ? undefined : String(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id)),
                     unread_count: conv.unread_count
                 });
             }
@@ -125,19 +146,14 @@ export class SyncService {
             }
 
             // 4. Update sync time
-            await LocalDatabaseService.updateLastSyncTime(sync_time);
-
-            // 5. Trigger retry for any pending/failed messages (independent process)
-            // resendFn will be provided by the UI or we can handle it here if it's just a background sync
-            // For background syncEverything, we might not have the UI resendFn, but in typical flow, 
-            // the UI calls SyncService.syncEverything and then handles retries itself.
-            // However, to be safe and fulfill "Retry runs during sync", we'll attempt it if possible.
-            // Note: In app/chat/[id].tsx we already call it after safeSync.
+            if (sync_time) {
+                await LocalDatabaseService.updateLastSyncTime(sync_time);
+            }
 
             console.log(`[Sync] Unified synchronization complete.`);
             return data;
         } catch (error) {
-            console.error('[Sync Error] Unified sync failed:', error);
+            console.warn('[Sync] Unexpected error during sync (non-fatal):', error);
         } finally {
             this.isSyncing = false;
         }

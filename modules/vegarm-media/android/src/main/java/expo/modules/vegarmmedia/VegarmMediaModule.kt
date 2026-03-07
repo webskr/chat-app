@@ -27,7 +27,7 @@ class VegarmMediaModule : Module() {
           }
           
           // Pre-create all subdirectories natively to avoid Expo FileSystem Scoped Storage errors
-          val subFolders = listOf("images", "videos", "documents", "thumbnails", "cache")
+          val subFolders = listOf("images", "videos", "documents", "thumbnails", "backups", "cache")
           for (folder in subFolders) {
               val subDir = File(vegarmDir, folder)
               if (!subDir.exists()) {

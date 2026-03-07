@@ -18,6 +18,17 @@ try {
     if (!isset($_FILES['image'])) throw new Exception("No 'image' file in request");
     if ($_FILES['image']['error'] !== UPLOAD_ERR_OK) throw new Exception("File upload error: " . $_FILES['image']['error']);
 
+    // ── Auth FIRST (before using $authenticated_user_id) ───────────────────────
+    require_once __DIR__ . '/../includes/db_connection.php';
+    require_once __DIR__ . '/../api/utils/rateLimiter.php';
+    require_once __DIR__ . '/../includes/auth_middleware.php';
+
+    $authenticated_user_id = authenticate($pdo);
+    checkRateLimit($pdo, $authenticated_user_id, "upload_media", 5, 60);
+
+    $sender_id   = $authenticated_user_id;
+    $receiver_id = isset($_POST['receiver_id']) ? $_POST['receiver_id'] : '0';
+
     // ── Full Image ───────────────────────────────────────────────────────────
     $target_dir = __DIR__ . "/../uploads/";
     if (!file_exists($target_dir)) mkdir($target_dir, 0777, true);
@@ -28,16 +39,6 @@ try {
 
     $check = getimagesize($_FILES["image"]["tmp_name"]);
     if ($check === false) throw new Exception("File is not a valid image");
-
-    $sender_id   = $authenticated_user_id;
-    $receiver_id = isset($_POST['receiver_id']) ? $_POST['receiver_id'] : '0';
-
-    require_once __DIR__ . '/../api/utils/rateLimiter.php';
-    require_once __DIR__ . '/../includes/db_connection.php';
-    require_once __DIR__ . '/../includes/auth_middleware.php';
-
-    $authenticated_user_id = authenticate($pdo);
-    checkRateLimit($pdo, $authenticated_user_id, "upload_media", 5, 60);
 
     $date_str    = date('dmY');
     $original_name = pathinfo($_FILES["image"]["name"], PATHINFO_FILENAME);

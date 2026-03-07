@@ -14,13 +14,10 @@
  * Bump INIT_KEY version if you need to force a re-run.
  */
 
-import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { getPublicMediaDirectory } from '../modules/vegarm-media';
 
 // Bump this version string to force the init to re-run on all devices
-const INIT_KEY = 'media_folder_initialized_v3';
+const INIT_KEY = 'media_folder_initialized_v4';
 const ALBUM_NAME = 'Vegarm';
 
 // Minimal 1×1 transparent PNG (base64)
@@ -65,23 +62,32 @@ export async function initMediaFolder(): Promise<void> {
         // Create the Vegarm album (or add to existing)
         let album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
         if (!album) {
-            await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
-            console.log('[initMediaFolder] ✅ Created "Vegarm" album.');
+            await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, true);
+            console.log('[initMediaFolder] ✅ Created "Vegarm" album (copyAssets: true).');
         } else {
-            await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-            console.log('[initMediaFolder] ✅ Added placeholder to existing "Vegarm" album.');
+            await MediaLibrary.addAssetsToAlbumAsync([asset], album, true);
+            console.log('[initMediaFolder] ✅ Added placeholder to existing "Vegarm" album (copyAssets: true).');
         }
 
         // Trigger a simple FileSystem check to force OS to create the media folder
-        // This is often needed on Android 11+ to ensure the directory is physically present
-        if (FileSystem.documentDirectory) {
-            const baseMediaDir = FileSystem.documentDirectory.replace('files/', 'media/') + 'com.skr.vegarm/';
+        // Use the native module to get the correct path
+        const baseMediaDir = getPublicMediaDirectory();
+        if (baseMediaDir) {
             const mediaDir = `${baseMediaDir}media/`;
             const backupsDir = `${baseMediaDir}backups/`;
 
             await FileSystem.makeDirectoryAsync(mediaDir, { intermediates: true }).catch(() => { });
             await FileSystem.makeDirectoryAsync(backupsDir, { intermediates: true }).catch(() => { });
-            console.log('[initMediaFolder] Folders ensured:', { mediaDir, backupsDir });
+            console.log('[initMediaFolder] Folders ensured via native path:', { mediaDir, backupsDir });
+        } else if (FileSystem.documentDirectory) {
+            // Fallback for Expo Go or when native module fails
+            const fallbackMediaDir = FileSystem.documentDirectory.replace('files/', 'media/') + 'com.skr.vegarm/';
+            const mediaDir = `${fallbackMediaDir}media/`;
+            const backupsDir = `${fallbackMediaDir}backups/`;
+
+            await FileSystem.makeDirectoryAsync(mediaDir, { intermediates: true }).catch(() => { });
+            await FileSystem.makeDirectoryAsync(backupsDir, { intermediates: true }).catch(() => { });
+            console.log('[initMediaFolder] Folders ensured (fallback):', { mediaDir, backupsDir });
         }
 
         // Mark done — use the bumped key so old devices re-run with the new logic

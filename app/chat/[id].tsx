@@ -39,6 +39,7 @@ import { useVoiceRecording } from '../../components/chat/features/hooks/useVoice
 import { useChatLock } from '../../components/chat/features/hooks/useChatLock';
 import { usePermissions } from '../../components/chat/features/hooks/usePermissions';
 import { styles } from '../../components/chat/features/styles';
+import { SecureStoreHelper } from '../../utils/SecureStoreHelper';
 
 // Add local styles override/extension if needed or rely on importing them.
 // Since 'styles' is imported from components/chat/features/styles, we should probably update THAT file, 
@@ -57,6 +58,7 @@ import { E2EEService } from '../../utils/E2EEService';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 import { MediaUploadService } from '../../utils/MediaUploadService';
 import { NetworkService } from '../../utils/NetworkService';
+import { ApiService } from '../../utils/ApiService';
 
 export default function ChatDetailScreen() {
     // 1. Params & Context Hooks
@@ -333,6 +335,8 @@ export default function ChatDetailScreen() {
     }, [isPanelOpen]);
 
     useEffect(() => {
+        if (Platform.OS === 'android') return; // Android handles keyboard resizing natively with adjustResize
+
         const showSubscription = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
             const height = e.endCoordinates.height;
             if (height > 100) {
@@ -419,9 +423,9 @@ export default function ChatDetailScreen() {
                 for (const msg of data) {
                     try {
                         await LocalDatabaseService.insertMessage({
-                            server_id: msg.id.toString(),
+                            server_id: msg.id?.toString(),
                             chat_id: chatId,
-                            sender_id: msg.sender_id.toString(),
+                            sender_id: msg.sender_id?.toString(),
                             receiver_id: msg.receiver_id?.toString(),
                             type: msg.message_type || 'text',
                             encrypted_payload: msg.encrypted_payload || msg.message_text,
@@ -810,7 +814,7 @@ export default function ChatDetailScreen() {
                             is_local: false,
                             created_at: data.timestamp || new Date().toISOString(),
                         };
-                        return [...prev, incomingMsg];
+                        return [incomingMsg, ...prev];
                     });
 
                     // ✅ Emit message:delivered back to sender
@@ -980,11 +984,9 @@ export default function ChatDetailScreen() {
                     console.log(`[Chat ${id}] Syncing with server...`);
 
                     // Parallel Fetch
-                    const [msgsRes, relRes, userRes] = await Promise.all([
-                        fetch(`${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}&${isGroup ? `group_id=${id}` : `receiver_id=${id}`}`, { signal }),
-                        !isGroup ? fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal }) : Promise.resolve(null),
-                        // For groups, we might need group details
-                        isGroup ? Promise.resolve(null) : Promise.resolve(null) // Group details handled differently usually
+                    const [msgsRes, relRes] = await Promise.all([
+                        ApiService.fetch(`${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}&${isGroup ? `group_id=${id}` : `receiver_id=${id}`}`, { signal }),
+                        !isGroup ? ApiService.fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal }) : Promise.resolve(null),
                     ]);
 
                     if (signal.aborted) return;
@@ -1003,7 +1005,7 @@ export default function ChatDetailScreen() {
                                     const myVersion = await E2EEService.getCurrentKeyVersion(currentUser.id);
                                     const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id, myVersion);
                                     if (myPrivateKey) {
-                                        const keyRes = await fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
+                                        const keyRes = await ApiService.fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
                                         if (keyRes.ok) {
                                             const keys = await keyRes.json();
                                             if (keys && keys.identity_key) {
@@ -1123,11 +1125,7 @@ export default function ChatDetailScreen() {
 
                     // 4. Update Last Seen
                     try {
-                        await fetch(`${Config.API_URL}/users/update_last_seen.php`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ user_id: currentUser.id })
-                        });
+                        await ApiService.post(`${Config.API_URL}/users/update_last_seen.php`, { user_id: currentUser.id });
                     } catch (e) { }
 
                     // 5. Scroll Position
@@ -1149,7 +1147,7 @@ export default function ChatDetailScreen() {
                 const ids = isGroup ? groupMembers.map(m => m.user_id).join(',') : id;
                 if (!ids) return;
                 try {
-                    const res = await fetch(`${Config.API_URL}/chat/get_presence.php?ids=${ids}`, { signal });
+                    const res = await ApiService.fetch(`${Config.API_URL}/chat/get_presence.php?ids=${ids}`, { signal });
                     if (res.ok) {
                         const data = await res.json();
                         const newMap: any = {};
@@ -1247,7 +1245,7 @@ export default function ChatDetailScreen() {
             };
             if (!isRetry) {
                 // ✅ safeSetMessages deduplicates — rapid taps can never cause duplicate optimistic messages
-                safeSetMessages(prev => [...prev, localMessage]);
+                safeSetMessages(prev => [localMessage, ...prev]);
             }
 
             // --- LOCAL DB INSERT ---
@@ -1302,13 +1300,13 @@ export default function ChatDetailScreen() {
 
                     if (myPrivateKey) {
                         // 2. Fetch receiver's latest public key and version
-                        const keyRes = await fetch(`${Config.API_URL}/chat/get_latest_key.php?user_id=${id}`);
+                        const keyRes = await ApiService.fetch(`${Config.API_URL}/chat/get_latest_key.php?user_id=${id}`);
                         if (keyRes.ok) {
                             const keys = await keyRes.json();
                             if (keys && keys.public_key) {
                                 currentKeyVersion = keys.key_version;
                                 const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.public_key);
-                                // Include version in ciphertext metadata prefix if desired, 
+                                // Include version in ciphertext metadata prefix if desired,
                                 // but we'll mainly use the explicit key_version field in the payload.
                                 messageText = await E2EEService.encryptMessage(payloadToEncrypt || " ", sharedSecret);
                                 console.log(`[E2EE] Message encrypted using receiver key v${currentKeyVersion}`);
@@ -1335,7 +1333,7 @@ export default function ChatDetailScreen() {
             if (mediaPath && !isMediaE2E) {
                 if (mediaType === 'image') payload.image_path = mediaPath;
                 else if (mediaType === 'video') payload.video_url = mediaPath;
-                else if (mediaType === 'audio') payload.audio_url = mediaPath;
+                else if (mediaType === 'audio' || mediaType === 'voice') payload.audio_url = mediaPath;
                 else if (mediaType === 'document') payload.file_url = mediaPath;
                 else if (mediaType === 'gif') payload.gif_url = mediaPath;
                 else if (mediaType === 'sticker') payload.sticker_url = mediaPath;
@@ -1351,11 +1349,7 @@ export default function ChatDetailScreen() {
                 payload.receiver_id = id;
             }
 
-            const response = await fetch(`${Config.API_URL}/chat/send_message.php`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            const response = await ApiService.post(`${Config.API_URL}/chat/send_message.php`, payload);
 
             if (response.ok) {
                 const data = await response.json();
@@ -1485,11 +1479,7 @@ export default function ChatDetailScreen() {
                 lastTypingEmit.current = now;
 
                 // Optional: Update last_typing in DB via API (lightweight)
-                fetch(`${Config.API_URL}/users/update_online_status.php`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: currentUser.id, is_typing: 1 })
-                }).catch(() => { });
+                ApiService.post(`${Config.API_URL}/users/update_online_status.php`, { user_id: currentUser.id, is_typing: 1 }).catch(() => { });
             }
 
             // Reset idle timer for typing:stop
@@ -1572,28 +1562,12 @@ export default function ChatDetailScreen() {
     const uploadImage = async (asset: any) => {
         if (!currentUser) return { success: false };
         setIsUploading(true);
-        const formData = new FormData();
-        const filename = asset.fileName || asset.uri.split('/').pop() || 'upload.jpg';
-        if (Platform.OS === 'web') {
-            const res = await fetch(asset.uri);
-            formData.append('image', await res.blob(), filename);
-        } else {
-            formData.append('image', { uri: Platform.OS === 'android' ? asset.uri : asset.uri.replace('file://', ''), name: filename, type: asset.type || 'image/jpeg' } as any);
-        }
-        formData.append('sender_id', String(currentUser?.id));
-        formData.append('receiver_id', String(id));
-
         try {
-            const response = await fetch(`${Config.API_URL}/chat/upload_image.php`, { method: 'POST', body: formData });
-            const responseText = await response.text();
-            try {
-                const data = JSON.parse(responseText);
-                if (response.ok && data.success) {
-                    return { success: true, ...data };
-                }
-            } catch (jsonErr) {
-                console.error("Image upload failed parsing JSON. Raw response:", responseText);
-            }
+            const uploadResult = await MediaUploadService.uploadMedia(asset.uri, 'image', currentUser.id, id, {
+                fileName: asset.fileName || 'upload.jpg',
+                mimeType: asset.type || 'image/jpeg'
+            });
+            return uploadResult;
         } catch (e) {
             console.error("Image upload failed", e);
         } finally {
@@ -1635,24 +1609,13 @@ export default function ChatDetailScreen() {
     const uploadVideo = async (asset: any) => {
         if (!currentUser) return { success: false };
         setIsUploading(true);
-        const formData = new FormData();
-        const filename = asset.fileName || asset.uri.split('/').pop();
-        if (Platform.OS === 'web') {
-            const res = await fetch(asset.uri);
-            formData.append('video', await res.blob(), filename);
-        } else {
-            formData.append('video', { uri: Platform.OS === 'android' ? asset.uri : asset.uri.replace('file://', ''), name: filename, type: asset.mimeType || 'video/mp4' } as any);
-        }
-        formData.append('sender_id', String(currentUser?.id));
-        formData.append('receiver_id', String(id));
-        if (asset.duration) formData.append('duration', String(Math.ceil(asset.duration / 1000)));
-
         try {
-            const response = await fetch(`${Config.API_URL}/chat/upload_video.php`, { method: 'POST', body: formData });
-            const data = await response.json();
-            if (response.ok && data.success) {
-                return { success: true, ...data };
-            }
+            const uploadResult = await MediaUploadService.uploadMedia(asset.uri, 'video', currentUser.id, id, {
+                fileName: asset.fileName || 'video.mp4',
+                duration: asset.duration ? Math.ceil(asset.duration / 1000) : undefined,
+                mimeType: asset.mimeType || 'video/mp4'
+            });
+            return uploadResult;
         } catch (e) {
             console.error("Video upload error", e);
         } finally {
@@ -1685,23 +1648,12 @@ export default function ChatDetailScreen() {
     const uploadDocument = async (asset: any) => {
         if (!currentUser) return { success: false };
         setIsUploading(true);
-        const formData = new FormData();
-        const filename = asset.name;
-        if (Platform.OS === 'web') {
-            const res = await fetch(asset.uri);
-            formData.append('document', await res.blob(), filename);
-        } else {
-            formData.append('document', { uri: Platform.OS === 'android' ? asset.uri : asset.uri.replace('file://', ''), name: filename, type: asset.mimeType } as any);
-        }
-        formData.append('sender_id', String(currentUser?.id));
-        formData.append('receiver_id', String(id));
-
         try {
-            const response = await fetch(`${Config.API_URL}/chat/upload_document.php`, { method: 'POST', body: formData });
-            const data = await response.json();
-            if (response.ok && data.success) {
-                return { success: true, ...data };
-            }
+            const uploadResult = await MediaUploadService.uploadMedia(asset.uri, 'document', currentUser.id, id, {
+                fileName: asset.name,
+                mimeType: asset.mimeType
+            });
+            return uploadResult;
         } catch (e) {
             console.error("Doc upload error", e);
         } finally {
@@ -1846,7 +1798,6 @@ export default function ChatDetailScreen() {
         if (!currentUser) return;
 
         // --- DUPLICATION GUARD ---
-        // If we just uploaded THIS exact URI in the last 2 seconds, ignore.
         const now = Date.now();
         if (lastVoiceUploadRef.current &&
             lastVoiceUploadRef.current.uri === uri &&
@@ -1857,27 +1808,21 @@ export default function ChatDetailScreen() {
         lastVoiceUploadRef.current = { uri, time: now };
 
         setIsUploading(true);
-        const formData = new FormData();
-        const filename = uri.split('/').pop() || 'voice.m4a';
-        if (Platform.OS === 'web') {
-            const res = await fetch(uri);
-            formData.append('audio', await res.blob(), filename);
-        } else {
-            formData.append('audio', { uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''), name: filename, type: 'audio/m4a' } as any);
-        }
-        formData.append('sender_id', String(currentUser?.id));
-        formData.append('receiver_id', String(id));
-        formData.append('duration', String(duration));
-
         try {
-            const response = await fetch(`${Config.API_URL}/chat/upload_audio.php`, { method: 'POST', body: formData });
-            const data = await response.json();
-            if (response.ok && data.success) {
-                // Upload is complete, now send the message using centralized handler
-                const messageId = await handleSend('', data.audio_url, 'voice', false, false, null, { duration: duration });
+            const result = await MediaUploadService.uploadMedia(uri, 'audio', currentUser.id, id, {
+                duration: duration,
+                fileName: uri.split('/').pop() || 'voice.m4a',
+                mimeType: 'audio/m4a'
+            });
+
+            if (result.success) {
+                const audUrl = result.audio_url || result.media_url;
+                const messageId = await handleSend('', audUrl, 'voice', false, false, null, { duration: duration });
                 if (messageId) {
                     await MediaStorageService.copyToCache(uri, messageId, 'voice' as any);
                 }
+            } else {
+                console.error("Voice upload failed:", result.message || result);
             }
         } catch (error) {
             console.error('Voice upload error', error);
@@ -1888,63 +1833,13 @@ export default function ChatDetailScreen() {
 
     const handleGifSelect = async (url: string) => {
         if (!currentUser || !id) return;
-        const tempId = Date.now();
-        const newMessage = { id: tempId, temp_id: tempId, sender_id: currentUser.id, receiver_id: id, message_text: '', media_url: url, message_type: 'gif', status: 'sending', created_at: new Date().toISOString(), is_local: true };
-        safeSetMessages(prev => [...prev, newMessage]);
-        try {
-            const response = await fetch(`${Config.API_URL}/chat/send_message.php`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sender_id: currentUser.id,
-                    ...(isGroup ? { group_id: id } : { receiver_id: id }),
-                    gif_url: url
-                })
-            });
-            if (response.ok) {
-                const data = await response.json();
-                if (data.message_id) {
-                    safeSetMessages(prev => prev.map(m => m.id === tempId || m.temp_id === tempId
-                        ? { ...m, id: data.message_id, temp_id: tempId, is_local: false, status: 'sent', created_at: data.created_at || m.created_at }
-                        : m
-                    ));
-                }
-            }
-        } catch (error) {
-            setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed' }]);
-        }
-        // ✅ No fetchMessages() — polling will sync on next interval
+        await handleSend('', url, 'gif');
     };
 
 
     const handleStickerSend = async (url: string) => {
         if (!currentUser || !id) return;
-        const tempId = Date.now();
-        const newMessage = { id: tempId, temp_id: tempId, sender_id: currentUser.id, receiver_id: id, message_text: '', media_url: url, message_type: 'sticker', status: 'sending', created_at: new Date().toISOString(), is_local: true };
-        safeSetMessages(prev => [...prev, newMessage]);
-        try {
-            const response = await fetch(`${Config.API_URL}/chat/send_message.php`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sender_id: currentUser.id,
-                    ...(isGroup ? { group_id: id } : { receiver_id: id }),
-                    sticker_url: url
-                })
-            });
-            if (response.ok) {
-                const data = await response.json();
-                if (data.message_id) {
-                    safeSetMessages(prev => prev.map(m => m.id === tempId || m.temp_id === tempId
-                        ? { ...m, id: data.message_id, temp_id: tempId, is_local: false, status: 'sent', created_at: data.created_at || m.created_at }
-                        : m
-                    ));
-                }
-            }
-        } catch (error) {
-            setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed' }]);
-        }
-        // ✅ No fetchMessages() — polling will sync on next interval
+        await handleSend('', url, 'sticker');
     };
 
     const handleSaveEdit = async () => {
@@ -2717,6 +2612,16 @@ export default function ChatDetailScreen() {
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                     keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
                 >
+                    {mergedMessages.length === 0 && isReady && !isLoading && (
+                        <View style={{ marginTop: 60, alignItems: 'center', width: '100%' }}>
+                            <EmptyState
+                                icon={MessageSquare}
+                                title="No messages yet"
+                                message="Start chatting!"
+                                style={{ flex: 0 }}
+                            />
+                        </View>
+                    )}
                     <FlashList
                         key={id} // 4️⃣ Force re-mount on chat change
                         ref={flatListRef}
@@ -2738,13 +2643,7 @@ export default function ChatDetailScreen() {
                                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                                     <ActivityIndicator size="large" color={Colors.primary} />
                                 </View>
-                            ) : (
-                                <EmptyState
-                                    icon={MessageSquare}
-                                    title="No messages yet"
-                                    message="Start chatting!"
-                                />
-                            )
+                            ) : null
                         }
                         ListFooterComponent={
                             isLoadingOlder ? (

@@ -3,6 +3,7 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
 import { Config } from '../constants/Config';
+import { SecureStoreHelper } from './SecureStoreHelper';
 
 export interface UploadResult {
     success: boolean;
@@ -127,8 +128,13 @@ export class MediaUploadService {
         });
 
         try {
+            const accessToken = await SecureStoreHelper.getAccessToken();
+            const headers: Record<string, string> = {};
+            if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
             const response = await fetch(`${Config.API_URL}${endpoint}`, {
                 method: 'POST',
+                headers,
                 body: formData,
             });
 

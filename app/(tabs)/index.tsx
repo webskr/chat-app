@@ -104,11 +104,11 @@ export default function ChatScreen() {
                 onPress={() => router.push({
                     pathname: '/chat/[id]',
                     params: {
-                        id: isGroup ? item.group_id.toString() : item.other_user_id.toString(),
+                        id: isGroup ? item.id?.toString() : item.other_user_id?.toString(),
                         user: displayName,
-                        avatar_id: item.other_avatar_id,
+                        avatar_id: item.other_avatar_id?.toString(),
                         avatar_url: displayAvatar,
-                        is_official: item.other_is_official,
+                        is_official: item.other_is_official?.toString(),
                         is_group: isGroup ? '1' : '0'
                     }
                 })}

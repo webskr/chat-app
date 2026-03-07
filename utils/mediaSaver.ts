@@ -128,9 +128,11 @@ export const saveMedia = async (
         let album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
         if (!album) {
             // First time — createAlbumAsync creates the Pictures/Vegarm directory
-            await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
+            // Use copyAssets: true to avoid "Modify this file?" prompt on Android
+            await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, true);
         } else {
-            await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+            // Use copyAssets: true to avoid "Modify this file?" prompt on Android
+            await MediaLibrary.addAssetsToAlbumAsync([asset], album, true);
         }
 
         Alert.alert('✅ Saved', `Media saved to "${ALBUM_NAME}" album in your gallery.`);

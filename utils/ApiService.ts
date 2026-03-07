@@ -7,16 +7,23 @@ interface RequestOptions extends RequestInit {
 
 export class ApiService {
     private static isRefreshing = false;
-    private static refreshSubscribers: ((token: string) => void)[] = [];
+    private static refreshSubscribers: { resolve: (token: string) => void; reject: (error: any) => void }[] = [];
 
     private static onTokenRefreshed(token: string) {
-        this.refreshSubscribers.forEach((callback) => callback(token));
+        this.refreshSubscribers.forEach((subscriber) => subscriber.resolve(token));
         this.refreshSubscribers = [];
     }
 
-    private static addRefreshSubscriber(callback: (token: string) => void) {
-        this.refreshSubscribers.push(callback);
+    private static onTokenRefreshFailed(error: any) {
+        this.refreshSubscribers.forEach((subscriber) => subscriber.reject(error));
+        this.refreshSubscribers = [];
     }
+
+    private static addRefreshSubscriber(resolve: (token: string) => void, reject: (error: any) => void) {
+        this.refreshSubscribers.push({ resolve, reject });
+    }
+
+
 
     static async fetch(url: string, options: RequestOptions = {}): Promise<Response> {
         const { skipAuth, ...fetchOptions } = options;
@@ -31,6 +38,12 @@ export class ApiService {
             if (token) {
                 headers['Authorization'] = `Bearer ${token}`;
             }
+
+            const refreshToken = await SecureStoreHelper.getRefreshToken();
+            if (!refreshToken) {
+                console.log(`[ApiService] 🛑 Blocked request to ${url} due to missing refresh token`);
+                throw new Error("User not authenticated");
+            }
         }
 
         try {
@@ -42,7 +55,12 @@ export class ApiService {
                     this.isRefreshing = true;
                     try {
                         const refreshToken = await SecureStoreHelper.getRefreshToken();
-                        if (!refreshToken) throw new Error('No refresh token available');
+                        if (!refreshToken) {
+                            const error = new Error('No refresh token available');
+                            this.onTokenRefreshFailed(error);
+                            this.isRefreshing = false;
+                            throw error;
+                        }
 
                         const refreshResponse = await fetch(`${Config.API_URL}/auth/refresh.php`, {
                             method: 'POST',
@@ -54,29 +72,50 @@ export class ApiService {
                             const data = await refreshResponse.json();
                             await SecureStoreHelper.setAccessToken(data.access_token);
                             await SecureStoreHelper.setRefreshToken(data.refresh_token);
+                            console.log('[ApiService] ✅ Token refreshed successfully');
                             this.isRefreshing = false;
+                            // Notify any queued callers (isRefreshing=true while we were refreshing)
                             this.onTokenRefreshed(data.access_token);
+
+                            // ✅ KEY FIX: First caller retries directly.
+                            // onTokenRefreshed() already fired + cleared the subscriber list,
+                            // so we CANNOT use the subscriber pattern here — we'd add a subscriber
+                            // after the list is cleared and it would never be called.
+                            headers['Authorization'] = `Bearer ${data.access_token}`;
+                            return fetch(url, { ...fetchOptions, headers });
                         } else {
-                            // Refresh failed, logout user
+                            // Refresh failed — token invalid or expired on server
+                            let body = '';
+                            try { body = await refreshResponse.text(); } catch (_) { }
+                            console.warn(`[ApiService] ❌ Refresh token rejected by server (HTTP ${refreshResponse.status}): ${body.substring(0, 200)}`);
                             await SecureStoreHelper.clearTokens();
-                            throw new Error('Refresh token invalid');
+                            const error = new Error('Refresh token invalid');
+                            this.onTokenRefreshFailed(error);
+                            this.isRefreshing = false;
+                            throw error;
                         }
                     } catch (error) {
+                        this.onTokenRefreshFailed(error);
                         this.isRefreshing = false;
                         throw error;
                     }
                 }
 
-                // Return a promise that resolves when the token is refreshed
+                // Another call is already refreshing — queue and wait
                 return new Promise((resolve, reject) => {
-                    this.addRefreshSubscriber(async (newToken) => {
-                        try {
-                            headers['Authorization'] = `Bearer ${newToken}`;
-                            resolve(await fetch(url, { ...fetchOptions, headers }));
-                        } catch (e) {
-                            reject(e);
+                    this.addRefreshSubscriber(
+                        async (newToken) => {
+                            try {
+                                headers['Authorization'] = `Bearer ${newToken}`;
+                                resolve(await fetch(url, { ...fetchOptions, headers }));
+                            } catch (e) {
+                                reject(e);
+                            }
+                        },
+                        (error) => {
+                            reject(error);
                         }
-                    });
+                    );
                 });
             }
 

@@ -216,7 +216,7 @@ export default function CreateGroupScreen() {
                     ) : (
                         <FlatList
                             data={filteredUsers}
-                            keyExtractor={item => item.id.toString()}
+                            keyExtractor={item => item?.id?.toString() || Math.random().toString()}
                             renderItem={renderUserItem}
                             contentContainerStyle={{ paddingBottom: 50 }}
                         />

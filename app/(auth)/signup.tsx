@@ -7,6 +7,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Config } from '../../constants/Config';
+import { initMediaFolder } from '../../utils/initMediaFolder';
 
 export default function SignupScreen() {
     const [username, setUsername] = useState('');
@@ -51,7 +52,14 @@ export default function SignupScreen() {
                 body: JSON.stringify({ username, email, password, invite_code: inviteCode }),
             });
 
-            const data = await response.json();
+            let data;
+            try {
+                const text = await response.text();
+                data = JSON.parse(text);
+            } catch (parseError) {
+                console.error("Non-JSON response received:", parseError);
+                throw new Error("Server returned an invalid response. Please check your network connection or Config IP.");
+            }
 
             if (response.ok) {
                 setIsLoading(false);
@@ -66,6 +74,9 @@ export default function SignupScreen() {
                 if (inviteCode) {
                     await AsyncStorage.removeItem('pending_invite_code');
                 }
+
+                // 🗂️ Trigger upfront permissions (to avoid prompts later)
+                initMediaFolder().catch(() => { });
 
                 router.replace('/(auth)/login');
             } else {

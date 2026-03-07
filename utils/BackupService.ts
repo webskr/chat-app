@@ -7,9 +7,18 @@ import { Platform } from 'react-native';
 import { LocalDatabaseService } from './LocalDatabaseService';
 import { E2EEService } from './E2EEService';
 
+import { getPublicMediaDirectory } from '../modules/vegarm-media';
+
 export class BackupService {
-    private static BACKUP_DIR = `${FileSystem.documentDirectory?.replace('files/', 'media/')}com.skr.vegarm/backups/`;
-    private static MEDIA_DIR = `${FileSystem.documentDirectory?.replace('files/', 'media/')}com.skr.vegarm/media/`;
+    private static getBaseDir() {
+        const publicDir = getPublicMediaDirectory();
+        if (publicDir) return publicDir;
+        // Fallback for Expo Go
+        return `${FileSystem.documentDirectory?.replace('files/', 'media/')}com.skr.vegarm/`;
+    }
+
+    private static BACKUP_DIR = `${BackupService.getBaseDir()}backups/`;
+    private static MEDIA_DIR = `${BackupService.getBaseDir()}media/`;
     private static TEMP_BACKUP_DIR = `${FileSystem.cacheDirectory}backup_temp/`;
 
     /**
@@ -309,5 +318,17 @@ export class BackupService {
             });
         }
         console.log(`[BackupService] Restored ${files.length} items to media.`);
+    }
+
+    /**
+     * Deletes all local backup files.
+     */
+    static async deleteBackups(): Promise<void> {
+        console.log("[BackupService] Deleting all local backups...");
+        const exists = await FileSystem.getInfoAsync(this.BACKUP_DIR);
+        if (exists.exists) {
+            await FileSystem.deleteAsync(this.BACKUP_DIR, { idempotent: true });
+            await FileSystem.makeDirectoryAsync(this.BACKUP_DIR, { intermediates: true });
+        }
     }
 }

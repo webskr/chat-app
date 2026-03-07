@@ -111,9 +111,9 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
     if (isGif) {
         return (
             <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
-                {!!item.media_url ? (
+                {!!(resolvedDisplayUri || item.media_url) ? (
                     <RNImage
-                        source={{ uri: item.media_url }}
+                        source={{ uri: (resolvedDisplayUri || (item.media_url?.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url?.replace(/^\//, '')}`)) }}
                         style={{ width: 240, height: 240, borderRadius: 12 }}
                         resizeMode="cover"
                     />
@@ -153,7 +153,7 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
                     </View>
                 ) : (
                     <VideoMessageBubble
-                        videoUrl={isMe ? resolvedDisplayUri : (cachedMediaUri || item.media_url)}
+                        videoUrl={resolvedDisplayUri || (item.media_url?.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url?.replace(/^\//, '')}`)}
                         thumbnailUrl={item.thumbnail_url}
                         duration={item.duration}
                         fileSize={item.file_size}
@@ -170,7 +170,7 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
         return (
             <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
                 <DocumentMessageBubble
-                    fileUrl={isMe ? resolvedDisplayUri : (cachedMediaUri || item.media_url)}
+                    fileUrl={resolvedDisplayUri || (item.media_url?.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url?.replace(/^\//, '')}`)}
                     fileName={item.file_name}
                     fileSize={item.file_size}
                     mimeType={item.mime_type}
@@ -193,7 +193,7 @@ export const ChatMediaContent: React.FC<ChatMediaContentProps> = React.memo(({
         return (
             <Pressable onPress={handlePress} onLongPress={handleLongPress} android_ripple={null}>
                 <VoiceMessageBubble
-                    audioUrl={cachedMediaUri || item.media_url}
+                    audioUrl={resolvedDisplayUri || (item.media_url?.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url?.replace(/^\//, '')}`)}
                     duration={item.duration || 0}
                     isMe={isMe}
                     onLongPress={handleLongPress}

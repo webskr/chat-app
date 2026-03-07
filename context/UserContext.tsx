@@ -101,12 +101,29 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         // 3. User Ready Guard
         if (!userRef.current?.id) return;
 
+        // 4. Token Guard
+        const accessToken = await SecureStoreHelper.getAccessToken();
+        const refreshToken = await SecureStoreHelper.getRefreshToken();
+        if (!accessToken || !refreshToken) {
+            console.log("[UserContext] 🛑 No auth tokens, forcing logout");
+            await setUser(null); // This clears AsyncStorage and SecureStore
+            return;
+        }
+
         console.log("[UserContext] 🚀 Smart Sync Triggered");
         isSyncingRef.current = true;
 
         try {
             await SyncService.syncEverything(Number(userRef.current.id));
             lastSyncTimeRef.current = Date.now();
+
+            // After sync: check if ApiService cleared our tokens (refresh token was rejected by server)
+            const postSyncAccessToken = await SecureStoreHelper.getAccessToken();
+            const postSyncRefreshToken = await SecureStoreHelper.getRefreshToken();
+            if (!postSyncAccessToken || !postSyncRefreshToken) {
+                console.warn("[UserContext] 🛑 Tokens were cleared during sync (refresh token rejected). Forcing logout.");
+                await setUser(null);
+            }
         } catch (error) {
             console.error("[UserContext] safeSync error:", error);
         } finally {
@@ -142,15 +159,27 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             if (userData) {
                 const parsedUser = JSON.parse(userData);
                 console.log(`[UserContext] User ID extracted: ${parsedUser.id}`);
+
+                // Check for tokens strictly
+                const accessToken = await SecureStoreHelper.getAccessToken();
+                const refreshToken = await SecureStoreHelper.getRefreshToken();
+                console.log(`[UserContext] Access token exists: ${!!accessToken}`);
+                console.log(`[UserContext] Refresh token exists: ${!!refreshToken}`);
+
+                if (!accessToken || !refreshToken) {
+                    console.log("[UserContext] 🛑 User session invalid (missing tokens), expunging user storage.");
+                    // Completely clear user state manually instead of using setUser so we don't trigger recursive loads during mount
+                    await AsyncStorage.removeItem('user');
+                    await SecureStoreHelper.clearTokens();
+                    setUserState(null);
+                    return; // Stop loading DB and Context mapping immediately.
+                }
+
                 setUserState(parsedUser);
                 // Initialize DB on reload
                 console.log("[UserContext] Calling LocalDatabaseService.initDB...");
                 await LocalDatabaseService.initDB(String(parsedUser.id));
                 setIsDbReady(true);
-
-                // Check for tokens
-                const token = await SecureStoreHelper.getAccessToken();
-                console.log(`[UserContext] Access token exists: ${!!token}`);
 
                 console.log("[UserContext] isDbReady set to true.");
                 // 🗂️ Ensure Android/media/com.skr.vegarm folder exists
