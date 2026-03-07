@@ -10,4 +10,3 @@ android/build
 android/app/build
 # Secrets
 vegarm-*.json
-google-services.json
