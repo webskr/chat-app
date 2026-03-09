@@ -1,13 +1,17 @@
 import * as FileSystem from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
-import * as Random from 'expo-random';
 import { Buffer } from 'buffer';
 import { Platform } from 'react-native';
 import { LocalDatabaseService } from './LocalDatabaseService';
 import { E2EEService } from './E2EEService';
+import { deriveKey } from '@stablelib/pbkdf2';
+import { SHA256 } from '@stablelib/sha256';
+import { AES } from '@stablelib/aes';
+import { GCM } from '@stablelib/gcm';
+import JSZip from 'jszip';
 
-import { getPublicMediaDirectory } from '../modules/vegarm-media';
+import { getPublicMediaDirectory, writeMedia } from '../modules/vegarm-media';
 
 export class BackupService {
     private static getBaseDir() {
@@ -17,9 +21,9 @@ export class BackupService {
         return `${FileSystem.documentDirectory?.replace('files/', 'media/')}com.skr.vegarm/`;
     }
 
-    private static BACKUP_DIR = `${BackupService.getBaseDir()}backups/`;
-    private static MEDIA_DIR = `${BackupService.getBaseDir()}media/`;
-    private static TEMP_BACKUP_DIR = `${FileSystem.cacheDirectory}backup_temp/`;
+    private static get BACKUP_DIR() { return `${this.getBaseDir()}backups/`; }
+    private static get MEDIA_DIR() { return `${this.getBaseDir()}media/`; }
+    private static get TEMP_BACKUP_DIR() { return `${FileSystem.cacheDirectory}backup_temp/`; }
 
     /**
      * Creates a full encrypted backup locally.
@@ -111,12 +115,26 @@ export class BackupService {
         await LocalDatabaseService.closeDB();
 
         // 2. Copy the file
+        let actualDBPath = dbPath;
         const info = await FileSystem.getInfoAsync(dbPath);
-        if (info.exists) {
-            await FileSystem.copyAsync({ from: dbPath, to: destPath });
+
+        if (!info.exists && Platform.OS === 'android') {
+            // op-sqlite on Android often stores databases in /databases/ instead of /files/SQLite/
+            // documentDirectory is /files/
+            const databasesPath = dbPath.replace('/files/SQLite/', '/databases/');
+            const dbInfo = await FileSystem.getInfoAsync(databasesPath);
+            if (dbInfo.exists) {
+                actualDBPath = databasesPath;
+                console.log("[BackupService] Found database in alternative path:", actualDBPath);
+            }
+        }
+
+        const finalInfo = await FileSystem.getInfoAsync(actualDBPath);
+        if (finalInfo.exists) {
+            await FileSystem.copyAsync({ from: actualDBPath, to: destPath });
             console.log("[BackupService] Database exported to temp.");
         } else {
-            console.warn("[BackupService] Database file not found at:", dbPath);
+            console.warn("[BackupService] Database file not found even at alternative paths.");
         }
     }
 
@@ -156,8 +174,8 @@ export class BackupService {
             }
         }
 
-        // PBKDF2 derivation
-        const salt = await Random.getRandomBytesAsync(16);
+        // Use Crypto instead of deprecated Random
+        const salt = await Crypto.getRandomBytesAsync(16);
         const derivedKey = await this.deriveKey(password, salt);
 
         // Encrypt the JSON bundle
@@ -176,17 +194,12 @@ export class BackupService {
     }
 
     private static async deriveKey(password: string, salt: Uint8Array): Promise<Uint8Array> {
-        // Since we are installing @stablelib/pbkdf2
-        const { Pbkdf2 } = require('@stablelib/pbkdf2');
-        const { SHA256 } = require('@stablelib/sha256');
-        const p = new Pbkdf2(new Uint8Array(Buffer.from(password)), salt, 10000, 32, SHA256);
-        return p.key;
+        // @stablelib/pbkdf2 exports deriveKey as a function
+        return deriveKey(SHA256, new Uint8Array(Buffer.from(password)), salt, 10000, 32);
     }
 
     private static async encryptData(plaintext: string, key: Uint8Array): Promise<{ iv: Uint8Array, cipher: Uint8Array }> {
-        const { GCM } = require("@stablelib/gcm");
-        const { AES } = require("@stablelib/aes");
-        const iv = await Random.getRandomBytesAsync(12);
+        const iv = await Crypto.getRandomBytesAsync(12);
         const aes = new GCM(new AES(key));
         const cipher = aes.seal(iv, new Uint8Array(Buffer.from(plaintext)));
         return { iv, cipher };
@@ -205,7 +218,6 @@ export class BackupService {
 
     private static async packageBackup(): Promise<string> {
         console.log("[BackupService] Packaging backup (ZIP)...");
-        const JSZip = require('jszip');
         const zip = new JSZip();
 
         // Recursively add files to ZIP
@@ -213,9 +225,24 @@ export class BackupService {
 
         const content = await zip.generateAsync({ type: 'base64' });
         const fileName = `backup_${new Date().toISOString().replace(/[:.]/g, '').split('T')[0]}.zip`;
-        const finalPath = `${this.BACKUP_DIR}${fileName}`;
+        const backupDir = this.BACKUP_DIR;
 
-        await FileSystem.writeAsStringAsync(finalPath, content, { encoding: FileSystem.EncodingType.Base64 });
+        // Ensure backup directory exists
+        const dirInfo = await FileSystem.getInfoAsync(backupDir);
+        if (!dirInfo.exists) {
+            console.log("[BackupService] Creating backup directory:", backupDir);
+            await FileSystem.makeDirectoryAsync(backupDir, { intermediates: true });
+        }
+
+        const finalPath = `${backupDir}${fileName}`;
+
+        if (Platform.OS === 'android') {
+            console.log("[BackupService] Using native write for ZIP package on Android.");
+            await writeMedia(content, fileName, "backups");
+        } else {
+            await FileSystem.writeAsStringAsync(finalPath, content, { encoding: FileSystem.EncodingType.Base64 });
+        }
+
         console.log("[BackupService] ZIP package created at:", finalPath);
         return finalPath;
     }
@@ -240,7 +267,6 @@ export class BackupService {
 
     private static async unpackageBackup(zipUri: string) {
         console.log("[BackupService] Unpackaging backup...");
-        const JSZip = require('jszip');
         const base64 = await FileSystem.readAsStringAsync(zipUri, { encoding: FileSystem.EncodingType.Base64 });
         const zip = await JSZip.loadAsync(base64, { base64: true });
 
@@ -285,8 +311,6 @@ export class BackupService {
     }
 
     private static async decryptData(iv: Uint8Array, cipher: Uint8Array, key: Uint8Array): Promise<string> {
-        const { GCM } = require("@stablelib/gcm");
-        const { AES } = require("@stablelib/aes");
         const aes = new GCM(new AES(key));
         const decrypted = aes.open(iv, cipher);
         if (!decrypted) throw new Error("Key decryption failed. Wrong password?");
@@ -302,7 +326,17 @@ export class BackupService {
         await LocalDatabaseService.closeDB();
 
         // 2. Replace DB file
-        await FileSystem.copyAsync({ from: srcPath, to: destPath });
+        let actualDestPath = destPath;
+        if (Platform.OS === 'android') {
+            const databasesPath = destPath.replace('/files/SQLite/', '/databases/');
+            // Ensure databases directory exists
+            const dbDir = databasesPath.substring(0, databasesPath.lastIndexOf('/'));
+            await FileSystem.makeDirectoryAsync(dbDir, { intermediates: true }).catch(() => { });
+            actualDestPath = databasesPath;
+        }
+
+        await FileSystem.copyAsync({ from: srcPath, to: actualDestPath });
+        console.log("[BackupService] Database restored to:", actualDestPath);
     }
 
     private static async restoreMedia() {

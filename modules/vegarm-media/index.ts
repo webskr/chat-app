@@ -36,3 +36,19 @@ export async function downloadMedia(url: string, filename: string, subfolder: st
     if (!mod) return '';
     return mod.downloadMedia(url, filename, subfolder);
 }
+
+/**
+ * Writes base64 data natively directly into
+ * Android/media/com.skr.vegarm/Vegarm/<subfolder>/<filename>.
+ * This bypasses Expo FileSystem which lacks WRITE access to Android public media dirs.
+ *
+ * @param base64Data Full base64 string to write.
+ * @param filename   Target filename, e.g. "backup.zip".
+ * @param subfolder  Subfolder name, e.g. "backups".
+ * @returns A promise resolving to the saved `file://` URI, or empty string on failure.
+ */
+export async function writeMedia(base64Data: string, filename: string, subfolder: string): Promise<string> {
+    const mod = getModule();
+    if (!mod) return '';
+    return mod.writeMedia(base64Data, filename, subfolder);
+}

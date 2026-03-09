@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, FlatList, TextInput, Switch, Modal, Pressable } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, FlatList, TextInput, Switch, Modal, Pressable, Platform } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { UserPlus, LogOut, Trash2, Camera, Shield, User, MessageSquare, Flag, Lock, Clock, Settings, MoreVertical, Edit2 } from 'lucide-react-native';
@@ -14,6 +14,7 @@ import { Config } from '../../constants/Config';
 import { useUser } from '../../context/UserContext';
 import { getAvatarById } from '../../constants/Avatars';
 import { GroupDefaultIcon } from '../../components/icons/GroupDefaultIcon';
+import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 
 export default function GroupInfoScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -27,8 +28,16 @@ export default function GroupInfoScreen() {
     const [showAllMembers, setShowAllMembers] = useState(false);
     const [menuVisible, setMenuVisible] = useState(false);
     const [chatLocked, setChatLocked] = useState(false); // Mock state for now
+    const [isMuted, setIsMuted] = useState(false);
 
     const [activeTab, setActiveTab] = useState<'members' | 'settings'>('members');
+
+    // Editing States
+    const [editNameModalVisible, setEditNameModalVisible] = useState(false);
+    const [editDescModalVisible, setEditDescModalVisible] = useState(false);
+    const [editedName, setEditedName] = useState('');
+    const [editedDesc, setEditedDesc] = useState('');
+    const [updating, setUpdating] = useState(false);
 
     useEffect(() => {
         fetchGroupDetails();
@@ -42,6 +51,13 @@ export default function GroupInfoScreen() {
             if (response.ok) {
                 setGroup(data);
                 setMembers(data.members);
+
+                // Fetch mute status
+                const muteRes = await fetch(`${Config.API_URL}/chat/check_mute.php?user_id=${user.id}&target_id=${id}`);
+                const muteData = await muteRes.json();
+                if (muteRes.ok) {
+                    setIsMuted(muteData.is_muted);
+                }
             } else {
                 Alert.alert("Error", data.message);
                 router.back();
@@ -50,6 +66,75 @@ export default function GroupInfoScreen() {
             console.error(error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const toggleMute = async (value: boolean) => {
+        if (!user || !id) return;
+        try {
+            const response = await fetch(`${Config.API_URL}/chat/mute_chat.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: user.id,
+                    target_id: id,
+                    action: value ? 'mute' : 'unmute'
+                })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                setIsMuted(value);
+            } else {
+                Alert.alert("Error", data.message);
+            }
+        } catch (error) {
+            console.error(error);
+            Alert.alert("Error", "Network error.");
+        }
+    };
+
+    const handleUpdateDetails = async (field: 'name' | 'description', value: string) => {
+        if (!user || !id) return;
+        setUpdating(true);
+        try {
+            const body: any = {
+                group_id: id,
+                user_id: user.id
+            };
+            if (field === 'name') body.name = value;
+            else body.description = value;
+
+            const response = await fetch(`${Config.API_URL}/chat/update_group_details.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                Alert.alert("Success", "Group updated successfully.");
+                setGroup((prev: any) => ({ ...prev, [field === 'name' ? 'name' : 'description']: value }));
+
+                // Update local metadata for instant chat list/header refresh
+                if (field === 'name') {
+                    LocalDatabaseService.updateChatMetadata({
+                        id: id.toString(),
+                        is_group: true,
+                        group_name: value,
+                        other_username: value
+                    }).catch(e => console.error("Local metadata update failed", e));
+                }
+
+                setEditNameModalVisible(false);
+                setEditDescModalVisible(false);
+            } else {
+                Alert.alert("Error", data.message || "Failed to update.");
+            }
+        } catch (error) {
+            console.error(error);
+            Alert.alert("Error", "Network error.");
+        } finally {
+            setUpdating(false);
         }
     };
 
@@ -216,8 +301,8 @@ export default function GroupInfoScreen() {
 
     const onEditGroup = () => {
         setMenuVisible(false);
-        // Navigate to edit group screen (to be implemented or reused)
-        Alert.alert("Edit Group", "Feature coming soon.");
+        setEditedName(group?.name || '');
+        setEditNameModalVisible(true);
     };
 
     const onGroupPermissions = () => {
@@ -327,7 +412,7 @@ export default function GroupInfoScreen() {
                             </TouchableOpacity>
                         )}
 
-                        {isOwner && (
+                        {(group?.my_role === 'owner' || group?.my_role === 'admin') && (
                             <>
                                 <TouchableOpacity style={styles.menuItem} onPress={onEditGroup}>
                                     <ThemedText>Change group name</ThemedText>
@@ -376,7 +461,7 @@ export default function GroupInfoScreen() {
                     <View style={styles.section}>
                         <GlassCard>
                             {/* "Add Members" Row */}
-                            {(group?.my_role === 'owner' || group?.allow_member_add_members) && (
+                            {(group?.my_role === 'owner' || group?.my_role === 'admin' || group?.allow_member_add_members) && (
                                 <TouchableOpacity style={styles.memberRow} onPress={() => router.push({ pathname: '/chat/add_members', params: { groupId: id } })}>
                                     <View style={[styles.iconCircle, { backgroundColor: Colors.primary, width: 40, height: 40, borderRadius: 20 }]}>
                                         <UserPlus size={20} color={'white'} />
@@ -407,7 +492,17 @@ export default function GroupInfoScreen() {
                             <View style={styles.section}>
                                 <GlassCard>
                                     <View style={{ padding: 16 }}>
-                                        <ThemedText type="defaultSemiBold" style={{ marginBottom: 4 }}>Description</ThemedText>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                            <ThemedText type="defaultSemiBold">Description</ThemedText>
+                                            {(group?.my_role === 'owner' || group?.my_role === 'admin') && (
+                                                <TouchableOpacity onPress={() => {
+                                                    setEditedDesc(group?.description || '');
+                                                    setEditDescModalVisible(true);
+                                                }}>
+                                                    <Edit2 size={16} color={Colors.primary} />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
                                         <ThemedText style={{ color: Colors.textSecondary, fontSize: 14 }}>{group.description}</ThemedText>
                                         <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center' }}>
                                             <ThemedText style={{ color: Colors.textSecondary, fontSize: 12 }}>Created by {group.creator_name || 'Owner'}, {new Date(group.created_at).toLocaleDateString()}</ThemedText>
@@ -420,13 +515,17 @@ export default function GroupInfoScreen() {
                         {/* Settings Section */}
                         <View style={styles.section}>
                             <GlassCard>
-                                {/* Notifications (Mock) */}
+                                {/* Mute Notifications */}
                                 {renderSettingRow(
-                                    <Ionicons name="notifications-outline" size={22} color={Colors.text} />,
-                                    "Notifications",
-                                    "All",
-                                    null,
-                                    () => { }
+                                    <Ionicons name={isMuted ? "notifications-off-outline" : "notifications-outline"} size={22} color={isMuted ? Colors.error : Colors.text} />,
+                                    "Mute Notifications",
+                                    isMuted ? "On" : "Off",
+                                    <Switch
+                                        value={isMuted}
+                                        onValueChange={toggleMute}
+                                        trackColor={{ false: '#767577', true: Colors.primary }}
+                                        thumbColor={'#f4f3f4'}
+                                    />
                                 )}
                                 <View style={styles.divider} />
 
@@ -514,6 +613,75 @@ export default function GroupInfoScreen() {
                 )}
 
             </ScrollView>
+
+            {/* Edit Name Modal */}
+            <Modal
+                visible={editNameModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setEditNameModalVisible(false)}
+            >
+                <Pressable style={styles.modalOverlay} onPress={() => setEditNameModalVisible(false)}>
+                    <View style={styles.bottomModalContainer}>
+                        <View style={styles.modalHeader}>
+                            <ThemedText type="subtitle">Edit group name</ThemedText>
+                            <TouchableOpacity onPress={() => setEditNameModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={Colors.text} />
+                            </TouchableOpacity>
+                        </View>
+                        <TextInput
+                            style={styles.modalInput}
+                            value={editedName}
+                            onChangeText={setEditedName}
+                            placeholder="Enter group name"
+                            placeholderTextColor={Colors.textSecondary}
+                            autoFocus
+                        />
+                        <TouchableOpacity
+                            style={[styles.saveButton, updating && { opacity: 0.7 }]}
+                            onPress={() => handleUpdateDetails('name', editedName)}
+                            disabled={updating}
+                        >
+                            {updating ? <ActivityIndicator color="#fff" /> : <ThemedText style={styles.saveButtonText}>Save</ThemedText>}
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Modal>
+
+            {/* Edit Description Modal */}
+            <Modal
+                visible={editDescModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setEditDescModalVisible(false)}
+            >
+                <Pressable style={styles.modalOverlay} onPress={() => setEditDescModalVisible(false)}>
+                    <View style={styles.bottomModalContainer}>
+                        <View style={styles.modalHeader}>
+                            <ThemedText type="subtitle">Edit description</ThemedText>
+                            <TouchableOpacity onPress={() => setEditDescModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={Colors.text} />
+                            </TouchableOpacity>
+                        </View>
+                        <TextInput
+                            style={[styles.modalInput, { height: 100, textAlignVertical: 'top' }]}
+                            value={editedDesc}
+                            onChangeText={setEditedDesc}
+                            placeholder="Enter group description"
+                            placeholderTextColor={Colors.textSecondary}
+                            multiline
+                            autoFocus
+                        />
+                        <TouchableOpacity
+                            style={[styles.saveButton, updating && { opacity: 0.7 }]}
+                            onPress={() => handleUpdateDetails('description', editedDesc)}
+                            disabled={updating}
+                        >
+                            {updating ? <ActivityIndicator color="#fff" /> : <ThemedText style={styles.saveButtonText}>Save</ThemedText>}
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -655,5 +823,41 @@ const styles = StyleSheet.create({
     },
     activeTabText: {
         color: Colors.primary,
+    },
+    bottomModalContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#1E1E1E',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    modalInput: {
+        backgroundColor: '#2C2C2C',
+        borderRadius: 8,
+        padding: 12,
+        color: Colors.text,
+        fontSize: 16,
+        marginBottom: 20,
+    },
+    saveButton: {
+        backgroundColor: Colors.primary,
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    saveButtonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16,
     }
 });

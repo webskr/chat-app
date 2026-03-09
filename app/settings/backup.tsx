@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch, Modal, TextInput } from 'react-native';
 import { ChevronLeft, Cloud, HardDrive, RotateCcw, ShieldCheck, Trash2, Download } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { BackupService } from '../../utils/BackupService';
@@ -7,6 +7,7 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Updates from 'expo-updates';
 import * as DocumentPicker from 'expo-document-picker';
+import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 
 const LAST_BACKUP_KEY = 'last_backup_timestamp';
 
@@ -25,6 +26,10 @@ export default function BackupSettingsScreen() {
     const [loading, setLoading] = useState(false);
     const [lastBackup, setLastBackup] = useState<string | null>(null);
     const [isCloudEnabled, setIsCloudEnabled] = useState(false);
+    const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+    const [backupPassword, setBackupPassword] = useState("");
+    const [modalAction, setModalAction] = useState<"create" | "restore" | null>(null);
+    const [pendingRestoreFile, setPendingRestoreFile] = useState<any>(null);
 
     useEffect(() => {
         loadSettings();
@@ -36,43 +41,42 @@ export default function BackupSettingsScreen() {
         setLastBackup(timestamp);
     };
 
-    const handleCreateBackup = async () => {
+    const handleCreateBackup = () => {
         if (!user?.id) {
             Alert.alert("Error", "User not found. Please log in again.");
             return;
         }
+        setModalAction("create");
+        setBackupPassword("");
+        setPasswordModalVisible(true);
+    };
 
-        Alert.prompt(
-            "Backup Password",
-            "Create a password to encrypt your backup. You will need this to restore.",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Create",
-                    onPress: async (password) => {
-                        if (!password || password.length < 4) {
-                            Alert.alert("Error", "Password too short.");
-                            return;
-                        }
-                        try {
-                            setLoading(true);
-                            const path = await BackupService.createBackup(password, String(user.id));
+    const submitCreateBackup = async (password: string) => {
+        if (!password || password.length < 4) {
+            Alert.alert("Error", "Password too short.");
+            return;
+        }
+        try {
+            setLoading(true);
+            setPasswordModalVisible(false);
+            const path = await BackupService.createBackup(password, String(user!.id));
 
-                            const now = new Date().toLocaleString();
-                            await AsyncStorage.setItem(LAST_BACKUP_KEY, now);
-                            setLastBackup(now);
+            // CRITICAL: BackupService closes the DB. We MUST re-init it with the same id
+            // (which acts as the encryption token in this app) so the app remains functional.
+            if (user?.id) {
+                await LocalDatabaseService.initDB(String(user.id));
+            }
 
-                            Alert.alert("Success", `Local backup created successfully.`);
-                        } catch (err: any) {
-                            Alert.alert("Error", err.message);
-                        } finally {
-                            setLoading(false);
-                        }
-                    }
-                }
-            ],
-            "secure-text"
-        );
+            const now = new Date().toLocaleString();
+            await AsyncStorage.setItem(LAST_BACKUP_KEY, now);
+            setLastBackup(now);
+
+            Alert.alert("Success", `Local backup created successfully.`);
+        } catch (err: any) {
+            Alert.alert("Error", err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleRestoreBackup = async () => {
@@ -84,24 +88,30 @@ export default function BackupSettingsScreen() {
 
             if (result.canceled) return;
 
-            const selectedFile = result.assets[0];
-
-            Alert.prompt("Enter Password", "Enter your backup decryption password.", async (password) => {
-                if (!password) return;
-                try {
-                    setLoading(true);
-                    await BackupService.restoreBackup(selectedFile.uri, password);
-                    Alert.alert("Success", "Restore complete. The app will now restart to apply changes.", [
-                        { text: "OK", onPress: () => Updates.reloadAsync() }
-                    ]);
-                } catch (err: any) {
-                    Alert.alert("Error", err.message);
-                } finally {
-                    setLoading(false);
-                }
-            }, "secure-text");
+            setPendingRestoreFile(result.assets[0]);
+            setModalAction("restore");
+            setBackupPassword("");
+            setPasswordModalVisible(true);
         } catch (err: any) {
             Alert.alert("Error", "Could not open file picker.");
+        }
+    };
+
+    const submitRestoreBackup = async (password: string) => {
+        if (!password) return;
+        if (!pendingRestoreFile) return;
+
+        try {
+            setLoading(true);
+            setPasswordModalVisible(false);
+            await BackupService.restoreBackup(pendingRestoreFile.uri, password);
+            Alert.alert("Success", "Restore complete. The app will now restart to apply changes.", [
+                { text: "OK", onPress: () => Updates.reloadAsync() }
+            ]);
+        } catch (err: any) {
+            Alert.alert("Error", err.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -216,6 +226,53 @@ export default function BackupSettingsScreen() {
                     </View>
                 </TouchableOpacity>
             </ScrollView>
+
+            <Modal
+                transparent
+                visible={passwordModalVisible}
+                animationType="fade"
+                onRequestClose={() => setPasswordModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>
+                            {modalAction === "create" ? "Create Backup Password" : "Enter Backup Password"}
+                        </Text>
+                        <Text style={styles.modalSubtitle}>
+                            {modalAction === "create"
+                                ? "This password will be used to encrypt your backup. Don't lose it!"
+                                : "Provide the password used to encrypt this backup archive."}
+                        </Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Min. 4 characters"
+                            secureTextEntry
+                            value={backupPassword}
+                            onChangeText={setBackupPassword}
+                            autoFocus
+                        />
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={() => setPasswordModalVisible(false)}
+                            >
+                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.confirmButton]}
+                                onPress={() => {
+                                    if (modalAction === "create") submitCreateBackup(backupPassword);
+                                    else submitRestoreBackup(backupPassword);
+                                }}
+                            >
+                                <Text style={styles.confirmButtonText}>
+                                    {modalAction === "create" ? "Create" : "Restore"}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -276,5 +333,47 @@ const styles = StyleSheet.create({
     },
     actionText: { flex: 1 },
     actionTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
-    actionSubtitle: { fontSize: 13, color: '#64748b', marginTop: 2 }
+    actionSubtitle: { fontSize: 13, color: '#64748b', marginTop: 2 },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20
+    },
+    modalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        width: '100%',
+        maxWidth: 340,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+    },
+    modalTitle: { fontSize: 18, fontWeight: '700', color: '#1e293b', marginBottom: 8 },
+    modalSubtitle: { fontSize: 14, color: '#64748b', marginBottom: 20, lineHeight: 20 },
+    input: {
+        backgroundColor: '#f1f5f9',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 16,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    modalButtons: { flexDirection: 'row', gap: 12 },
+    modalButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    cancelButton: { backgroundColor: '#f1f5f9' },
+    confirmButton: { backgroundColor: '#22c55e' },
+    cancelButtonText: { color: '#64748b', fontWeight: '600' },
+    confirmButtonText: { color: '#fff', fontWeight: '600' },
 });

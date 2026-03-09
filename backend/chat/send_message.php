@@ -437,6 +437,7 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
                         'media_url'         => $media_url,
                         'timestamp'         => $server_created_at,
                         'key_version'       => !empty($data->key_version) ? $data->key_version : 1,
+                        'sender_name'       => $sender_name
                     ]
                 ];
 

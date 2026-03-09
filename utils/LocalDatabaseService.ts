@@ -134,7 +134,8 @@ export class LocalDatabaseService {
                         is_deleted      INTEGER DEFAULT 0,
                         deleted_for_everyone INTEGER DEFAULT 0,
                         deleted_at      DATETIME,
-                        timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP
+                        timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        sender_name     TEXT
                     );
                 `);
 
@@ -162,6 +163,9 @@ export class LocalDatabaseService {
                 } catch (e) { }
                 try {
                     await this.db.execute(`ALTER TABLE messages ADD COLUMN deleted_at DATETIME;`);
+                } catch (e) { }
+                try {
+                    await this.db.execute(`ALTER TABLE messages ADD COLUMN sender_name TEXT;`);
                 } catch (e) { }
 
                 await this.db.execute(`
@@ -207,6 +211,16 @@ export class LocalDatabaseService {
                         value TEXT
                     );
                 `);
+
+                // CLEANUP: Fix group duplication by removing old "group_X" chatId format
+                try {
+                    console.log("[LocalDatabaseService] Running chat ID cleanup...");
+                    // Delete entries where ID starts with 'group_' if they are redundant
+                    await this.db.execute(`DELETE FROM chats WHERE id LIKE 'group_%'`);
+                    await this.db.execute(`UPDATE messages SET chat_id = REPLACE(chat_id, 'group_', '') WHERE chat_id LIKE 'group_%'`);
+                } catch (cleanupErr) {
+                    console.warn("[LocalDatabaseService] Cleanup failed:", cleanupErr);
+                }
 
                 this.isInitialized = true;
                 this.isInitializing = false;
@@ -274,6 +288,7 @@ export class LocalDatabaseService {
         timestamp?: string; // Optional: use server time if provided
         temp_id?: string;
         key_version?: number;
+        sender_name?: string;
     }): Promise<number> {
         const db = this.getDB();
 
@@ -286,8 +301,8 @@ export class LocalDatabaseService {
                 const result = await db.execute(
                     `INSERT INTO messages
                         (server_id, temp_id, chat_id, sender_id, receiver_id, type,
-                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp, sender_name)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                      ON CONFLICT(server_id) DO UPDATE SET
                          status            = CASE
                                                 WHEN messages.status = 'seen' THEN 'seen'
@@ -298,7 +313,8 @@ export class LocalDatabaseService {
                          local_file_path   = COALESCE(messages.local_file_path,   excluded.local_file_path),
                          retry_count       = excluded.retry_count,
                          key_version       = COALESCE(messages.key_version, excluded.key_version),
-                         timestamp         = COALESCE(excluded.timestamp, messages.timestamp)`,
+                         timestamp         = COALESCE(excluded.timestamp, messages.timestamp),
+                         sender_name       = COALESCE(excluded.sender_name, messages.sender_name)`,
                     [
                         msg.server_id,
                         msg.temp_id || null,
@@ -311,7 +327,8 @@ export class LocalDatabaseService {
                         msg.status,
                         msg.retry_count || 0,
                         msg.key_version || null,
-                        finalTimestamp
+                        finalTimestamp,
+                        msg.sender_name || null
                     ]
                 );
                 insertId = result.insertId || 0;
@@ -320,8 +337,8 @@ export class LocalDatabaseService {
                 const result = await db.execute(
                     `INSERT INTO messages
                         (server_id, temp_id, chat_id, sender_id, receiver_id, type,
-                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp)
-                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp, sender_name)
+                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         msg.temp_id || null,
                         msg.chat_id,
@@ -333,7 +350,8 @@ export class LocalDatabaseService {
                         msg.status,
                         msg.retry_count || 0,
                         msg.key_version || null,
-                        finalTimestamp
+                        finalTimestamp,
+                        msg.sender_name || null
                     ]
                 );
                 insertId = result.insertId || 0;
@@ -470,7 +488,7 @@ export class LocalDatabaseService {
     static async searchMessages(chatId: string, query: string, limit: number = 30, offset: number = 0): Promise<any[]> {
         const db = this.getDB();
         const result = await db.execute(
-            `SELECT id, chat_id, sender_id, encrypted_payload, timestamp, type, status
+            `SELECT id, chat_id, sender_id, sender_name, encrypted_payload, timestamp, type, status
              FROM messages
              WHERE chat_id = ? 
                AND type = 'text'
@@ -491,7 +509,7 @@ export class LocalDatabaseService {
         const db = this.getDB();
         const result = await db.execute(
             `SELECT 
-                m.id, m.chat_id, m.sender_id, m.encrypted_payload, m.timestamp, m.type, m.status,
+                m.id, m.chat_id, m.sender_id, m.sender_name, m.encrypted_payload, m.timestamp, m.type, m.status,
                 c.other_username, c.group_name, c.other_avatar_url, c.group_icon, c.is_group,
                 c.other_avatar_id, c.other_is_official
              FROM messages m

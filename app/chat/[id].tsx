@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton, Animated } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 // @ts-ignore
@@ -318,9 +318,12 @@ export default function ChatDetailScreen() {
 
             // ✅ Emit batch seen receipt via socket
             if (socket.current) {
+                const socketRoom = isGroup ? `group_${id}` : `user_${id}`;
+                const dbChatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+
                 socket.current.emit('message:seen', {
-                    room: isGroup ? `group_${id}` : `user_${id}`,
-                    chat_id: isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`,
+                    room: socketRoom,
+                    chat_id: dbChatId,
                     sender_id: currentUser.id
                 });
             }
@@ -483,7 +486,8 @@ export default function ChatDetailScreen() {
             status: r.status,
             is_deleted: r.is_deleted === 1,
             deleted_for_everyone: r.deleted_for_everyone === 1,
-            created_at: r.timestamp
+            created_at: r.timestamp,
+            sender_name: r.sender_name
         };
     };
 
@@ -609,9 +613,9 @@ export default function ChatDetailScreen() {
             });
 
             socket.current.on('connect', () => {
-                const chatId = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-                console.log(`[Socket] Connected. Joining room: ${chatId}`);
-                socket.current?.emit('join_room', chatId);
+                const socketRoom = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                console.log(`[Socket] Connected. Joining room: ${socketRoom}`);
+                socket.current?.emit('join_room', socketRoom);
 
                 if (currentUser) {
                     socket.current?.emit('user:identify', currentUser.id);
@@ -619,7 +623,8 @@ export default function ChatDetailScreen() {
                 }
 
                 // [Sync] Trigger offline sync on reconnect using safeSync (lock + throttle)
-                SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, chatId);
+                const dbChatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, dbChatId);
                 safeSync().then(() => {
                     // Force UI refresh after global sync to catch any messages for this chat
                     fetchMessages();
@@ -754,7 +759,7 @@ export default function ChatDetailScreen() {
 
                 // Add to Local DB
                 try {
-                    const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                    const dbChatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
                     let decryptedPayload = data.encrypted_payload;
 
                     // Decrypt if 1-on-1 and encrypted
@@ -813,7 +818,24 @@ export default function ChatDetailScreen() {
                             status: 'delivered',
                             is_local: false,
                             created_at: data.timestamp || new Date().toISOString(),
+                            sender_name: data.sender_name
                         };
+
+                        // ✅ Persistence for real-time messages
+                        LocalDatabaseService.insertMessage({
+                            server_id: String(realId),
+                            temp_id: data.temp_id?.toString(),
+                            chat_id: dbChatId,
+                            sender_id: data.sender_id.toString(),
+                            receiver_id: isGroup ? undefined : currentUser.id.toString(),
+                            type: data.message_type || 'text',
+                            encrypted_payload: data.encrypted_payload,
+                            media_url: data.media_url || undefined,
+                            status: 'delivered',
+                            timestamp: data.timestamp,
+                            sender_name: data.sender_name
+                        }).catch(e => console.warn("[Socket] Failed to persist realtime message", e));
+
                         return [incomingMsg, ...prev];
                     });
 
@@ -832,10 +854,11 @@ export default function ChatDetailScreen() {
                         updateMessageStatus('seen', [realId]);
                         // ✅ Also emit message:seen via socket
                         if (socket.current) {
+                            const socketRoom = isGroup ? `group_${id}` : `user_${data.sender_id}`;
                             socket.current.emit('message:seen', {
-                                room: isGroup ? `group_${id}` : `user_${data.sender_id}`,
+                                room: socketRoom,
                                 message_ids: [realId],
-                                chat_id: chatId,
+                                chat_id: dbChatId,
                                 sender_id: currentUser.id
                             });
                         }
@@ -1170,7 +1193,8 @@ export default function ChatDetailScreen() {
             const interval = setInterval(() => {
                 if (AppState.currentState === 'active') {
                     // Only sync incrementally, don't fetch all messages
-                    SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, chatId);
+                    const dbChatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+                    SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, dbChatId);
                     updateLastSeen();
                 }
             }, 30000); // 30s interval is enough for fallback
@@ -1260,7 +1284,8 @@ export default function ChatDetailScreen() {
                         encrypted_payload: newMessage.message_text || undefined,
                         local_file_path: mediaPath || undefined,
                         status: 'sending',
-                        retry_count: 0
+                        retry_count: 0,
+                        sender_name: currentUser.username
                     });
                     (newMessage as any).local_db_id = dbId;
                 } else {
@@ -1406,7 +1431,8 @@ export default function ChatDetailScreen() {
                             reply_to_message_id: newMessage.reply_to_message_id,
                             is_one_time: newMessage.is_one_time,
                             media_url: newMessage.media_url,
-                            key_version: !isGroup ? currentKeyVersion : null
+                            key_version: !isGroup ? currentKeyVersion : null,
+                            sender_name: currentUser.username
                         });
                     }
                 }
@@ -2511,28 +2537,14 @@ export default function ChatDetailScreen() {
         const isMe = String(item.sender_id) === String(currentUser?.id);
         const isSelfChat = String(id) === String(currentUser?.id);
 
-        // Find the next message that will actually be rendered (has content)
-        let nextVisibleMsg = null;
-        for (let i = index + 1; i < messages.length; i++) {
-            const m = messages[i];
-            const hasContent = !!m.message_text || !!m.media_url || m.message_type === 'sticker' || m.message_type === 'voice' || !!m.is_forwarded || !!m.reply_to_message_id || !!m.is_deleted;
-            if (hasContent) {
-                nextVisibleMsg = m;
-                break;
-            }
-        }
-
-        const isLastInGroup = !nextVisibleMsg ||
-            nextVisibleMsg.sender_id !== item.sender_id ||
-            formatChatTime(nextVisibleMsg.created_at) !== formatChatTime(item.created_at);
-
         return (
             <MessageItem
                 item={item}
                 index={index}
                 isMe={isMe}
                 isSelfChat={isSelfChat}
-                isLastInGroup={isLastInGroup}
+                isLastInGroup={item.isLastInGroup} // Use pre-calculated value
+                showSenderName={item.showSenderName}
                 isGroupChat={isGroup}
                 currentUser={currentUser}
                 id={id}
@@ -2556,15 +2568,66 @@ export default function ChatDetailScreen() {
             />
         );
     }, [
-        messages, isGroup, currentUser, id, otherUsername, targetUserProfile,
+        isGroup, currentUser, id, otherUsername, targetUserProfile,
         selectedMessageId, isSelectionMode, selectedMessageIds, groupMembers,
         handleLongPressMessage, handleDeleteMessage, handleSend, handleImagePress,
         scrollToMessage, handleForwardMessage, handleSelectMessage, handleReaction,
-        setReplyingToMessage
+        setReplyingToMessage, highlightMessageId
     ]);
 
     // ── STEP 5: Stable deduplicated data array for FlashList ────────────────────
-    const mergedMessages = deduplicateMessages([...messages, ...failedMessages]);
+    const mergedMessages = useMemo(() => {
+        const rawMerged = deduplicateMessages([...messages, ...failedMessages]);
+
+        // Pre-calculate grouping to avoid O(N) search in renderItem
+        return rawMerged.map((item, index) => {
+            const isMe = String(item.sender_id) === String(currentUser?.id);
+
+            // Older message (physically ABOVE in inverted list)
+            let prevVisibleMsg = null;
+            for (let i = index + 1; i < rawMerged.length; i++) {
+                const m = rawMerged[i];
+                const hasContent = !!m.message_text || !!m.media_url || m.message_type === 'sticker' || m.message_type === 'voice' || !!m.is_forwarded || !!m.reply_to_message_id || !!m.is_deleted;
+                if (hasContent) {
+                    prevVisibleMsg = m;
+                    break;
+                }
+            }
+
+            // Newer message (physically BELOW in inverted list)
+            let nextVisibleMsg = null;
+            for (let i = index - 1; i >= 0; i--) {
+                const m = rawMerged[i];
+                const hasContent = !!m.message_text || !!m.media_url || m.message_type === 'sticker' || m.message_type === 'voice' || !!m.is_forwarded || !!m.reply_to_message_id || !!m.is_deleted;
+                if (hasContent) {
+                    nextVisibleMsg = m;
+                    break;
+                }
+            }
+
+            const itemTime = new Date(item.created_at).getTime();
+            const prevTime = prevVisibleMsg ? new Date(prevVisibleMsg.created_at).getTime() : 0;
+            const nextTime = nextVisibleMsg ? new Date(nextVisibleMsg.created_at).getTime() : 0;
+
+            const FIVE_MINUTES = 5 * 60 * 1000;
+
+            // showSenderName: This is the TOP-MOST message of a cluster
+            // Show it if the OLDER message is different sender OR far away
+            const showSenderName = isGroup && !isMe && (
+                !prevVisibleMsg ||
+                String(prevVisibleMsg.sender_id) !== String(item.sender_id) ||
+                (itemTime - prevTime) > FIVE_MINUTES
+            );
+
+            // isLastInGroup: This is the BOTTOM-MOST message of a cluster
+            // Show avatar/time if the NEWER message is different sender OR far away
+            const isLastInGroup = !nextVisibleMsg ||
+                String(nextVisibleMsg.sender_id) !== String(item.sender_id) ||
+                (nextTime - itemTime) > FIVE_MINUTES;
+
+            return { ...item, isLastInGroup, showSenderName };
+        });
+    }, [messages, failedMessages, currentUser?.id]);
 
     // ── STEP 6: Conditional Rendering (AFTER all hooks) ────────────────────────
     if (isCheckingLock || !isDbReady) {
@@ -2629,7 +2692,7 @@ export default function ChatDetailScreen() {
                         inverted={true}
                         keyExtractor={(item) => String(item.id)}
                         renderItem={renderMessage}
-                        estimatedItemSize={100}
+                        estimatedItemSize={120}
                         contentContainerStyle={{
                             ...styles.listContent,
                             paddingBottom: 20

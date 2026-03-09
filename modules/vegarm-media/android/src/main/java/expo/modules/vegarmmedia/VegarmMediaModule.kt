@@ -7,6 +7,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import android.util.Base64
 
 class VegarmMediaModule : Module() {
   override fun definition() = ModuleDefinition {
@@ -92,6 +93,34 @@ class VegarmMediaModule : Module() {
           }
       }
       connection.disconnect()
+      
+      return@AsyncFunction "file://${destFile.absolutePath}"
+    }
+
+    /**
+     * Writes base64 data to a file in the media directory.
+     * Bypasses expo-file-system Scoped Storage restrictions.
+     */
+    AsyncFunction("writeMedia") { base64Data: String, filename: String, subfolder: String ->
+      val context: Context = appContext.reactContext ?: return@AsyncFunction ""
+      
+      val mediaDirs = context.externalMediaDirs
+      if (mediaDirs.isEmpty() || mediaDirs[0] == null) {
+          return@AsyncFunction ""
+      }
+      
+      val mediaDir = mediaDirs[0]
+      val destDir = File(File(mediaDir, "Vegarm"), subfolder)
+      if (!destDir.exists()) {
+          destDir.mkdirs()
+      }
+      
+      val destFile = File(destDir, filename)
+      
+      val data = Base64.decode(base64Data, Base64.DEFAULT)
+      FileOutputStream(destFile).use { output ->
+          output.write(data)
+      }
       
       return@AsyncFunction "file://${destFile.absolutePath}"
     }

@@ -40,7 +40,8 @@ export class SyncService {
                     type: msg.message_type || 'text',
                     encrypted_payload: msg.encrypted_payload || msg.message_text,
                     status: msg.status || 'delivered',
-                    timestamp: msg.created_at
+                    timestamp: msg.created_at,
+                    sender_name: msg.sender_name
                 });
             }
 
@@ -121,7 +122,8 @@ export class SyncService {
                     type: msg.message_type || 'text',
                     encrypted_payload: msg.message_text,
                     status: msg.status || 'delivered',
-                    timestamp: msg.created_at
+                    timestamp: msg.created_at,
+                    sender_name: msg.sender_name
                 });
             }
 
@@ -135,6 +137,10 @@ export class SyncService {
                     id: chatId,
                     is_group: !!conv.is_group,
                     other_user_id: conv.is_group ? undefined : String(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id)),
+                    other_username: conv.is_group ? conv.group_name : undefined,
+                    group_name: conv.group_name,
+                    group_icon: conv.group_icon,
+                    other_avatar_url: conv.is_group ? conv.group_icon : undefined,
                     unread_count: conv.unread_count
                 });
             }

@@ -66,7 +66,7 @@ try {
     }
 
     // 2. Insert into groups table
-    $stmt = $pdo->prepare("INSERT INTO groups (name, description, icon_path, created_by) VALUES (:name, :desc, :icon, :creator)");
+    $stmt = $pdo->prepare("INSERT INTO groups (name, description, icon_path, created_by, allow_member_edit_info, allow_member_send_messages, allow_member_add_members, admin_approve_new_members) VALUES (:name, :desc, :icon, :creator, 0, 1, 1, 0)");
     $stmt->execute([
         ':name' => $name,
         ':desc' => $description,

@@ -41,6 +41,7 @@ export const MessageItem = React.memo(({
     id,
     otherUsername,
     isGroupChat,
+    showSenderName,
     targetUserProfile,
     onSwipe,
     onLongPress,
@@ -210,7 +211,7 @@ export const MessageItem = React.memo(({
                                     </View>
                                 </GlassCard>
                             )}
-                            {!isMe && !!isGroupChat && !isSelfChat && (
+                            {!isMe && !!isGroupChat && !isSelfChat && !!showSenderName && (
                                 <ThemedText style={[styles.senderName, {
                                     color: (() => {
                                         const sender = groupMembers?.find((m: any) => String(m.id) === String(item.sender_id) || String(m.user_id) === String(item.sender_id));

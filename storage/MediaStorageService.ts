@@ -2,14 +2,16 @@ import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { Platform } from 'react-native';
 import { Config } from '../constants/Config';
+import { getPublicMediaDirectory, downloadMedia } from '../modules/vegarm-media';
 
 /**
  * Media Type enum for folder organization
  */
 export type MediaType = 'Images' | 'Videos' | 'Documents' | 'Thumbnails' | 'Cache';
 
-// Hardened: We use FileSystem.documentDirectory which is always available.
-let MEDIA_BASE_DIR = `${FileSystem.documentDirectory}vegarm/`;
+// Hardened: Use native path if available (Android Scoped Storage), fallback to internal.
+const publicDir = getPublicMediaDirectory();
+let MEDIA_BASE_DIR = publicDir ? publicDir : `${FileSystem.documentDirectory}vegarm/`;
 
 const FOLDERS: { [key in MediaType]: string } = {
     Images: 'images/',
@@ -26,6 +28,12 @@ export class MediaStorageService {
      */
     static async init(): Promise<void> {
         try {
+            // If using public native directory, folders are pre-created in VegarmMediaModule.kt
+            if (publicDir && Platform.OS === 'android') {
+                console.log('[Storage] Using native public directory, skipping Expo folder creation.');
+                return;
+            }
+
             const baseDirInfo = await FileSystem.getInfoAsync(MEDIA_BASE_DIR);
 
             if (!baseDirInfo.exists) {
@@ -63,12 +71,14 @@ export class MediaStorageService {
 
     static resolveMediaType(url: string, explicitType?: string): MediaType {
         if (explicitType === 'image' || explicitType === 'sticker' || explicitType === 'gif') return 'Images';
-        if (explicitType === 'video' || explicitType === 'voice') return 'Videos';
+        if (explicitType === 'video') return 'Videos';
+        if (explicitType === 'voice') return 'Videos'; // Keep as Videos for folder structure
         if (explicitType === 'document') return 'Documents';
 
         const rawUrl = url.split('?')[0].toLowerCase();
         if (/\.(jpg|jpeg|png|webp|gif)$/i.test(rawUrl)) return 'Images';
-        if (/\.(mp4|mov|mkv|webm|m4a|mp3|wav|aac)$/i.test(rawUrl)) return 'Videos';
+        if (/\.(mp4|mov|mkv|webm)$/i.test(rawUrl)) return 'Videos';
+        if (/\.(m4a|mp3|wav|aac)$/i.test(rawUrl)) return 'Videos'; // Voice/Audio folders
         return 'Documents';
     }
 
@@ -116,19 +126,43 @@ export class MediaStorageService {
         }
 
         try {
-            const downloadResult = await FileSystem.downloadAsync(fullUrl, destinationPath);
+            let resultUri: string;
 
-            // Save to Gallery on Android
-            if (Platform.OS === 'android' && (mediaType === 'Images' || mediaType === 'Videos')) {
-                const { status } = await MediaLibrary.requestPermissionsAsync();
+            if (publicDir && Platform.OS === 'android') {
+                // Use native download to bypass Expo FileSystem write restrictions on Android/media
+                const subfolder = FOLDERS[mediaType].replace('/', '');
+                console.log(`[Storage] Using native download for ${expectedFilename} into ${subfolder}`);
+                resultUri = await downloadMedia(fullUrl, expectedFilename, subfolder);
+                if (!resultUri) throw new Error("Native download failed");
+            } else {
+                const downloadResult = await FileSystem.downloadAsync(fullUrl, destinationPath);
+                resultUri = downloadResult.uri;
+            }
+
+            // Save to Gallery on Android (Images and Videos ONLY, skip automatic gallery save for voice)
+            const isGalleryMedia = (mediaType === 'Images' || mediaType === 'Videos') && type !== 'voice';
+
+            if (Platform.OS === 'android' && isGalleryMedia) {
+                const { status } = await MediaLibrary.requestPermissionsAsync(true); // Request write-only
                 if (status === 'granted') {
-                    const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
-                    await MediaLibrary.createAlbumAsync('Vegarm', asset, false);
-                    console.log(`[Storage] Media saved to gallery: Vegarm album`);
+                    const ALBUM_NAME = 'Vegarm';
+                    const asset = await MediaLibrary.createAssetAsync(resultUri);
+
+                    // Check if album exists
+                    let album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
+                    if (!album) {
+                        // Create album with copyAssets: true to avoid Scoped Storage "modify" prompt
+                        await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, true);
+                        console.log(`[Storage] Created "${ALBUM_NAME}" album and saved asset (copyAssets: true)`);
+                    } else {
+                        // Add to existing album with copyAssets: true
+                        await MediaLibrary.addAssetsToAlbumAsync([asset], album, true);
+                        console.log(`[Storage] Added asset to existing "${ALBUM_NAME}" album (copyAssets: true)`);
+                    }
                 }
             }
 
-            return downloadResult.uri;
+            return resultUri;
         } catch (e) {
             console.error('[Storage Error] saveMedia fatal error:', e);
             throw e;

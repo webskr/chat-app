@@ -13,6 +13,7 @@ import { Avatar } from '../../components/Avatar';
 import { Config } from '../../constants/Config';
 import { useUser } from '../../context/UserContext';
 import { getAvatarById } from '../../constants/Avatars';
+import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 import { SearchInput } from '../../components/SearchInput';
 
 export default function CreateGroupScreen() {
@@ -122,6 +123,16 @@ export default function CreateGroupScreen() {
                             // router.replace('/'); 
                             // Go directly to the new group chat
                             if (data.group_id) {
+                                // Proactively update local metadata to prevent "Unnamed Group"
+                                LocalDatabaseService.updateChatMetadata({
+                                    id: data.group_id.toString(),
+                                    is_group: true,
+                                    other_username: groupName,
+                                    other_avatar_url: data.icon_path,
+                                    group_name: groupName,
+                                    group_icon: data.icon_path
+                                }).catch(e => console.error("Metadata update failed", e));
+
                                 router.replace({
                                     pathname: '/chat/[id]',
                                     params: {
