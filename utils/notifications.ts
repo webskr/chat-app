@@ -49,7 +49,7 @@ export async function registerForPushNotificationsAsync() {
         // https://docs.expo.dev/push-notifications/push-notifications-setup/#configure-projectid
         // For bare workflow or development builds, project ID might be needed if not in app.json
         try {
-            const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? 'a577d34c-aee7-46d8-9df6-ffee5d2d947a';
+            const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? '311d8ff0-7a32-4a33-ad53-77cc0ca53f9a';
             const expoToken = await Notifications.getExpoPushTokenAsync({
                 projectId,
             });
