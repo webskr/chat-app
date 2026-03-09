@@ -104,14 +104,14 @@ if (!empty($data->sender_id) && (!empty($data->message) || !empty($data->image_p
         $convStmt = $pdo->prepare($convSql);
         
         // Push notification preparation
-        include_once '../includes/push_service.php';
+        include_once '../includes/fcm_service.php';
         $push_title = "Vegarm Official";
         $push_body = $message_type === 'image' ? "📷 New Announcement" : (mb_substr($message_text, 0, 40) . "...");
 
         $successCount = 0;
         
         // Prepare token statement once
-        $tokenStmt = $pdo->prepare("SELECT device_token FROM users WHERE id = :id");
+        $tokenStmt = $pdo->prepare("SELECT fcm_token FROM user_devices WHERE user_id = :id AND fcm_token IS NOT NULL");
 
         foreach ($allUsers as $receiver_id) {
             $user1_id = min((int)$data->sender_id, (int)$receiver_id);
@@ -150,16 +150,18 @@ if (!empty($data->sender_id) && (!empty($data->message) || !empty($data->image_p
             // Push Notification (only if sent immediately)
             if ($status === 'sent') {
                  $tokenStmt->execute([':id' => $receiver_id]);
-                 $token = $tokenStmt->fetchColumn();
+                 $tokens = $tokenStmt->fetchAll(PDO::FETCH_COLUMN);
                  
-                 if ($token) {
-                     try {
-                         sendPushNotification($token, $push_title, $push_body, [
-                             'type' => 'new_message',
-                             'conversation_id' => $convId,
-                             'sender_id' => $data->sender_id
-                         ]);
-                     } catch (Exception $e) {}
+                 foreach ($tokens as $token) {
+                     if ($token) {
+                         try {
+                             sendFCMNotification($token, $push_title, $push_body, [
+                                 'type' => 'new_message',
+                                 'conversation_id' => $convId,
+                                 'sender_id' => $data->sender_id
+                             ]);
+                         } catch (Exception $e) {}
+                     }
                  }
             }
         }

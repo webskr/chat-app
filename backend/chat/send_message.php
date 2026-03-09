@@ -266,7 +266,7 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
 
             // --- NOTIFICATION LOGIC ---
             if ($status === 'sent') {
-                include_once __DIR__ . '/../includes/push_service.php';
+                include_once __DIR__ . '/../includes/fcm_service.php';
 
                 // Get Sender Name
                 $sender_stmt = $pdo->prepare("SELECT username, display_name FROM users WHERE id = :sid");
@@ -296,9 +296,10 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
                             // Verify these usernames exist and are in the group
                             $placeholders = str_repeat('?,', count($potential_usernames) - 1) . '?';
                             $mention_query = "
-                                SELECT u.id, u.username, u.device_token 
+                                SELECT u.id, u.username, d.fcm_token as device_token
                                 FROM users u
                                 JOIN group_members gm ON u.id = gm.user_id
+                                LEFT JOIN user_devices d ON u.id = d.user_id
                                 WHERE gm.group_id = ? 
                                 AND u.username IN ($placeholders)
                             ";
@@ -321,13 +322,13 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
 
                     // Get Recipients (Active Members != Sender)
                     $recipients_query = "
-                        SELECT u.id, u.device_token
+                        SELECT u.id, d.fcm_token as device_token
                         FROM group_members gm
                         JOIN users u ON gm.user_id = u.id
+                        JOIN user_devices d ON u.id = d.user_id
                         WHERE gm.group_id = :gid 
                         AND gm.user_id != :sid 
                         AND gm.status = 'active'
-                        AND u.device_token IS NOT NULL
                     ";
                     $rec_stmt = $pdo->prepare($recipients_query);
                     $rec_stmt->execute([':gid' => $group_id, ':sid' => $sender_id]);
@@ -370,7 +371,7 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
                                 $notificationBody = "You were mentioned: " . $body;
                             }
 
-                            sendPushNotification($rec['device_token'], $title, $notificationBody, $payload);
+                            sendFCMNotification($rec['device_token'], $title, $notificationBody, $payload);
                         }
                     }
 
@@ -378,7 +379,7 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
                     // 1-on-1 Notifications
                     // ... (Existing Logic)
                     // Check Mute
-                    $notif_query = "SELECT u.device_token, (SELECT COUNT(*) FROM muted_chats WHERE user_id = :rid AND target_id = :sid AND mute_until > NOW()) as is_muted FROM users u WHERE u.id = :rid";
+                    $notif_query = "SELECT d.fcm_token as device_token, (SELECT COUNT(*) FROM muted_chats WHERE user_id = :rid AND target_id = :sid AND mute_until > NOW()) as is_muted FROM users u LEFT JOIN user_devices d ON u.id = d.user_id WHERE u.id = :rid";
                     $notif_stmt = $pdo->prepare($notif_query);
                     $notif_stmt->execute([':rid' => $receiver_id, ':sid' => $sender_id]);
                     $receiver_info = $notif_stmt->fetch(PDO::FETCH_ASSOC);
@@ -392,7 +393,7 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
                             'sender_name' => $sender_name,
                             'message_id' => $message_id
                         ];
-                        sendPushNotification($receiver_info['device_token'], $title, $body, $payload);
+                        sendFCMNotification($receiver_info['device_token'], $title, $body, $payload);
                     }
                 }
             }

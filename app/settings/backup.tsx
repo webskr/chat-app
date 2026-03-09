@@ -3,17 +3,17 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIn
 import { ChevronLeft, Cloud, HardDrive, RotateCcw, ShieldCheck, Trash2, Download } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { BackupService } from '../../utils/BackupService';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Updates from 'expo-updates';
 import * as DocumentPicker from 'expo-document-picker';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
-
+import { GoogleDriveService } from '../../utils/GoogleDriveService';
 const LAST_BACKUP_KEY = 'last_backup_timestamp';
 
 // Mocked for development - user should provide these in production
 const GOOGLE_CONFIG = {
-    webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com', // Replace with real one
+    webClientId: '617829207220-lm7j89apn1ojd6kr0vv1ouogcj74ija4.apps.googleusercontent.com',
     offlineAccess: true,
     scopes: ['https://www.googleapis.com/auth/drive.appdata'],
 };
@@ -25,11 +25,15 @@ export default function BackupSettingsScreen() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [lastBackup, setLastBackup] = useState<string | null>(null);
-    const [isCloudEnabled, setIsCloudEnabled] = useState(false);
     const [passwordModalVisible, setPasswordModalVisible] = useState(false);
     const [backupPassword, setBackupPassword] = useState("");
-    const [modalAction, setModalAction] = useState<"create" | "restore" | null>(null);
+    const [modalAction, setModalAction] = useState<"create" | "restore" | "create_drive" | "restore_drive" | null>(null);
     const [pendingRestoreFile, setPendingRestoreFile] = useState<any>(null);
+
+    // Drive State
+    const [driveBackups, setDriveBackups] = useState<any[]>([]);
+    const [drivePickerVisible, setDrivePickerVisible] = useState(false);
+    const [selectedDriveBackup, setSelectedDriveBackup] = useState<any>(null);
 
     useEffect(() => {
         loadSettings();
@@ -105,6 +109,136 @@ export default function BackupSettingsScreen() {
             setLoading(true);
             setPasswordModalVisible(false);
             await BackupService.restoreBackup(pendingRestoreFile.uri, password);
+            Alert.alert("Success", "Restore complete. The app will now restart to apply changes.", [
+                { text: "OK", onPress: () => Updates.reloadAsync() }
+            ]);
+        } catch (err: any) {
+            Alert.alert("Error", err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleGoogleSignIn = async () => {
+        try {
+            await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+            const userInfo = await GoogleSignin.signIn();
+            return userInfo;
+        } catch (error: any) {
+            if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+                console.log('User cancelled the login flow');
+            } else if (error.code === statusCodes.IN_PROGRESS) {
+                console.log('Sign in is in progress already');
+            } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+                Alert.alert('Error', 'Play services not available or outdated');
+            } else {
+                Alert.alert('Error signing in', error.message);
+            }
+            return null;
+        }
+    };
+
+    const handleBackupToDrive = async () => {
+        if (!user?.id) {
+            Alert.alert("Error", "User not found. Please log in again.");
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const userInfo = await handleGoogleSignIn();
+            if (!userInfo) return; // User cancelled or failed
+
+            setModalAction("create_drive");
+            setBackupPassword("");
+            setPasswordModalVisible(true);
+        } catch (error: any) {
+            Alert.alert("Error", error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const submitBackupToDrive = async (password: string) => {
+        if (!password || password.length < 4) {
+            Alert.alert("Error", "Password too short.");
+            return;
+        }
+        try {
+            setLoading(true);
+            setPasswordModalVisible(false);
+
+            // 1. Create local backup
+            const path = await BackupService.createBackup(password, String(user!.id));
+
+            // Re-init DB
+            if (user?.id) {
+                await LocalDatabaseService.initDB(String(user.id));
+            }
+
+            // 2. Upload to Drive
+            const fileName = path.split('/').pop() || `backup_${Date.now()}.zip`;
+            await GoogleDriveService.uploadFile(path, fileName);
+
+            const now = new Date().toLocaleString();
+            await AsyncStorage.setItem(LAST_BACKUP_KEY, now);
+            setLastBackup(now);
+
+            Alert.alert("Success", `Backup uploaded to Google Drive successfully.`);
+        } catch (err: any) {
+            Alert.alert("Error", err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRestoreFromDrive = async () => {
+        try {
+            setLoading(true);
+            const userInfo = await handleGoogleSignIn();
+            if (!userInfo) return;
+
+            const backups = await GoogleDriveService.listBackups();
+            if (backups.length === 0) {
+                Alert.alert("No Backups", "No backups found in Google Drive.");
+                return;
+            }
+
+            setDriveBackups(backups);
+            setDrivePickerVisible(true);
+        } catch (err: any) {
+            Alert.alert("Error", err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const selectDriveBackup = async (backup: any) => {
+        setDrivePickerVisible(false);
+        setSelectedDriveBackup(backup);
+        setModalAction("restore_drive");
+        setBackupPassword("");
+        setPasswordModalVisible(true);
+    };
+
+    const submitRestoreFromDrive = async (password: string) => {
+        if (!password || !selectedDriveBackup) return;
+
+        try {
+            setLoading(true);
+            setPasswordModalVisible(false);
+
+            const tempUri = `${FileSystem.cacheDirectory}temp_drive_restore.zip`;
+
+            // 1. Download
+            await GoogleDriveService.downloadFile(selectedDriveBackup.id, tempUri);
+
+            // 2. Restore
+            await BackupService.restoreBackup(tempUri, password);
+
+            // Cleanup temp file
+            await FileSystem.deleteAsync(tempUri, { idempotent: true });
+
             Alert.alert("Success", "Restore complete. The app will now restart to apply changes.", [
                 { text: "OK", onPress: () => Updates.reloadAsync() }
             ]);
@@ -191,27 +325,31 @@ export default function BackupSettingsScreen() {
 
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Cloud Backup</Text>
-                    <View style={styles.actionItem}>
+                    <TouchableOpacity
+                        style={styles.actionItem}
+                        onPress={handleBackupToDrive}
+                        disabled={loading}
+                    >
                         <View style={[styles.iconBox, { backgroundColor: '#eff6ff' }]}>
                             <Cloud color="#3b82f6" size={20} />
                         </View>
                         <View style={styles.actionText}>
-                            <Text style={styles.actionTitle}>Google Drive Sync</Text>
-                            <Text style={styles.actionSubtitle}>Keep your backups safe in the cloud.</Text>
+                            <Text style={styles.actionTitle}>Backup to Google Drive</Text>
+                            <Text style={styles.actionSubtitle}>Create and upload backup to your Google Drive.</Text>
                         </View>
-                        <Switch
-                            value={isCloudEnabled}
-                            onValueChange={setIsCloudEnabled}
-                        />
-                    </View>
+                    </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.actionItem} disabled={!isCloudEnabled}>
+                    <TouchableOpacity
+                        style={styles.actionItem}
+                        onPress={handleRestoreFromDrive}
+                        disabled={loading}
+                    >
                         <View style={[styles.iconBox, { backgroundColor: '#fefce8' }]}>
                             <Download color="#ca8a04" size={20} />
                         </View>
                         <View style={styles.actionText}>
-                            <Text style={styles.actionTitle}>Download from Drive</Text>
-                            <Text style={styles.actionSubtitle}>Restore latest backup from Google Drive.</Text>
+                            <Text style={styles.actionTitle}>Restore from Drive</Text>
+                            <Text style={styles.actionSubtitle}>Download and restore a backup from Google Drive.</Text>
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -236,10 +374,10 @@ export default function BackupSettingsScreen() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>
-                            {modalAction === "create" ? "Create Backup Password" : "Enter Backup Password"}
+                            {modalAction === "create" || modalAction === "create_drive" ? "Create Backup Password" : "Enter Backup Password"}
                         </Text>
                         <Text style={styles.modalSubtitle}>
-                            {modalAction === "create"
+                            {modalAction === "create" || modalAction === "create_drive"
                                 ? "This password will be used to encrypt your backup. Don't lose it!"
                                 : "Provide the password used to encrypt this backup archive."}
                         </Text>
@@ -262,14 +400,53 @@ export default function BackupSettingsScreen() {
                                 style={[styles.modalButton, styles.confirmButton]}
                                 onPress={() => {
                                     if (modalAction === "create") submitCreateBackup(backupPassword);
-                                    else submitRestoreBackup(backupPassword);
+                                    else if (modalAction === "restore") submitRestoreBackup(backupPassword);
+                                    else if (modalAction === "create_drive") submitBackupToDrive(backupPassword);
+                                    else if (modalAction === "restore_drive") submitRestoreFromDrive(backupPassword);
                                 }}
                             >
                                 <Text style={styles.confirmButtonText}>
-                                    {modalAction === "create" ? "Create" : "Restore"}
+                                    {modalAction === "create" || modalAction === "create_drive" ? "Create" : "Restore"}
                                 </Text>
                             </TouchableOpacity>
                         </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Drive Backups Picker Modal */}
+            <Modal
+                transparent
+                visible={drivePickerVisible}
+                animationType="slide"
+                onRequestClose={() => setDrivePickerVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.drivePickerContent}>
+                        <Text style={styles.modalTitle}>Select a Backup</Text>
+                        <ScrollView style={{ maxHeight: 300, width: '100%', marginBottom: 16 }}>
+                            {driveBackups.map((backup) => (
+                                <TouchableOpacity
+                                    key={backup.id}
+                                    style={styles.driveBackupItem}
+                                    onPress={() => selectDriveBackup(backup)}
+                                >
+                                    <Cloud color="#3b82f6" size={20} />
+                                    <View style={{ marginLeft: 12 }}>
+                                        <Text style={styles.driveBackupName}>{backup.name}</Text>
+                                        <Text style={styles.driveBackupDate}>
+                                            {new Date(backup.createdTime).toLocaleString()}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                        <TouchableOpacity
+                            style={[styles.modalButton, styles.cancelButton, { width: '100%' }]}
+                            onPress={() => setDrivePickerVisible(false)}
+                        >
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
@@ -376,4 +553,34 @@ const styles = StyleSheet.create({
     confirmButton: { backgroundColor: '#22c55e' },
     cancelButtonText: { color: '#64748b', fontWeight: '600' },
     confirmButtonText: { color: '#fff', fontWeight: '600' },
+    drivePickerContent: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        width: '100%',
+        maxWidth: 380,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        alignItems: 'center',
+    },
+    driveBackupItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+    },
+    driveBackupName: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#1e293b',
+    },
+    driveBackupDate: {
+        fontSize: 12,
+        color: '#64748b',
+        marginTop: 2,
+    }
 });

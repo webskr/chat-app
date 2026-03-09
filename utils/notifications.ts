@@ -15,6 +15,10 @@ Notifications.setNotificationHandler({
     }),
 });
 
+/**
+ * Requests permission and gets the raw Device Push Token (FCM token on Android, APNs on iOS).
+ * This bypasses the Expo Push API completely.
+ */
 export async function registerForPushNotificationsAsync() {
     let token;
 
@@ -34,6 +38,7 @@ export async function registerForPushNotificationsAsync() {
     }
 
     if (Device.isDevice) {
+        // Request Permissions First
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
         if (existingStatus !== 'granted') {
@@ -45,18 +50,13 @@ export async function registerForPushNotificationsAsync() {
             return;
         }
 
-        // Learn more about projectId:
-        // https://docs.expo.dev/push-notifications/push-notifications-setup/#configure-projectid
-        // For bare workflow or development builds, project ID might be needed if not in app.json
         try {
-            const projectId = Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId ?? '311d8ff0-7a32-4a33-ad53-77cc0ca53f9a';
-            const expoToken = await Notifications.getExpoPushTokenAsync({
-                projectId,
-            });
-            token = expoToken.data;
-            console.log("Push Token:", token);
+            // Get the raw Device Token (FCM on Android) instead of Expo Token
+            const deviceToken = await Notifications.getDevicePushTokenAsync();
+            token = deviceToken.data;
+            console.log("Raw FCM Device Token:", token);
         } catch (e: any) {
-            console.log("Error fetching token:", e);
+            console.log("Error fetching device token:", e);
             if (e.message?.includes('SERVICE_NOT_AVAILABLE')) {
                 console.warn('Google Play Services is temporarily unavailable. Push tokens cannot be fetched right now.');
             }
@@ -66,6 +66,17 @@ export async function registerForPushNotificationsAsync() {
     }
 
     return token;
+}
+
+/**
+ * Listens for token refreshes from Firebase (e.g. if the FCM token rotates).
+ * Call this in your root layout/component.
+ */
+export function addPushTokenListener(callback: (token: string) => void) {
+    return Notifications.addPushTokenListener((deviceToken) => {
+        console.log("FCM Token was refreshed:", deviceToken.data);
+        callback(deviceToken.data);
+    });
 }
 
 // Navigation logic for tapping a notification

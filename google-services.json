@@ -12,7 +12,12 @@
           "package_name": "com.skr.vegarm"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "617829207220-lm7j89apn1ojd6kr0vv1ouogcj74ija4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDlFgVPUOj7GtHrDgQT6e_ZW2-yIkXC6-c"
@@ -20,7 +25,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "617829207220-lm7j89apn1ojd6kr0vv1ouogcj74ija4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

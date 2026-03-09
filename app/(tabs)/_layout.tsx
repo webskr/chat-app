@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router';
 import { MessageSquareText, Group, Globe2, Settings } from 'lucide-react-native';
 import { Colors } from '../../constants/Colors';
 import { BlurView } from 'expo-blur';
-import { StyleSheet, View, Text } from 'react-native';
+import { StyleSheet, View, Text, Platform } from 'react-native';
 import { useUser } from '../../context/UserContext';
 import { registerForPushNotificationsAsync } from '~/utils/notifications';
 import { Config } from '../../constants/Config';
@@ -14,30 +14,48 @@ export default function TabLayout() {
     // console.log('TabLayout: unreadCount', unreadCount);
 
     useEffect(() => {
+        let tokenListener: any;
         const registerToken = async () => {
             if (user) {
                 try {
                     const registerForPushNotificationsAsyncModule = require('../../utils/notifications');
                     const token = await registerForPushNotificationsAsyncModule.registerForPushNotificationsAsync();
-                    if (token) {
-                        // Send to backend
-                        await fetch(`${Config.API_URL}/auth/update_token.php`, {
+
+                    const saveTokenToDB = async (fcmToken: string) => {
+                        await fetch(`${Config.API_URL}/api/save-token.php`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 user_id: user.id,
-                                token: token
+                                token: fcmToken,
+                                platform: Platform.OS
                             })
                         });
-                        console.log('Device token registered:', token);
+                        console.log('FCM Device token registered & saved:', fcmToken);
+                    };
+
+                    if (token) {
+                        await saveTokenToDB(token);
                     }
+
+                    // Also listen for FCM token refreshes in the background
+                    tokenListener = registerForPushNotificationsAsyncModule.addPushTokenListener((newToken: string) => {
+                        saveTokenToDB(newToken);
+                    });
+
                 } catch (err) {
-                    console.log('Error registering token:', err);
+                    console.log('Error registering fcm token:', err);
                 }
             }
         };
 
         registerToken();
+
+        return () => {
+            if (tokenListener && tokenListener.remove) {
+                tokenListener.remove();
+            }
+        };
     }, [user]);
 
     return (
