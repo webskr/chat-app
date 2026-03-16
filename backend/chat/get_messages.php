@@ -109,9 +109,10 @@ try {
 
         if ($canAutoDelete) {
             $minutes = (int)$conv['auto_delete_minutes'];
+            // Explicitly use DATE_SUB for consistency with other parts of the app
             $deleteSql = "DELETE FROM messages 
                           WHERE conversation_id = :cid 
-                          AND created_at < (NOW() - INTERVAL :min MINUTE)";
+                          AND created_at < DATE_SUB(NOW(), INTERVAL :min MINUTE)";
             $delStmt = $pdo->prepare($deleteSql);
             $delStmt->execute([':cid' => $conv['id'], ':min' => $minutes]);
         }
@@ -175,6 +176,7 @@ try {
             u.username AS sender_name,
             u.avatar_id AS sender_avatar_id,
             u.avatar_url AS sender_avatar_url,
+            u.is_official AS sender_is_official,
             COALESCE(ur.privacy_read_receipts, 1) AS receiver_read_receipts
         FROM messages m
         LEFT JOIN media md ON m.media_id = md.id

@@ -101,6 +101,10 @@ class VegarmMediaModule : Module() {
      * Writes base64 data to a file in the media directory.
      * Bypasses expo-file-system Scoped Storage restrictions.
      */
+    /**
+     * Writes base64 data to a file in the media directory.
+     * Bypasses expo-file-system Scoped Storage restrictions.
+     */
     AsyncFunction("writeMedia") { base64Data: String, filename: String, subfolder: String ->
       val context: Context = appContext.reactContext ?: return@AsyncFunction ""
       
@@ -120,6 +124,43 @@ class VegarmMediaModule : Module() {
       val data = Base64.decode(base64Data, Base64.DEFAULT)
       FileOutputStream(destFile).use { output ->
           output.write(data)
+      }
+      
+      return@AsyncFunction "file://${destFile.absolutePath}"
+    }
+
+    /**
+     * Copies a file from a source URI to the media directory.
+     * Bypasses expo-file-system Scoped Storage restrictions.
+     */
+    AsyncFunction("copyMedia") { sourceUri: String, filename: String, subfolder: String ->
+      val context: Context = appContext.reactContext ?: return@AsyncFunction ""
+      
+      val mediaDirs = context.externalMediaDirs
+      if (mediaDirs.isEmpty() || mediaDirs[0] == null) {
+          return@AsyncFunction ""
+      }
+      
+      val mediaDir = mediaDirs[0]
+      val destDir = File(File(mediaDir, "Vegarm"), subfolder)
+      if (!destDir.exists()) {
+          destDir.mkdirs()
+      }
+      
+      val destFile = File(destDir, filename)
+      
+      // Remove "file://" prefix if present for the source
+      val sourcePath = if (sourceUri.startsWith("file://")) sourceUri.substring(7) else sourceUri
+      val sourceFile = File(sourcePath)
+      
+      if (!sourceFile.exists()) {
+          throw Exception("Source file does not exist: $sourcePath")
+      }
+
+      sourceFile.inputStream().use { input ->
+          FileOutputStream(destFile).use { output ->
+              input.copyTo(output)
+          }
       }
       
       return@AsyncFunction "file://${destFile.absolutePath}"

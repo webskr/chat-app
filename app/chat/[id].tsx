@@ -14,7 +14,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
-import { formatChatTime } from '../../utils/time';
+import { formatChatTime, parseToDate } from '../../utils/time';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
 import { EmptyState } from '../../components/EmptyState';
@@ -202,24 +202,22 @@ export default function ChatDetailScreen() {
     const isSelectionMode = selectedMessageIds.length > 0;
 
     // 7. Helper Functions (Non-Hooks)
-    const deduplicateMessages = (msgs: any[]): any[] => {
+    const deduplicateMessages = useCallback((msgs: any[]): any[] => {
+        if (!msgs || msgs.length === 0) return [];
         const confirmed = new Map<string, any>();
         const localOnly = new Map<string, any>();
 
         for (const m of msgs) {
             if (!m) continue;
-            // Local messages don't have a numeric server ID or have is_local=true
             const isLocal = m.is_local || !m.id || isNaN(Number(m.id)) || (typeof m.id === 'string' && (m.id.startsWith('temp_') || m.id.startsWith('sock_') && !m.server_id));
 
             if (isLocal) {
                 const tempKey = `temp_${m.temp_id ?? m.id}`;
-                // Keep the one with media if exists (more complete information)
                 if (!localOnly.has(tempKey) || m.media_url) {
                     localOnly.set(tempKey, m);
                 }
             } else {
                 const serverKey = String(m.id);
-                // Keep the one with latest status (seen > delivered > sent)
                 const existing = confirmed.get(serverKey);
                 if (!existing || m.status === 'seen' || (m.status === 'delivered' && existing.status !== 'seen')) {
                     confirmed.set(serverKey, m);
@@ -227,32 +225,33 @@ export default function ChatDetailScreen() {
             }
         }
 
-        // Remove local versions if server confirmed version exists
         for (const [, m] of confirmed) {
-            if (m.temp_id) {
-                localOnly.delete(`temp_${m.temp_id}`);
-            }
+            if (m.temp_id) localOnly.delete(`temp_${m.temp_id}`);
         }
 
         const merged = [...confirmed.values(), ...localOnly.values()];
-        merged.sort((a, b) => {
-            const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-            const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-            // Descending order for inverted list (newest first)
-            return tb - ta;
-        });
+        // Only sort if we have items
+        if (merged.length > 1) {
+            merged.sort((a, b) => {
+                const ta = parseToDate(a.created_at || a.timestamp || 0).getTime();
+                const tb = parseToDate(b.created_at || b.timestamp || 0).getTime();
+                return tb - ta;
+            });
+        }
         return merged;
-    };
+    }, []);
 
     const safeSetMessages = useCallback(
         (updater: any[] | ((prev: any[]) => any[])) => {
             if (!isMounted.current) return;
             setMessages(prev => {
                 const next = typeof updater === 'function' ? updater(prev) : updater;
+                // Optimization: If it's a small update (like a single message), we could potentially be smarter
+                // but for now, just ensure deduplicateMessages is memoized and stable.
                 return deduplicateMessages(next);
             });
         },
-        []
+        [deduplicateMessages]
     );
 
     // 8. Effect Hooks
@@ -293,16 +292,12 @@ export default function ChatDetailScreen() {
         if (!currentUser || !id) return;
         const checkMuteStatus = async () => {
             try {
-                const response = await fetch(`${Config.API_URL}/chat/check_mute.php?user_id=${currentUser.id}&target_id=${id}`);
+                const response = await ApiService.get(`${Config.API_URL}/chat/check_mute.php?user_id=${currentUser.id}&target_id=${id}`);
                 const data = await response.json();
                 if (response.ok) {
                     setIsMuted(data.is_muted);
                     if (String(id) === String(currentUser.id) && !data.is_muted) {
-                        await fetch(`${Config.API_URL}/chat/mute_chat.php`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ user_id: currentUser.id, target_id: id, action: 'mute' })
-                        });
+                        await ApiService.post(`${Config.API_URL}/chat/mute_chat.php`, { user_id: currentUser.id, target_id: id, action: 'mute' });
                         setIsMuted(true);
                     }
                 }
@@ -363,12 +358,7 @@ export default function ChatDetailScreen() {
     async function updateLastSeen(signal?: AbortSignal) {
         if (!currentUser) return;
         try {
-            await fetch(`${Config.API_URL}/users/update_online_status.php`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id, is_online: 1 }),
-                signal
-            });
+            await ApiService.post(`${Config.API_URL}/users/update_online_status.php`, { user_id: currentUser.id, is_online: 1 }, { signal });
         } catch (e: any) {
             if (e.name !== 'AbortError') console.error("Heartbeat update error", e);
         }
@@ -416,7 +406,7 @@ export default function ChatDetailScreen() {
             if (isGroup) url += `&group_id=${id}`;
             else url += `&receiver_id=${id}`;
 
-            const response = await fetch(url, { signal });
+            const response = await ApiService.fetch(url, { signal });
             if (signal?.aborted) return;
             let data = await response.json();
 
@@ -486,6 +476,7 @@ export default function ChatDetailScreen() {
             status: r.status,
             is_deleted: r.is_deleted === 1,
             deleted_for_everyone: r.deleted_for_everyone === 1,
+            is_one_time: r.is_one_time === 1,
             created_at: r.timestamp,
             sender_name: r.sender_name
         };
@@ -546,7 +537,7 @@ export default function ChatDetailScreen() {
     async function fetchRelationshipStatus(signal?: AbortSignal) {
         if (!currentUser || isGroup) return;
         try {
-            const response = await fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal });
+            const response = await ApiService.get(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal });
             if (signal?.aborted) return;
             const data = await response.json();
             if (response.ok) {
@@ -566,7 +557,7 @@ export default function ChatDetailScreen() {
     async function fetchTargetUserProfile(signal?: AbortSignal) {
         if (!currentUser || isGroup) return;
         try {
-            const response = await fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal });
+            const response = await ApiService.get(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal });
             if (signal?.aborted) return;
             const data = await response.json();
             if (response.ok) {
@@ -625,10 +616,11 @@ export default function ChatDetailScreen() {
                 // [Sync] Trigger offline sync on reconnect using safeSync (lock + throttle)
                 const dbChatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
                 SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, dbChatId);
-                safeSync().then(() => {
-                    // Force UI refresh after global sync to catch any messages for this chat
-                    fetchMessages();
 
+                // 3. Initial Fetch (Local + Sync) - Immediately load local data
+                fetchMessages(signal);
+
+                safeSync().then(() => {
                     // [Retry] Trigger auto-retry for failed messages
                     SyncService.retryPendingMessages(Number(currentUser.id), resendMessage);
                 });
@@ -740,7 +732,7 @@ export default function ChatDetailScreen() {
             });
 
             socket.current.on('message:new', async (data: any) => {
-                console.log(`[Socket] Received message:new from ${data.sender_id}`);
+                console.log(`[Socket] 📩 Received message:new from ${data.sender_id}`, data);
 
                 // ── Determine if this message belongs to THIS chat ──
                 const belongsHere = isGroup
@@ -817,6 +809,7 @@ export default function ChatDetailScreen() {
                             message_type: data.message_type || 'text',
                             status: 'delivered',
                             is_local: false,
+                            is_one_time: !!data.is_one_time,
                             created_at: data.timestamp || new Date().toISOString(),
                             sender_name: data.sender_name
                         };
@@ -830,10 +823,11 @@ export default function ChatDetailScreen() {
                             receiver_id: isGroup ? undefined : currentUser.id.toString(),
                             type: data.message_type || 'text',
                             encrypted_payload: data.encrypted_payload,
-                            media_url: data.media_url || undefined,
+                            local_file_path: data.media_url || undefined,
                             status: 'delivered',
                             timestamp: data.timestamp,
-                            sender_name: data.sender_name
+                            sender_name: data.sender_name,
+                            is_one_time: data.is_one_time ? 1 : 0
                         }).catch(e => console.warn("[Socket] Failed to persist realtime message", e));
 
                         return [incomingMsg, ...prev];
@@ -841,8 +835,10 @@ export default function ChatDetailScreen() {
 
                     // ✅ Emit message:delivered back to sender
                     if (socket.current) {
+                        const receiptRoom = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(data.sender_id))}_${Math.max(Number(currentUser.id), Number(data.sender_id))}`;
+                        console.log(`[Socket] 📤 Emitting message:delivered to room: ${receiptRoom}`);
                         socket.current.emit('message:delivered', {
-                            room: isGroup ? `group_${id}` : `user_${data.sender_id}`,
+                            room: receiptRoom,
                             message_ids: [realId],
                             chat_id: chatId,
                             sender_id: currentUser.id
@@ -854,9 +850,10 @@ export default function ChatDetailScreen() {
                         updateMessageStatus('seen', [realId]);
                         // ✅ Also emit message:seen via socket
                         if (socket.current) {
-                            const socketRoom = isGroup ? `group_${id}` : `user_${data.sender_id}`;
+                            const receiptRoom = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(data.sender_id))}_${Math.max(Number(currentUser.id), Number(data.sender_id))}`;
+                            console.log(`[Socket] 👁️ Emitting message:seen to room: ${receiptRoom}`);
                             socket.current.emit('message:seen', {
-                                room: socketRoom,
+                                room: receiptRoom,
                                 message_ids: [realId],
                                 chat_id: dbChatId,
                                 sender_id: currentUser.id
@@ -992,6 +989,7 @@ export default function ChatDetailScreen() {
                             status: r.status,
                             is_deleted: r.is_deleted === 1,
                             deleted_for_everyone: r.deleted_for_everyone === 1,
+                            is_one_time: r.is_one_time === 1,
                             created_at: r.timestamp,
                         };
                     });
@@ -2330,7 +2328,13 @@ export default function ChatDetailScreen() {
     };
 
     const handleCopySelected = async () => {
-        const selectedMsgs = messages.filter(m => selectedMessageIds.includes(m.id));
+        const selectedMsgs = messages.filter(m => selectedMessageIds.includes(m.id) && !m.is_one_time);
+
+        if (selectedMsgs.length === 0 && selectedMessageIds.length > 0) {
+            Alert.alert('Cannot Copy', 'One-Time View messages cannot be copied.');
+            return;
+        }
+
         const textToCopy = selectedMsgs
             .map(m => `[${formatChatTime(m.created_at)}] ${m.sender_id === currentUser?.id ? 'You' : otherUsername}: ${m.message_text || (m.media_url ? '[Media]' : '')}`)
             .join('\n');
@@ -2464,8 +2468,8 @@ export default function ChatDetailScreen() {
     };
 
     const handleSaveMediaToDevice = async (msg: any) => {
-        if (!msg.media_url || msg.is_one_time) {
-            if (msg.is_one_time) Alert.alert('Restricted', 'One-Time View messages cannot be saved.');
+        if (msg.is_one_time) {
+            Alert.alert('Cannot Save', 'One-Time View messages cannot be saved to device.');
             return;
         }
         setMessageOptionsVisible(false);
@@ -2488,13 +2492,19 @@ export default function ChatDetailScreen() {
             if (res.data) {
                 const { message_text, media_url } = res.data;
 
-                // Update Local State
+                // Update Local State Optimistically - Clear content immediately after view
                 safeSetMessages(prev => prev.map(m => m.id === messageId ? {
                     ...m,
                     status: 'seen',
-                    message_text: message_text || m.message_text,
-                    media_url: media_url || m.media_url
+                    message_text: null,
+                    media_url: null
                 } : m));
+
+                // Persist to Local DB
+                const msgToUpdate = messages.find(m => m.id === messageId);
+                if (msgToUpdate && msgToUpdate.local_db_id) {
+                    await LocalDatabaseService.updateMessageStatus(msgToUpdate.local_db_id, 'seen');
+                }
 
                 // If Media, Show Viewer
                 if (media_url) {
@@ -2514,6 +2524,12 @@ export default function ChatDetailScreen() {
             } else {
                 if (res.message === 'Already seen.') {
                     safeSetMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: 'seen' } : m));
+
+                    // Also ensure local DB is synced if server says already seen
+                    const msgToUpdate = messages.find(m => m.id === messageId);
+                    if (msgToUpdate && msgToUpdate.local_db_id) {
+                        await LocalDatabaseService.updateMessageStatus(msgToUpdate.local_db_id, 'seen');
+                    }
                 }
             }
         } catch (e) {
@@ -2568,8 +2584,8 @@ export default function ChatDetailScreen() {
             />
         );
     }, [
-        isGroup, currentUser, id, otherUsername, targetUserProfile,
-        selectedMessageId, isSelectionMode, selectedMessageIds, groupMembers,
+        isGroup, currentUser?.id, id, otherUsername, targetUserProfile?.id,
+        selectedMessageId, isSelectionMode, selectedMessageIds.length, groupMembers.length,
         handleLongPressMessage, handleDeleteMessage, handleSend, handleImagePress,
         scrollToMessage, handleForwardMessage, handleSelectMessage, handleReaction,
         setReplyingToMessage, highlightMessageId
@@ -2577,57 +2593,55 @@ export default function ChatDetailScreen() {
 
     // ── STEP 5: Stable deduplicated data array for FlashList ────────────────────
     const mergedMessages = useMemo(() => {
+        const start = performance.now();
         const rawMerged = deduplicateMessages([...messages, ...failedMessages]);
 
-        // Pre-calculate grouping to avoid O(N) search in renderItem
-        return rawMerged.map((item, index) => {
+        // O(N) pre-pass to find "visible" neighbors (non-metadata/system messages if any)
+        // In this app, most rows are visible, but we filter for content anyway.
+        // Array is inverted: index 0 is bottom (newest), index N-1 is top (oldest).
+
+        const visibleMsgs = rawMerged.filter(m =>
+            !!m.message_text || !!m.media_url || m.message_type === 'sticker' ||
+            m.message_type === 'voice' || !!m.is_forwarded || !!m.reply_to_message_id ||
+            !!m.is_deleted || !!m.deleted_for_everyone
+        );
+
+        const FIVE_MINUTES = 5 * 60 * 1000;
+
+        const result = rawMerged.map((item) => {
             const isMe = String(item.sender_id) === String(currentUser?.id);
+            const hasContent = !!item.message_text || !!item.media_url || item.message_type === 'sticker' || item.message_type === 'voice' || !!item.is_forwarded || !!item.reply_to_message_id || !!item.is_deleted || !!item.deleted_for_everyone;
 
-            // Older message (physically ABOVE in inverted list)
-            let prevVisibleMsg = null;
-            for (let i = index + 1; i < rawMerged.length; i++) {
-                const m = rawMerged[i];
-                const hasContent = !!m.message_text || !!m.media_url || m.message_type === 'sticker' || m.message_type === 'voice' || !!m.is_forwarded || !!m.reply_to_message_id || !!m.is_deleted;
-                if (hasContent) {
-                    prevVisibleMsg = m;
-                    break;
-                }
-            }
+            if (!hasContent) return item;
 
-            // Newer message (physically BELOW in inverted list)
-            let nextVisibleMsg = null;
-            for (let i = index - 1; i >= 0; i--) {
-                const m = rawMerged[i];
-                const hasContent = !!m.message_text || !!m.media_url || m.message_type === 'sticker' || m.message_type === 'voice' || !!m.is_forwarded || !!m.reply_to_message_id || !!m.is_deleted;
-                if (hasContent) {
-                    nextVisibleMsg = m;
-                    break;
-                }
-            }
+            // Find neighbors in visibleMsgs list for cluster detection (O(1) in most cases due to adjacency)
+            const vIndex = visibleMsgs.findIndex(m => m.id === item.id);
+            const prevVisibleMsg = vIndex < visibleMsgs.length - 1 ? visibleMsgs[vIndex + 1] : null; // Physically ABOVE (Older)
+            const nextVisibleMsg = vIndex > 0 ? visibleMsgs[vIndex - 1] : null; // Physically BELOW (Newer)
 
-            const itemTime = new Date(item.created_at).getTime();
-            const prevTime = prevVisibleMsg ? new Date(prevVisibleMsg.created_at).getTime() : 0;
-            const nextTime = nextVisibleMsg ? new Date(nextVisibleMsg.created_at).getTime() : 0;
+            const itemTime = parseToDate(item.created_at || 0).getTime();
+            const prevTime = prevVisibleMsg ? parseToDate(prevVisibleMsg.created_at || 0).getTime() : 0;
+            const nextTime = nextVisibleMsg ? parseToDate(nextVisibleMsg.created_at || 0).getTime() : 0;
 
-            const FIVE_MINUTES = 5 * 60 * 1000;
-
-            // showSenderName: This is the TOP-MOST message of a cluster
-            // Show it if the OLDER message is different sender OR far away
+            // showSenderName: TOP of cluster (Older msg is different or too far)
             const showSenderName = isGroup && !isMe && (
                 !prevVisibleMsg ||
                 String(prevVisibleMsg.sender_id) !== String(item.sender_id) ||
                 (itemTime - prevTime) > FIVE_MINUTES
             );
 
-            // isLastInGroup: This is the BOTTOM-MOST message of a cluster
-            // Show avatar/time if the NEWER message is different sender OR far away
+            // isLastInGroup: BOTTOM of cluster (Newer msg is different or too far)
             const isLastInGroup = !nextVisibleMsg ||
                 String(nextVisibleMsg.sender_id) !== String(item.sender_id) ||
                 (nextTime - itemTime) > FIVE_MINUTES;
 
             return { ...item, isLastInGroup, showSenderName };
         });
-    }, [messages, failedMessages, currentUser?.id]);
+
+        const end = performance.now();
+        if (end - start > 16) console.warn(`[PERF] Chat list grouping took ${Math.round(end - start)}ms`);
+        return result;
+    }, [messages, failedMessages, currentUser?.id, isGroup, deduplicateMessages]);
 
     // ── STEP 6: Conditional Rendering (AFTER all hooks) ────────────────────────
     if (isCheckingLock || !isDbReady) {
@@ -2688,10 +2702,15 @@ export default function ChatDetailScreen() {
                     <FlashList
                         key={id} // 4️⃣ Force re-mount on chat change
                         ref={flatListRef}
-                        data={isReady ? mergedMessages : []}
+                        data={mergedMessages}
                         inverted={true}
                         keyExtractor={(item) => String(item.id)}
                         renderItem={renderMessage}
+                        extraData={{
+                            selectedMessageIds,
+                            isSelectionMode,
+                            highlightMessageId
+                        }}
                         estimatedItemSize={120}
                         contentContainerStyle={{
                             ...styles.listContent,
@@ -2793,7 +2812,11 @@ export default function ChatDetailScreen() {
                 url={otvUrl}
                 text={otvText}
                 type={otvType}
-                onClose={() => setOtvVisible(false)}
+                onClose={() => {
+                    setOtvVisible(false);
+                    setOtvUrl(null);
+                    setOtvText(null);
+                }}
             />
             <FullScreenImageModal visible={isFullScreenVisible} imageUri={fullScreenImage} onClose={() => setIsFullScreenVisible(false)} />
             <ImageEditorModal visible={isEditorVisible} imageUri={editorImageUri} onClose={() => setIsEditorVisible(false)} onSend={handleEditorSend} />

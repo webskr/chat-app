@@ -8647,3 +8647,56 @@
 2026-03-07 19:34:21 - REQUEST RECEIVED
 2026-03-07 19:34:21 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
 2026-03-07 19:34:21 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/50703202611000108856.jpg
+2026-03-12 14:33:38 - REQUEST RECEIVED
+2026-03-12 14:33:38 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-12 14:33:38 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11203202621000058806.png
+2026-03-12 14:34:07 - REQUEST RECEIVED
+2026-03-12 14:34:07 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
+2026-03-12 14:34:07 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11203202621000058795.jpg
+2026-03-12 14:42:40 - REQUEST RECEIVED
+2026-03-12 14:42:40 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-12 14:42:40 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11203202621000058806.png
+2026-03-12 19:37:16 - REQUEST RECEIVED
+2026-03-12 19:37:16 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-12 19:37:16 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11203202651000058831.png
+2026-03-12 19:52:45 - REQUEST RECEIVED
+2026-03-12 19:52:45 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-12 19:52:45 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11203202651000058806.png
+2026-03-12 19:53:41 - REQUEST RECEIVED
+2026-03-12 19:53:41 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
+2026-03-12 19:53:41 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/51203202611000109144.jpg
+2026-03-12 19:54:41 - REQUEST RECEIVED
+2026-03-12 19:54:41 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
+2026-03-12 19:54:41 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/51203202611000109144.jpg
+2026-03-12 21:05:07 - REQUEST RECEIVED
+2026-03-12 21:05:07 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
+2026-03-12 21:05:07 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11203202651000058795.jpg
+2026-03-12 21:05:20 - REQUEST RECEIVED
+2026-03-12 21:05:20 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-12 21:05:20 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11203202651000058835.png
+2026-03-12 22:00:05 - REQUEST RECEIVED
+2026-03-12 22:00:06 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefromjpeg()
+2026-03-12 22:00:06 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11203202651000058833.jpg
+2026-03-13 14:16:38 - AUDIO UPLOAD REQUEST RECEIVED
+2026-03-13 14:16:38 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/voice/voice_69b3ceee48ab5_1773391598.m4a
+2026-03-14 13:11:14 - REQUEST RECEIVED
+2026-03-14 13:11:14 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-14 13:11:14 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11403202611000058857.png
+2026-03-14 13:11:39 - REQUEST RECEIVED
+2026-03-14 13:11:39 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-14 13:11:39 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11403202611000058871.png
+2026-03-14 13:17:56 - REQUEST RECEIVED
+2026-03-14 13:17:56 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-14 13:17:56 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11403202611000058871.png
+2026-03-14 13:18:50 - REQUEST RECEIVED
+2026-03-14 13:18:50 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-14 13:18:50 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11403202611000058871.png
+2026-03-14 13:22:46 - REQUEST RECEIVED
+2026-03-14 13:22:46 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-14 13:22:46 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11403202611000058892.png
+2026-03-14 13:24:34 - REQUEST RECEIVED
+2026-03-14 13:24:34 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-14 13:24:34 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11403202611000058835.png
+2026-03-14 22:00:26 - REQUEST RECEIVED
+2026-03-14 22:00:26 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-14 22:00:26 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11403202611000058892.png

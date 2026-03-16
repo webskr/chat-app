@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Image as RNImage } from 'react-native';
-import { MessageSquare, Image as ImageIcon, Mic, Video, Sparkles, Paperclip, X } from 'lucide-react-native';
+import { MessageSquare, Image as ImageIcon, Mic, Video, Sparkles, Paperclip, X, BadgeCheck } from 'lucide-react-native';
 import { Colors } from '../../../constants/Colors';
 import { ThemedText } from '../../../components/ThemedText';
 import { Config } from '../../../constants/Config';
@@ -39,7 +39,12 @@ export const ReplyPreview = ({ replyingToMessage, currentUser, onCancel }: any) 
             <View style={styles.replyPreviewContent}>
                 <View style={styles.replyIndicator} />
                 <View style={styles.replyTextContainer}>
-                    <ThemedText style={styles.replyName}>{name}</ThemedText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <ThemedText style={styles.replyName}>{name}</ThemedText>
+                        {!isMe && replyingToMessage.sender_is_official == 1 && (
+                            <BadgeCheck size={14} color={Colors.background} fill={Colors.verifiedBackground} />
+                        )}
+                    </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         {replyingToMessage.message_type !== 'text' && (
                             <Icon size={14} color={Colors.textSecondary} style={{ marginRight: 4 }} />

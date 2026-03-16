@@ -205,7 +205,7 @@ If not, install it here to auto-add me: ${playStoreLink}`
                                         <Hash size={14} color={Colors.textSecondary} />
                                         <ThemedText style={styles.metaText}>{invite.used_count} uses {invite.max_uses ? `/ ${invite.max_uses}` : ''}</ThemedText>
                                     </View>
-                                    {invite.expires_at && (
+                                    {!!invite.expires_at && (
                                         <View style={styles.metaItem}>
                                             <Clock size={14} color={Colors.textSecondary} />
                                             <ThemedText style={styles.metaText}>Exp: {new Date(invite.expires_at).toLocaleDateString()}</ThemedText>
@@ -214,7 +214,7 @@ If not, install it here to auto-add me: ${playStoreLink}`
                                 </View>
                             </View>
 
-                            {invite.is_active && (
+                            {!!invite.is_active && (
                                 <View style={styles.inviteActions}>
                                     <TouchableOpacity style={styles.iconButton} onPress={() => handleCopy(invite.invite_code)}>
                                         <Copy size={20} color={Colors.text} />

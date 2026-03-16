@@ -41,7 +41,8 @@ export class SyncService {
                     encrypted_payload: msg.encrypted_payload || msg.message_text,
                     status: msg.status || 'delivered',
                     timestamp: msg.created_at,
-                    sender_name: msg.sender_name
+                    sender_name: msg.sender_name,
+                    sender_is_official: msg.sender_is_official
                 });
             }
 
@@ -58,11 +59,16 @@ export class SyncService {
                     other_is_official: latest.other_is_official,
                     group_name: latest.group_name,
                     group_icon: latest.group_icon,
-                    unread_count: 0 // Resetting unread locally usually happens on chat open
+                    unread_count: 0, // Resetting unread locally usually happens on chat open
+                    auto_delete_minutes: latest.auto_delete_minutes || 0 // Assuming auto_delete_minutes comes with latest message
                 });
             }
 
             console.log(`[Sync] Synchronized ${messages.length} messages for chat ${chatId}`);
+            // Trigger local cleanup after chat sync
+            LocalDatabaseService.cleanupExpiredMessages().catch(e => 
+                console.error("[SyncService] Auto-delete cleanup error:", e)
+            );
         } catch (error) {
             console.error('[Sync Error] Chat sync failed:', error);
         } finally {
@@ -96,7 +102,7 @@ export class SyncService {
                 // Log the actual HTTP status and body for easy diagnosis
                 let body = '';
                 try { body = await response.text(); } catch (_) { }
-                console.warn(`[Sync] sync.php returned HTTP ${response.status}: ${body.substring(0, 300)}`);
+                console.warn(`[Sync] ❌ sync.php returned HTTP ${response.status}: ${body.substring(0, 300)}`);
                 return; // Graceful non-throw - will retry on next safeSync cycle
             }
 
@@ -104,50 +110,73 @@ export class SyncService {
             try {
                 data = await response.json();
             } catch (parseError) {
-                console.warn('[Sync] sync.php response is not valid JSON. Possible PHP error output contaminating response.');
+                console.warn('[Sync] ❌ sync.php response is not valid JSON. Possible PHP error output contaminating response.');
+                console.log("[Sync] Raw response text:", await response.text().catch(() => "N/A"));
                 return;
             }
 
-            const { messages = [], conversations = [], presence = [], sync_time } = data;
+            const { messages = [], conversations = [], presence = [], blocked_user_ids = [], sync_time } = data;
 
-            console.log(`[Sync] Synchronizing ${messages.length} messages and ${conversations.length} conversations...`);
+            console.log(`[Sync] 📦 Received ${messages.length} messages, ${conversations.length} conversations, ${presence.length} presence updates, ${blocked_user_ids.length} blocked user IDs.`);
 
             // 1. Update Messages
             for (const msg of messages) {
-                await LocalDatabaseService.insertMessage({
-                    server_id: msg.id?.toString(),
-                    chat_id: msg.chat_id,
-                    sender_id: msg.sender_id?.toString(),
-                    receiver_id: msg.receiver_id?.toString(),
-                    type: msg.message_type || 'text',
-                    encrypted_payload: msg.message_text,
-                    status: msg.status || 'delivered',
-                    timestamp: msg.created_at,
-                    sender_name: msg.sender_name
-                });
+                try {
+                    await LocalDatabaseService.insertMessage({
+                        server_id: msg.id?.toString(),
+                        chat_id: msg.chat_id,
+                        sender_id: msg.sender_id?.toString(),
+                        receiver_id: msg.receiver_id?.toString(),
+                        type: msg.message_type || 'text',
+                        encrypted_payload: msg.message_text,
+                        status: msg.status || 'delivered',
+                        timestamp: msg.created_at,
+                        sender_name: msg.sender_name,
+                        sender_is_official: msg.sender_is_official
+                    });
+                } catch (msgErr) {
+                    console.error(`[Sync] ❌ Failed to insert message ${msg.id}:`, msgErr);
+                }
             }
 
             // 2. Update Conversations Metadata
             for (const conv of conversations) {
-                const chatId = conv.is_group
-                    ? String(conv.group_id)
-                    : "chat_" + Math.min(Number(userId), Number(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id))) + "_" + Math.max(Number(userId), Number(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id)));
+                try {
+                    const chatId = conv.is_group
+                        ? String(conv.group_id)
+                        : "chat_" + Math.min(Number(userId), Number(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id))) + "_" + Math.max(Number(userId), Number(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id)));
 
-                await LocalDatabaseService.updateChatMetadata({
-                    id: chatId,
-                    is_group: !!conv.is_group,
-                    other_user_id: conv.is_group ? undefined : String(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id)),
-                    other_username: conv.is_group ? conv.group_name : undefined,
-                    group_name: conv.group_name,
-                    group_icon: conv.group_icon,
-                    other_avatar_url: conv.is_group ? conv.group_icon : undefined,
-                    unread_count: conv.unread_count
-                });
+                    await LocalDatabaseService.updateChatMetadata({
+                        id: chatId,
+                        is_group: !!conv.is_group,
+                        other_user_id: conv.is_group ? undefined : String(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id)),
+                        other_username: conv.is_group ? (conv.group_name || undefined) : (conv.other_username || undefined),
+                        group_name: conv.group_name || undefined,
+                        group_icon: conv.group_icon || undefined,
+                        other_avatar_url: conv.is_group ? (conv.group_icon || undefined) : (conv.other_avatar_url || undefined),
+                        other_avatar_id: conv.other_avatar_id != null ? Number(conv.other_avatar_id) : undefined,
+                        other_is_official: conv.other_is_official != null ? Number(conv.other_is_official) : undefined,
+                        unread_count: conv.unread_count != null ? Number(conv.unread_count) : undefined,
+                        auto_delete_minutes: conv.auto_delete_minutes != null ? Number(conv.auto_delete_minutes) : undefined
+                    });
+                } catch (convErr) {
+                    console.error(`[Sync] ❌ Failed to update conversation metadata:`, convErr);
+                }
+            }
+
+            // 2.1. Cleanup Blocked User Chats
+            for (const blockedId of blocked_user_ids) {
+                try {
+                    await LocalDatabaseService.deleteChatByOtherUserId(String(blockedId));
+                } catch (cleanupErr) {
+                    console.error(`[Sync] ❌ Failed to clean up chat for blocked user ${blockedId}:`, cleanupErr);
+                }
             }
 
             // 3. Mark delivered for new messages (batch)
             if (messages.length > 0) {
                 const messageIds = messages.map((m: any) => m.id);
+                console.log(`[Sync] 📝 Reporting delivery for ${messageIds.length} messages...`);
                 this.reportStatus(userId, 0, 'ALL', 'delivered', false, messageIds);
             }
 
@@ -285,7 +314,19 @@ export class SyncService {
                 payload.sender_id = otherId;
             }
 
-            const response = await ApiService.post(`${Config.API_URL}/chat/mark_seen_batch.php`, payload);
+            const endpoint = status === 'seen' ? 'mark_seen_batch.php' : 'message_delivered.php';
+            
+            // Adjust payload for message_delivered.php if needed (it expects sender_id if message_id is not specific)
+            if (status === 'delivered' && messageIds.length > 0) {
+                // message_delivered.php doesn't have a batch endpoint yet, it takes a single message_id.
+                // We'll just loop or skip for now if it's too many.
+                // For sync confirmation, sync.php already did the bulk update.
+                // This call is just for socket emission to senders.
+                console.log(`[Sync] skipping batch delivery report (already handled by sync.php)`);
+                return;
+            }
+
+            const response = await ApiService.post(`${Config.API_URL}/chat/${endpoint}`, payload);
 
             if (!response.ok) {
                 throw new Error('Network reporting failed');

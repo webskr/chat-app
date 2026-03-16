@@ -5,7 +5,7 @@ import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { SearchInput } from '../../components/SearchInput';
-import { MessageSquare, MoreVertical, UserPlus, Clock, Check, X } from 'lucide-react-native';
+import { MessageSquare, MoreVertical, UserPlus, Clock, Check, X, Edit2, BadgeCheck } from 'lucide-react-native';
 import { getAvatarById } from '../../constants/Avatars';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
@@ -54,9 +54,9 @@ export default function GlobalFriendsScreen() {
 
     const filteredUsers = React.useMemo(() => {
         return users.filter(user =>
-            user.relationship_status !== 'accepted' &&
-            user.username.toLowerCase().includes(searchQuery.toLowerCase())
-            // Removed email search for privacy
+            (user.relationship_status === 'self' || user.relationship_status !== 'accepted') &&
+            (user.username.toLowerCase().includes(searchQuery.toLowerCase()) || 
+             (user.real_username?.toLowerCase().includes(searchQuery.toLowerCase())))
         );
     }, [users, searchQuery]);
 
@@ -109,7 +109,17 @@ export default function GlobalFriendsScreen() {
                             size={48}
                         />
                         <View style={styles.info}>
-                            <ThemedText type="defaultSemiBold" style={styles.username}>{item.username}</ThemedText>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <ThemedText type="defaultSemiBold" style={styles.username}>
+                                    {item.username}
+                                    {item.relationship_status === 'self' && item.username !== item.real_username && (
+                                        <ThemedText style={styles.youIndicator}> (You)</ThemedText>
+                                    )}
+                                </ThemedText>
+                                {item.is_official == 1 && (
+                                    <BadgeCheck size={16} color={Colors.background} fill={Colors.verifiedBackground} />
+                                )}
+                            </View>
                         </View>
 
                         {isFriend ? (
@@ -127,6 +137,14 @@ export default function GlobalFriendsScreen() {
                             >
                                 <MessageSquare size={18} color={Colors.white} />
                                 <ThemedText style={styles.btnText}>Chat</ThemedText>
+                            </TouchableOpacity>
+                        ) : item.relationship_status === 'self' ? (
+                            <TouchableOpacity
+                                style={[styles.actionButton, styles.selfButton]}
+                                onPress={() => router.push('/profile-edit')}
+                            >
+                                <Edit2 size={18} color={Colors.white} />
+                                <ThemedText style={styles.btnText}>Edit</ThemedText>
                             </TouchableOpacity>
                         ) : isReceived ? (
                             <View style={styles.multiActions}>
@@ -253,6 +271,12 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: Colors.text,
     },
+    youIndicator: {
+        fontSize: 14,
+        color: Colors.primary,
+        fontStyle: 'italic',
+        fontWeight: '400',
+    },
     actionButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -266,6 +290,11 @@ const styles = StyleSheet.create({
     },
     requestButton: {
         backgroundColor: Colors.primary,
+    },
+    selfButton: {
+        backgroundColor: Colors.surface,
+        borderWidth: 1,
+        borderColor: Colors.primary,
     },
     pendingButton: {
         backgroundColor: Colors.surface,

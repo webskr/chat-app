@@ -14,7 +14,7 @@ import Animated, {
     useDerivedValue,
     interpolateColor
 } from 'react-native-reanimated';
-import { MessageSquare, Check, CheckCheck, Timer, ShieldAlert, Trash2, Forward, RefreshCcw, AlertCircle } from 'lucide-react-native';
+import { MessageSquare, Check, CheckCheck, Timer, ShieldAlert, Trash2, Forward, RefreshCcw, AlertCircle, BadgeCheck } from 'lucide-react-native';
 import { Colors } from '../../../constants/Colors';
 import { ThemedText } from '../../../components/ThemedText';
 import { Avatar } from '../../../components/Avatar';
@@ -212,16 +212,21 @@ export const MessageItem = React.memo(({
                                 </GlassCard>
                             )}
                             {!isMe && !!isGroupChat && !isSelfChat && !!showSenderName && (
-                                <ThemedText style={[styles.senderName, {
-                                    color: (() => {
-                                        const sender = groupMembers?.find((m: any) => String(m.id) === String(item.sender_id) || String(m.user_id) === String(item.sender_id));
-                                        if (sender?.role === 'owner') return '#FF3B30';
-                                        if (sender?.role === 'admin') return '#FF9500';
-                                        return Colors.text;
-                                    })()
-                                }]}>
-                                    {item.sender_name || 'Unknown'}
-                                </ThemedText>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 12, marginBottom: 2 }}>
+                                    <ThemedText style={[styles.senderName, {
+                                        color: (() => {
+                                            const sender = groupMembers?.find((m: any) => String(m.id) === String(item.sender_id) || String(m.user_id) === String(item.sender_id));
+                                            if (sender?.role === 'owner') return '#FF3B30';
+                                            if (sender?.role === 'admin') return '#FF9500';
+                                            return Colors.text;
+                                        })()
+                                    }]}>
+                                        {item.sender_name || 'Unknown'}
+                                    </ThemedText>
+                                    {item.sender_is_official == 1 && (
+                                        <BadgeCheck size={14} color={Colors.background} fill={Colors.verifiedBackground} />
+                                    )}
+                                </View>
                             )}
 
                             <Pressable
@@ -275,18 +280,31 @@ export const MessageItem = React.memo(({
                                         </ThemedText>
                                     </View>
                                 ) : (
-                                    !!isOneTime && (!!item.media_url || item.message_text === '🔒 One-Time Message' || item.status === 'seen') ? (
+                                    !!isOneTime ? (
                                         <TouchableOpacity
                                             style={styles.otvContent}
                                             onPress={() => onImagePress(item.media_url ? (item.media_url.startsWith('http') ? item.media_url : `${Config.API_URL}/${item.media_url.replace(/^\//, '')}`) : 'TEXT_OTV', true, item.id)}
                                             disabled={isMe || item.status === 'seen'}
                                         >
-                                            <View style={[styles.otvIconWrapper, { borderColor: isMe ? '#fff' : Colors.text }]}>
-                                                <ThemedText style={[styles.otvIconText, { color: isMe ? '#fff' : Colors.text }]}>1</ThemedText>
-                                            </View>
-                                            <ThemedText style={[styles.otvText, { color: isMe ? '#fff' : Colors.text }]}>
-                                                {item.status === 'seen' ? 'Opened' : (item.message_type === 'image' ? 'Photo' : item.message_type === 'video' ? 'Video' : 'Message')}
-                                            </ThemedText>
+                                            {item.status === 'seen' ? (
+                                                <ThemedText style={[styles.otvText, styles.viewedText, { color: isMe ? 'rgba(255,255,255,0.7)' : Colors.textSecondary }]}>
+                                                    👣 Viewed once
+                                                </ThemedText>
+                                            ) : (
+                                                <>
+                                                    <View style={[styles.otvIconWrapper, { borderColor: isMe ? '#fff' : Colors.text }]}>
+                                                        <ThemedText style={[styles.otvIconText, { color: isMe ? '#fff' : Colors.text }]}>1</ThemedText>
+                                                    </View>
+                                                    <View style={{ gap: 2 }}>
+                                                        <ThemedText style={[styles.otvText, { color: isMe ? '#fff' : Colors.text }]}>
+                                                            {item.message_type === 'image' ? 'Photo' : item.message_type === 'video' ? 'Video' : 'Message'}
+                                                        </ThemedText>
+                                                        <ThemedText style={[styles.tapToView, { color: isMe ? 'rgba(255,255,255,0.7)' : Colors.textSecondary }]}>
+                                                            Tap to view
+                                                        </ThemedText>
+                                                    </View>
+                                                </>
+                                            )}
                                         </TouchableOpacity>
                                     ) : (isSticker && item.media_url) ? (
                                         <RNImage
@@ -313,7 +331,7 @@ export const MessageItem = React.memo(({
                                     )
                                 )}
 
-                                {!!item.message_text && (!isOneTime || item.message_text !== '🔒 One-Time Message') && (
+                                {!!item.message_text && !isOneTime && (
                                     <View>
                                         <View style={styles.textWrap}>
                                             {item.message_text.split(URL_REGEX).map((part: string, i: number) => {
@@ -462,7 +480,9 @@ const styles = StyleSheet.create({
     otvContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     otvIconWrapper: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
     otvIconText: { fontSize: 10, fontWeight: 'bold' },
-    otvText: { fontWeight: '600' },
+    otvText: { fontWeight: '600', fontSize: 16 },
+    viewedText: { fontStyle: 'italic' },
+    tapToView: { fontSize: 12, opacity: 0.8 },
     textWrap: { flexDirection: 'row', flexWrap: 'wrap' },
     messageText: { fontSize: 16, color: Colors.text },
     linkText: { color: Colors.primary, textDecorationLine: 'underline' },

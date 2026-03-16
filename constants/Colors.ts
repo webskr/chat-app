@@ -19,7 +19,7 @@ export const Colors = {
   // Utilities
   glass: 'rgba(255, 255, 255, 0.08)',
   glassBorder: 'rgba(255, 255, 255, 0.12)',
-  verifiedBackground: '#1df22fff', // Twitter Blue / Generic Verified Blue
+  verifiedBackground: '#4ADE80', // Green for Verified Badge
 
   // Status
   online: '#25D366', // Matching primary green

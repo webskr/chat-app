@@ -418,37 +418,46 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
             // open chat screen without having to go back and re-open.
             // ─────────────────────────────────────────────────────────────
             if ($status === 'sent') {
-                // Determine room: matches what client does in join_room
+                // Determine rooms: 
+                // 1. Personal room (always good for global sync/unread)
+                // 2. Chat-specific room (matches client join_room for instant UI update)
+                $target_rooms = [];
                 if ($is_group) {
-                    $socket_room = "group_$group_id";
+                    $target_rooms[] = "group_$group_id";
                 } else {
-                    $socket_room = "user_$receiver_id"; // Receiver's personal room
+                    $target_rooms[] = "user_$receiver_id";
+                    $u1 = (int)min($sender_id, $receiver_id);
+                    $u2 = (int)max($sender_id, $receiver_id);
+                    $target_rooms[] = "chat_{$u1}_{$u2}";
                 }
 
-                $socket_payload = [
-                    'event' => 'message:new',
-                    'data'  => [
-                        'room'              => $socket_room,
-                        'message_id'        => (int)$message_id,
-                        'temp_id'           => !empty($data->temp_id) ? $data->temp_id : null,
-                        'sender_id'         => (int)$sender_id,
-                        'receiver_id'       => $is_group ? null : (int)$receiver_id,
-                        'encrypted_payload' => $message_text,  // Already stored (may be encrypted by client)
-                        'message_type'      => $message_type,
-                        'media_url'         => $media_url,
-                        'timestamp'         => $server_created_at,
-                        'key_version'       => !empty($data->key_version) ? $data->key_version : 1,
-                        'sender_name'       => $sender_name
-                    ]
-                ];
+                foreach ($target_rooms as $socket_room) {
+                    $socket_payload = [
+                        'event' => 'message:new',
+                        'data'  => [
+                            'room'              => $socket_room,
+                            'message_id'        => (int)$message_id,
+                            'temp_id'           => !empty($data->temp_id) ? $data->temp_id : null,
+                            'sender_id'         => (int)$sender_id,
+                            'receiver_id'       => $is_group ? null : (int)$receiver_id,
+                            'encrypted_payload' => $message_text,
+                            'message_type'      => $message_type,
+                            'media_url'         => $media_url,
+                            'timestamp'         => $server_created_at,
+                            'key_version'       => !empty($data->key_version) ? $data->key_version : 1,
+                            'sender_name'       => $sender_name,
+                            'is_one_time'       => (int)$is_one_time
+                        ]
+                    ];
 
-                $ch = curl_init('http://localhost:3000/internal-emit');
-                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($socket_payload));
-                curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 2); // Non-blocking: 2s max, don't hold up response
-                curl_exec($ch);
-                curl_close($ch);
+                    $ch = curl_init('http://localhost:3000/internal-emit');
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($socket_payload));
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+                    curl_exec($ch);
+                    curl_close($ch);
+                }
             }
         } else {
             http_response_code(503); echo json_encode(array("message" => "Unable to send message."));

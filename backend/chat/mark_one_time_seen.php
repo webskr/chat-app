@@ -83,8 +83,8 @@ if (!empty($data->message_id) && !empty($data->user_id)) {
                  exit();
             }
     
-            // Mark as seen
-            $update_query = "UPDATE messages SET seen_at = NOW(), status = 'seen' WHERE id = :mid";
+            // Mark as seen and NULLIFY content for privacy
+            $update_query = "UPDATE messages SET seen_at = NOW(), status = 'seen', media_url = NULL, message_text = NULL WHERE id = :mid";
             $update_stmt = $pdo->prepare($update_query);
             $update_stmt->execute([':mid' => $data->message_id]);
         }

@@ -11,7 +11,8 @@ export type MediaType = 'Images' | 'Videos' | 'Documents' | 'Thumbnails' | 'Cach
 
 // Hardened: Use native path if available (Android Scoped Storage), fallback to internal.
 const publicDir = getPublicMediaDirectory();
-let MEDIA_BASE_DIR = publicDir ? publicDir : `${FileSystem.documentDirectory}vegarm/`;
+const INTERNAL_BASE_DIR = `${FileSystem.documentDirectory}vegarm/`;
+let MEDIA_BASE_DIR = publicDir ? publicDir : INTERNAL_BASE_DIR;
 
 const FOLDERS: { [key in MediaType]: string } = {
     Images: 'images/',
@@ -100,12 +101,19 @@ export class MediaStorageService {
         const mediaType = this.resolveMediaType(url, type);
         const ext = this.extractExtension(url);
         const expectedFilename = `msg_${messageId}.${ext}`;
-        const localPath = this.getMediaPath(mediaType, expectedFilename);
-
-        const exists = await this.fileExists(localPath);
-        if (exists) {
-            return localPath;
+        
+        // 1. Try public path first if available
+        const publicPath = this.getMediaPath(mediaType, expectedFilename);
+        if (await this.fileExists(publicPath)) {
+            return publicPath;
         }
+
+        // 2. Try internal fallback path
+        const internalPath = `${INTERNAL_BASE_DIR}${FOLDERS[mediaType]}${expectedFilename}`;
+        if (await this.fileExists(internalPath)) {
+            return internalPath;
+        }
+
         return null;
     }
 
@@ -133,7 +141,14 @@ export class MediaStorageService {
                 const subfolder = FOLDERS[mediaType].replace('/', '');
                 console.log(`[Storage] Using native download for ${expectedFilename} into ${subfolder}`);
                 resultUri = await downloadMedia(fullUrl, expectedFilename, subfolder);
-                if (!resultUri) throw new Error("Native download failed");
+                
+                // Fallback to internal if native download failed/missing
+                if (!resultUri) {
+                    console.warn('[Storage] Native download failed or unavailable, falling back to internal storage.');
+                    const internalPath = `${INTERNAL_BASE_DIR}${FOLDERS[mediaType]}${expectedFilename}`;
+                    const downloadResult = await FileSystem.downloadAsync(fullUrl, internalPath);
+                    resultUri = downloadResult.uri;
+                }
             } else {
                 const downloadResult = await FileSystem.downloadAsync(fullUrl, destinationPath);
                 resultUri = downloadResult.uri;
@@ -178,7 +193,29 @@ export class MediaStorageService {
         try {
             const exists = await this.fileExists(destinationPath);
             if (!exists) {
-                await FileSystem.copyAsync({ from: localUri, to: destinationPath });
+                if (publicDir && Platform.OS === 'android') {
+                    const subfolder = FOLDERS[mediaType].replace('/', '');
+                    console.log(`[Storage] Using native copy for ${expectedFilename} into ${subfolder}`);
+                    const VegarmMedia = require('../modules/vegarm-media');
+                    const result = await VegarmMedia.copyMedia(localUri, expectedFilename, subfolder);
+                    if (result) return result;
+                    
+                    console.warn('[Storage] Native copyMedia failed or unavailable, falling back to internal storage.');
+                }
+                
+                // Final fallback: use internal storage (always writable)
+                const internalPath = `${INTERNAL_BASE_DIR}${FOLDERS[mediaType]}${expectedFilename}`;
+                console.log(`[Storage] Falling back to internal copy: ${internalPath}`);
+                
+                // Ensure internal directory exists before copying
+                const internalDir = `${INTERNAL_BASE_DIR}${FOLDERS[mediaType]}`;
+                const dirInfo = await FileSystem.getInfoAsync(internalDir);
+                if (!dirInfo.exists) {
+                    await FileSystem.makeDirectoryAsync(internalDir, { intermediates: true });
+                }
+
+                await FileSystem.copyAsync({ from: localUri, to: internalPath });
+                return internalPath;
             }
             return destinationPath;
         } catch (e) {

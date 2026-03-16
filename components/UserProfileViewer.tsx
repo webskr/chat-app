@@ -25,6 +25,7 @@ import {
     Link as LinkIcon,
     Lock,
     UserMinus,
+    BadgeCheck,
 } from 'lucide-react-native';
 import { getAvatarById } from '../constants/Avatars';
 import { BlurView } from 'expo-blur';
@@ -194,9 +195,14 @@ export function UserProfileViewer({
                                     online={relationship === 'friend' && isOnline}
                                 />
                             </View>
-                            <ThemedText type="title" style={styles.displayName}>
-                                {user.display_name || user.username}
-                            </ThemedText>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <ThemedText type="title" style={styles.displayName}>
+                                    {user.display_name || user.username}
+                                </ThemedText>
+                                {user.is_official == 1 && (
+                                    <BadgeCheck size={24} color={Colors.background} fill={Colors.verifiedBackground} />
+                                )}
+                            </View>
                             <ThemedText style={styles.handle}>@{user.username}</ThemedText>
 
                             {!isSelf && (

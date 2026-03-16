@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import { sha256 } from './E2EEService';
 import { Platform } from 'react-native';
+import { parseToDate } from './time';
 
 let opSqlite: any = null;
 if (Platform.OS !== 'web') {
@@ -113,11 +114,6 @@ export class LocalDatabaseService {
                 }
 
                 // 4. Create / migrate schema
-                // ── messages table ───────────────────────────────────────────────
-                // server_id UNIQUE NULL: multiple NULL rows are allowed by SQLite
-                // (each NULL is distinct), but once a server_id is written it is
-                // unique and permanent.  The ON CONFLICT clause in insertMessage
-                // handles races between socket and polling.
                 await this.db.execute(`
                     CREATE TABLE IF NOT EXISTS messages (
                         id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,38 +131,23 @@ export class LocalDatabaseService {
                         deleted_for_everyone INTEGER DEFAULT 0,
                         deleted_at      DATETIME,
                         timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        sender_name     TEXT
+                        sender_name     TEXT,
+                        is_one_time     INTEGER DEFAULT 0,
+                        key_version     INTEGER,
+                        sender_is_official INTEGER DEFAULT 0
                     );
                 `);
 
-                // Migration: Add key_version for rotation
-                try {
-                    await this.db.execute(`ALTER TABLE messages ADD COLUMN key_version INTEGER;`);
-                } catch (e) { }
-
-                // Migration: Add temp_id if it doesn't exist
-                try {
-                    await this.db.execute(`ALTER TABLE messages ADD COLUMN temp_id TEXT;`);
-                } catch (e) { /* Ignore if column exists */ }
-
-                // Migration: Add retry_count if it doesn't exist (for existing DBs)
-                try {
-                    await this.db.execute(`ALTER TABLE messages ADD COLUMN retry_count INTEGER DEFAULT 0;`);
-                } catch (e) { /* Ignore if column exists */ }
-
-                // Migration: Add deletion columns
-                try {
-                    await this.db.execute(`ALTER TABLE messages ADD COLUMN is_deleted INTEGER DEFAULT 0;`);
-                } catch (e) { }
-                try {
-                    await this.db.execute(`ALTER TABLE messages ADD COLUMN deleted_for_everyone INTEGER DEFAULT 0;`);
-                } catch (e) { }
-                try {
-                    await this.db.execute(`ALTER TABLE messages ADD COLUMN deleted_at DATETIME;`);
-                } catch (e) { }
-                try {
-                    await this.db.execute(`ALTER TABLE messages ADD COLUMN sender_name TEXT;`);
-                } catch (e) { }
+                // Migration helpers
+                try { await this.db.execute(`ALTER TABLE messages ADD COLUMN key_version INTEGER;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE messages ADD COLUMN temp_id TEXT;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE messages ADD COLUMN retry_count INTEGER DEFAULT 0;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE messages ADD COLUMN is_deleted INTEGER DEFAULT 0;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE messages ADD COLUMN deleted_for_everyone INTEGER DEFAULT 0;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE messages ADD COLUMN deleted_at DATETIME;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE messages ADD COLUMN sender_name TEXT;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE messages ADD COLUMN is_one_time INTEGER DEFAULT 0;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE messages ADD COLUMN sender_is_official INTEGER DEFAULT 0;`); } catch (e) { }
 
                 await this.db.execute(`
                     CREATE TABLE IF NOT EXISTS chats (
@@ -182,9 +163,12 @@ export class LocalDatabaseService {
                         last_message        TEXT,
                         last_message_time   DATETIME,
                         last_message_sender TEXT,
-                        unread_count        INTEGER DEFAULT 0
+                        unread_count        INTEGER DEFAULT 0,
+                        auto_delete_minutes INTEGER DEFAULT 0
                     );
                 `);
+
+                try { await this.db.execute(`ALTER TABLE chats ADD COLUMN auto_delete_minutes INTEGER DEFAULT 0;`); } catch (e) { }
 
                 await this.db.execute(`
                     CREATE TABLE IF NOT EXISTS status_retry_queue (
@@ -200,8 +184,6 @@ export class LocalDatabaseService {
                 await this.db.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp);');
                 await this.db.execute('CREATE INDEX IF NOT EXISTS idx_server_id ON messages(server_id);');
                 await this.db.execute('CREATE INDEX IF NOT EXISTS idx_chats_last_time ON chats(last_message_time);');
-
-                // Search indexes
                 await this.db.execute('CREATE INDEX IF NOT EXISTS idx_messages_text ON messages(encrypted_payload);');
                 await this.db.execute('CREATE INDEX IF NOT EXISTS idx_messages_chat_time ON messages(chat_id, timestamp);');
 
@@ -212,15 +194,11 @@ export class LocalDatabaseService {
                     );
                 `);
 
-                // CLEANUP: Fix group duplication by removing old "group_X" chatId format
+                // CLEANUP: Fix group duplication
                 try {
-                    console.log("[LocalDatabaseService] Running chat ID cleanup...");
-                    // Delete entries where ID starts with 'group_' if they are redundant
                     await this.db.execute(`DELETE FROM chats WHERE id LIKE 'group_%'`);
                     await this.db.execute(`UPDATE messages SET chat_id = REPLACE(chat_id, 'group_', '') WHERE chat_id LIKE 'group_%'`);
-                } catch (cleanupErr) {
-                    console.warn("[LocalDatabaseService] Cleanup failed:", cleanupErr);
-                }
+                } catch (cleanupErr) { }
 
                 this.isInitialized = true;
                 this.isInitializing = false;
@@ -266,15 +244,6 @@ export class LocalDatabaseService {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // insertMessage — THE safe insert used by BOTH socket handler and
-    // fetchMessages.  Never throws on duplicate; instead:
-    //   • If server_id already exists → UPDATE status & decrypt payload only
-    //     (never overwrite a file path that is already set)
-    //   • If server_id is NULL (optimistic / local-only) → plain INSERT
-    //
-    // This is the ONLY place that writes to the messages table for new rows.
-    // ─────────────────────────────────────────────────────────────────────────
     static async insertMessage(msg: {
         server_id?: string;
         chat_id: string;
@@ -285,24 +254,25 @@ export class LocalDatabaseService {
         local_file_path?: string;
         status: string;
         retry_count?: number;
-        timestamp?: string; // Optional: use server time if provided
+        timestamp?: string;
         temp_id?: string;
         key_version?: number;
         sender_name?: string;
+        sender_is_official?: number | boolean;
+        is_one_time?: boolean | number;
     }): Promise<number> {
         const db = this.getDB();
 
         try {
             let insertId = 0;
-            const finalTimestamp = msg.timestamp || new Date().toISOString();
+            const finalTimestamp = parseToDate(msg.timestamp || new Date()).toISOString();
 
-            // Path A — message has a real server_id (comes from server / socket)
             if (msg.server_id) {
                 const result = await db.execute(
                     `INSERT INTO messages
                         (server_id, temp_id, chat_id, sender_id, receiver_id, type,
-                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp, sender_name)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp, sender_name, sender_is_official, is_one_time)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                      ON CONFLICT(server_id) DO UPDATE SET
                          status            = CASE
                                                 WHEN messages.status = 'seen' THEN 'seen'
@@ -314,7 +284,9 @@ export class LocalDatabaseService {
                          retry_count       = excluded.retry_count,
                          key_version       = COALESCE(messages.key_version, excluded.key_version),
                          timestamp         = COALESCE(excluded.timestamp, messages.timestamp),
-                         sender_name       = COALESCE(excluded.sender_name, messages.sender_name)`,
+                         sender_name       = COALESCE(excluded.sender_name, messages.sender_name),
+                         sender_is_official = COALESCE(excluded.sender_is_official, messages.sender_is_official),
+                         is_one_time       = COALESCE(messages.is_one_time, excluded.is_one_time)`,
                     [
                         msg.server_id,
                         msg.temp_id || null,
@@ -328,17 +300,18 @@ export class LocalDatabaseService {
                         msg.retry_count || 0,
                         msg.key_version || null,
                         finalTimestamp,
-                        msg.sender_name || null
+                        msg.sender_name || null,
+                        (msg.sender_is_official === true || msg.sender_is_official === 1 || String(msg.sender_is_official) === '1') ? 1 : 0,
+                        (msg.is_one_time === true || msg.is_one_time === 1 || String(msg.is_one_time) === 'true' || String(msg.is_one_time) === '1') ? 1 : 0
                     ]
                 );
                 insertId = result.insertId || 0;
             } else {
-                // Path B — optimistic / local message (no server_id yet)
                 const result = await db.execute(
                     `INSERT INTO messages
                         (server_id, temp_id, chat_id, sender_id, receiver_id, type,
-                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp, sender_name)
-                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp, sender_name, sender_is_official, is_one_time)
+                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         msg.temp_id || null,
                         msg.chat_id,
@@ -351,15 +324,14 @@ export class LocalDatabaseService {
                         msg.retry_count || 0,
                         msg.key_version || null,
                         finalTimestamp,
-                        msg.sender_name || null
+                        msg.sender_name || null,
+                        (msg.sender_is_official === true || msg.sender_is_official === 1 || String(msg.sender_is_official) === '1') ? 1 : 0,
+                        (msg.is_one_time === true || msg.is_one_time === 1 || String(msg.is_one_time) === 'true' || String(msg.is_one_time) === '1') ? 1 : 0
                     ]
                 );
                 insertId = result.insertId || 0;
             }
 
-            // AUTO-UPDATE CHATS TABLE
-            // We only update last_message and time if the new message is newer than the existing one
-            // OR if it's a new chat row.
             await db.execute(
                 `INSERT INTO chats (id, last_message, last_message_time, last_message_sender, unread_count)
                  VALUES (?, ?, ?, ?, ?)
@@ -390,7 +362,7 @@ export class LocalDatabaseService {
                     msg.encrypted_payload || (msg.type === 'image' ? '📷 Image' : (msg.type === 'video' ? '🎥 Video' : '📎 Attachment')),
                     finalTimestamp,
                     msg.sender_id,
-                    0, // Default unread_count for new row
+                    0,
                     this.activeChatId || 'NONE'
                 ]
             );
@@ -407,37 +379,21 @@ export class LocalDatabaseService {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // updateServerId — called once after server confirms a temp message.
-    // Guards against the race where socket + polling both try to claim the same
-    // row: if the server_id is already taken, we DELETE the orphan temp row
-    // instead of crashing on UNIQUE constraint.
-    // ─────────────────────────────────────────────────────────────────────────
     static async updateServerId(local_id: number, server_id: string): Promise<void> {
         const db = this.getDB();
         try {
-            // Check whether this server_id is already confirmed in another row
             const existing = await db.execute(
                 `SELECT id FROM messages WHERE server_id = ? LIMIT 1`,
                 [server_id]
             );
-
             if (existing.rows && existing.rows.length > 0) {
-                // The server_id already belongs to a confirmed row.
-                // The optimistic row (local_id) is now a duplicate → delete it.
                 await db.execute(`DELETE FROM messages WHERE id = ? AND server_id IS NULL`, [local_id]);
                 console.log(`[DB] updateServerId: server_id ${server_id} already confirmed. Removed orphan local row ${local_id}.`);
                 return;
             }
-
-            // Safe to assign the server_id to this optimistic row
-            await db.execute(
-                `UPDATE messages SET server_id = ? WHERE id = ?`,
-                [server_id, local_id]
-            );
+            await db.execute(`UPDATE messages SET server_id = ? WHERE id = ?`, [server_id, local_id]);
         } catch (err: any) {
             if (err?.message?.includes('UNIQUE') || err?.message?.includes('constraint')) {
-                // Race lost — delete the orphan temp row silently
                 console.warn(`[DB] updateServerId: UNIQUE conflict for ${server_id}, removing orphan row ${local_id}.`);
                 try { await db.execute(`DELETE FROM messages WHERE id = ? AND server_id IS NULL`, [local_id]); } catch (_) { }
                 return;
@@ -446,10 +402,6 @@ export class LocalDatabaseService {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // getLocalMessages — returns messages ordered by timestamp DESC.
-    // Supports pagination via limit and beforeTimestamp cursor.
-    // ─────────────────────────────────────────────────────────────────────────
     static async getLocalMessages(chat_id: string, limit: number = 30, beforeTimestamp?: string): Promise<any[]> {
         const db = this.getDB();
         let query = `SELECT * FROM messages 
@@ -457,22 +409,30 @@ export class LocalDatabaseService {
                        AND is_deleted = 0
                        AND (server_id IS NOT NULL OR encrypted_payload IS NOT NULL OR local_file_path IS NOT NULL)`;
         const params: any[] = [chat_id];
-
         if (beforeTimestamp) {
             query += ` AND timestamp < ?`;
             params.push(beforeTimestamp);
         }
-
         query += ` ORDER BY timestamp DESC LIMIT ?`;
         params.push(limit);
-
         const result = await db.execute(query, params);
         return (result.rows || []) as any[];
     }
 
     static async updateMessageStatus(id: number, status: string): Promise<void> {
         const db = this.getDB();
-        await db.execute(`UPDATE messages SET status = ? WHERE id = ?`, [status, id]);
+        if (status === 'seen') {
+            await db.execute(
+                `UPDATE messages 
+                 SET status = ?, 
+                     local_file_path = CASE WHEN is_one_time = 1 THEN NULL ELSE local_file_path END,
+                     encrypted_payload = CASE WHEN is_one_time = 1 THEN NULL ELSE encrypted_payload END
+                 WHERE id = ?`, 
+                [status, id]
+            );
+        } else {
+            await db.execute(`UPDATE messages SET status = ? WHERE id = ?`, [status, id]);
+        }
     }
 
     static async updateMessageStatusAndRetry(id: number, status: string, retry_count: number): Promise<void> {
@@ -480,11 +440,6 @@ export class LocalDatabaseService {
         await db.execute(`UPDATE messages SET status = ?, retry_count = ? WHERE id = ?`, [status, retry_count, id]);
     }
 
-    // ── Search Implementation ────────────────────────────────────────────────
-
-    /**
-     * Search messages inside a specific chat.
-     */
     static async searchMessages(chatId: string, query: string, limit: number = 30, offset: number = 0): Promise<any[]> {
         const db = this.getDB();
         const result = await db.execute(
@@ -501,10 +456,6 @@ export class LocalDatabaseService {
         return (result.rows || []) as any[];
     }
 
-    /**
-     * Search messages across all chats (Global Search).
-     * Includes chat metadata for display.
-     */
     static async searchGlobalMessages(query: string, limit: number = 30, offset: number = 0): Promise<any[]> {
         const db = this.getDB();
         const result = await db.execute(
@@ -512,36 +463,26 @@ export class LocalDatabaseService {
                 m.id, m.chat_id, m.sender_id, m.sender_name, m.encrypted_payload, m.timestamp, m.type, m.status,
                 c.other_username, c.group_name, c.other_avatar_url, c.group_icon, c.is_group,
                 c.other_avatar_id, c.other_is_official
-             FROM messages m
-             JOIN chats c ON m.chat_id = c.id
-             WHERE m.type = 'text'
-               AND m.is_deleted = 0
-               AND m.encrypted_payload LIKE '%' || ? || '%'
-             ORDER BY m.timestamp DESC
-             LIMIT ? OFFSET ?`,
+            FROM messages m
+            JOIN chats c ON m.chat_id = c.id
+            WHERE m.type = 'text'
+              AND m.is_deleted = 0
+              AND m.encrypted_payload LIKE '%' || ? || '%'
+            ORDER BY m.timestamp DESC
+            LIMIT ? OFFSET ?`,
             [query, limit, offset]
         );
         return (result.rows || []) as any[];
     }
 
-    /**
-     * Fetch messages from the latest down to (and including) a specific message ID.
-     * Useful for jumping to a message from search.
-     */
     static async getMessagesUpToId(chatId: string, messageId: number | string): Promise<any[]> {
         const db = this.getDB();
-
-        // 1. Get the timestamp of the target message
         const targetRes = await db.execute(
             `SELECT timestamp FROM messages WHERE (id = ? OR server_id = ?) AND chat_id = ?`,
             [messageId, messageId, chatId]
         );
-
         if (!targetRes.rows || targetRes.rows.length === 0) return [];
         const targetTimestamp = targetRes.rows[0].timestamp;
-
-        // 2. Fetch all messages newer than or equal to this timestamp
-        // We add a small limit safety but usually it's fine
         const result = await db.execute(
             `SELECT * FROM messages 
              WHERE chat_id = ? 
@@ -551,7 +492,6 @@ export class LocalDatabaseService {
              LIMIT 200`,
             [chatId, targetTimestamp]
         );
-
         return (result.rows || []) as any[];
     }
 
@@ -567,7 +507,6 @@ export class LocalDatabaseService {
 
     static async getFailedMessages(): Promise<any[]> {
         const db = this.getDB();
-        // Return both 'failed' and 'pending' messages, ordered chronologically, with a retry limit
         const result = await db.execute(
             `SELECT * FROM messages 
              WHERE (status = 'failed' OR status = 'pending') 
@@ -607,8 +546,6 @@ export class LocalDatabaseService {
         );
     }
 
-    // ── Status Retry Queue ───────────────────────────────────────────────────
-
     static async queueStatusUpdate(server_id: string, chat_id: string, status: string): Promise<void> {
         const db = this.getDB();
         await db.execute(
@@ -639,12 +576,8 @@ export class LocalDatabaseService {
         return (result.rows?.[0] as any)?.server_id || null;
     }
 
-    // ── Chat List Management ──────────────────────────────────────────────────
-
     static async getConversations(): Promise<any[]> {
         const db = this.getDB();
-        // Use subquery to ensure we have the absolute latest status from messages
-        // while sorting the chat list by message time.
         const result = await db.execute(`
             SELECT 
                 c.*, 
@@ -673,36 +606,58 @@ export class LocalDatabaseService {
         group_name?: string;
         group_icon?: string;
         unread_count?: number;
+        auto_delete_minutes?: number;
     }): Promise<void> {
         const db = this.getDB();
         await db.execute(
             `INSERT INTO chats (
                 id, is_group, other_user_id, other_username, other_avatar_url, 
-                other_avatar_id, other_is_official, group_name, group_icon, unread_count
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                other_avatar_id, other_is_official, group_name, group_icon, unread_count,
+                auto_delete_minutes
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                 is_group          = excluded.is_group,
-                other_user_id     = COALESCE(excluded.other_user_id, other_user_id),
-                other_username    = COALESCE(excluded.other_username, other_username),
-                other_avatar_url  = COALESCE(excluded.other_avatar_url, other_avatar_url),
-                other_avatar_id   = COALESCE(excluded.other_avatar_id, other_avatar_id),
-                other_is_official = COALESCE(excluded.other_is_official, other_is_official),
-                group_name        = COALESCE(excluded.group_name, group_name),
-                group_icon        = COALESCE(excluded.group_icon, group_icon),
-                unread_count      = COALESCE(excluded.unread_count, unread_count)`,
+                other_user_id     = COALESCE(excluded.other_user_id, chats.other_user_id),
+                other_username    = COALESCE(excluded.other_username, chats.other_username),
+                other_avatar_url  = COALESCE(excluded.other_avatar_url, chats.other_avatar_url),
+                other_avatar_id   = COALESCE(excluded.other_avatar_id, chats.other_avatar_id),
+                other_is_official = CASE WHEN excluded.other_is_official IS NOT NULL AND excluded.other_is_official != 0 THEN excluded.other_is_official ELSE chats.other_is_official END,
+                group_name        = COALESCE(excluded.group_name, chats.group_name),
+                group_icon        = COALESCE(excluded.group_icon, chats.group_icon),
+                unread_count      = COALESCE(excluded.unread_count, chats.unread_count),
+                auto_delete_minutes = COALESCE(excluded.auto_delete_minutes, chats.auto_delete_minutes)`,
             [
                 chatData.id,
                 chatData.is_group ? 1 : 0,
-                chatData.other_user_id || null,
-                chatData.other_username || null,
-                chatData.other_avatar_url || null,
-                chatData.other_avatar_id || null,
-                chatData.other_is_official || 0,
-                chatData.group_name || null,
-                chatData.group_icon || null,
-                chatData.unread_count || 0
+                chatData.other_user_id ?? null,
+                chatData.other_username ?? null,
+                chatData.other_avatar_url ?? null,
+                chatData.other_avatar_id ?? null,
+                chatData.other_is_official ?? null,
+                chatData.group_name ?? null,
+                chatData.group_icon ?? null,
+                chatData.unread_count ?? null,
+                chatData.auto_delete_minutes ?? null
             ]
         );
+    }
+
+    static async deleteChatByOtherUserId(otherUserId: string): Promise<void> {
+        const db = this.getDB();
+        // 1. Find the chat ID(s) involving this user in 1-on-1 contexts
+        const result = await db.execute(
+            `SELECT id FROM chats WHERE other_user_id = ? AND is_group = 0`,
+            [otherUserId]
+        );
+        const chatIds = (result.rows || []).map((row: any) => row.id);
+
+        for (const chatId of chatIds) {
+            // 2. Delete messages for this chat
+            await db.execute(`DELETE FROM messages WHERE chat_id = ?`, [chatId]);
+            // 3. Delete the chat itself
+            await db.execute(`DELETE FROM chats WHERE id = ?`, [chatId]);
+            console.log(`[DB] Purged local chat ${chatId} for blocked user ${otherUserId}`);
+        }
     }
 
     static async markChatRead(chatId: string): Promise<void> {
@@ -715,22 +670,12 @@ export class LocalDatabaseService {
         return this.markChatRead(chatId);
     }
 
-    // ── Session Management ────────────────────────────────────────────────────
-
-    /**
-     * Safely closes the DB connection and resets internal state WITHOUT
-     * touching any data. Call this on logout so the next initDB() call
-     * (for the same or a different user) works cleanly.
-     *
-     * Messages, media file paths, and all table data are fully preserved.
-     */
     static resetConnection(): void {
         try {
             if (this.db) {
                 this.db.close();
             }
         } catch (_) {
-            // Ignore close errors — the connection may already be stale
         } finally {
             this.db = null;
             this.isInitialized = false;
@@ -739,10 +684,6 @@ export class LocalDatabaseService {
             console.log('[LocalDatabaseService] DB connection reset (data preserved).');
         }
     }
-
-    // ── Security ─────────────────────────────────────────────────────────────
-    // NOTE: wipeDatabase() is intentionally kept for future "Delete Account"
-    // use. It must NEVER be called on a normal logout.
 
     static async wipeDatabase(): Promise<void> {
         if (!this.db || !this.isInitialized) return;
@@ -759,8 +700,6 @@ export class LocalDatabaseService {
             console.error("[Security] Failed to wipe encrypted database:", e);
         }
     }
-
-    // ── Settings / Sync Time ──────────────────────────────────────────────────
 
     static async getLastSyncTime(): Promise<string> {
         const db = this.getDB();
@@ -785,7 +724,29 @@ export class LocalDatabaseService {
                 [syncTime]
             );
         } catch (e) {
-            console.error("[DB] Failed to update last_sync_time:", e);
+             console.error("[DB] Failed to update last_sync_time:", e);
+        }
+    }
+
+    static async cleanupExpiredMessages(): Promise<void> {
+        if (!this.isInitialized) return;
+        const db = this.getDB();
+        try {
+            console.log("[LocalDatabaseService] 🧹 Running local auto-delete cleanup...");
+            const result = await db.execute(`
+                DELETE FROM messages
+                WHERE chat_id IN (
+                    SELECT id FROM chats WHERE auto_delete_minutes > 0
+                )
+                AND timestamp < DATETIME('now', '-' || (
+                    SELECT auto_delete_minutes FROM chats WHERE chats.id = messages.chat_id
+                ) || ' minutes')
+            `);
+            if (result.rowsAffected > 0) {
+                console.log(`[LocalDatabaseService] 🗑️ Purged ${result.rowsAffected} expired messages locally.`);
+            }
+        } catch (e) {
+            console.error("[LocalDatabaseService] Cleanup error:", e);
         }
     }
 }

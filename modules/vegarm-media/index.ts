@@ -18,7 +18,9 @@ function getModule() {
  * Returns empty string in Expo Go where the native module is unavailable.
  */
 export function getPublicMediaDirectory(): string {
-    return getModule()?.getPublicMediaDirectory() ?? '';
+    const mod = getModule();
+    if (!mod || typeof mod.getPublicMediaDirectory !== 'function') return '';
+    return mod.getPublicMediaDirectory();
 }
 
 /**
@@ -33,7 +35,7 @@ export function getPublicMediaDirectory(): string {
  */
 export async function downloadMedia(url: string, filename: string, subfolder: string): Promise<string> {
     const mod = getModule();
-    if (!mod) return '';
+    if (!mod || typeof mod.downloadMedia !== 'function') return '';
     return mod.downloadMedia(url, filename, subfolder);
 }
 
@@ -49,6 +51,21 @@ export async function downloadMedia(url: string, filename: string, subfolder: st
  */
 export async function writeMedia(base64Data: string, filename: string, subfolder: string): Promise<string> {
     const mod = getModule();
-    if (!mod) return '';
+    if (!mod || typeof mod.writeMedia !== 'function') return '';
     return mod.writeMedia(base64Data, filename, subfolder);
+}
+
+/**
+ * Copies a file natively from one URI to another within theVegarm folder.
+ * This bypasses Expo FileSystem which lacks WRITE access to Android public media dirs.
+ *
+ * @param sourceUri  The source file:// URI or local path.
+ * @param filename   Target filename, e.g. "msg_535.jpg".
+ * @param subfolder  Subfolder name, e.g. "images", "videos".
+ * @returns A promise resolving to the saved `file://` URI, or empty string on failure.
+ */
+export async function copyMedia(sourceUri: string, filename: string, subfolder: string): Promise<string> {
+    const mod = getModule();
+    if (!mod || typeof mod.copyMedia !== 'function') return '';
+    return mod.copyMedia(sourceUri, filename, subfolder);
 }

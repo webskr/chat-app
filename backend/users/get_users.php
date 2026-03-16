@@ -20,6 +20,22 @@ if (!$user_id) {
 }
 
 try {
+    // Calculate a 24-hour seed based on the current date
+    $day_seed = floor(time() / 86400);
+
+     $query = "SELECT u.id, u.username, u.display_name, u.scramble_enabled, u.scramble_value, u.email, u.avatar_id, u.avatar_url, u.bio, 
+                     u.links,
+                     u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.show_in_world, u.neon_color, u.border_color, u.button_color, u.is_official, u.is_online, u.last_active,
+              (SELECT status FROM relationships WHERE user_id = :uid1 AND target_id = u.id) as sent_status,
+              (SELECT status FROM relationships WHERE user_id = u.id AND target_id = :uid2) as received_status
+              FROM users u 
+              ORDER BY (u.id = :uid3) DESC, RAND($day_seed)";
+    $stmt = $pdo->prepare($query);
+    $stmt->execute([':uid1' => $user_id, ':uid2' => $user_id, ':uid3' => $user_id]);
+    
+    $all_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $users = [];
+
     // Fetch my privacy settings
     $myPrivacySql = "SELECT privacy_last_seen FROM users WHERE id = :id";
     $myPrivacyStmt = $pdo->prepare($myPrivacySql);
@@ -27,23 +43,13 @@ try {
     $myPrivacy = $myPrivacyStmt->fetch(PDO::FETCH_ASSOC);
     $iCanSeeLastSeen = $myPrivacy ? (bool)$myPrivacy['privacy_last_seen'] : true;
 
-     $query = "SELECT u.id, u.username, u.display_name, u.scramble_enabled, u.scramble_value, u.email, u.avatar_id, u.avatar_url, u.bio, 
-                     u.links,
-                     u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.show_in_world, u.neon_color, u.border_color, u.button_color, u.is_official, u.is_online, u.last_active,
-              (SELECT status FROM relationships WHERE user_id = :uid1 AND target_id = u.id) as sent_status,
-              (SELECT status FROM relationships WHERE user_id = u.id AND target_id = :uid2) as received_status
-              FROM users u WHERE u.id != :uid3 ORDER BY u.display_name ASC, u.username ASC";
-    $stmt = $pdo->prepare($query);
-    $stmt->execute([':uid1' => $user_id, ':uid2' => $user_id, ':uid3' => $user_id]);
-    
-    $all_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $users = [];
-
     // Filter and process users
     foreach ($all_users as $user) {
         // Determine relationship status
         $status = 'none';
-        if ($user['sent_status'] === 'accepted' || $user['received_status'] === 'accepted') {
+        if ((string)$user['id'] === (string)$user_id) {
+            $status = 'self';
+        } elseif ($user['sent_status'] === 'accepted' || $user['received_status'] === 'accepted') {
             $status = 'accepted';
         } elseif ($user['sent_status'] === 'pending') {
             $status = 'pending'; // I sent request
@@ -53,8 +59,9 @@ try {
             $status = 'blocked';
         }
         $user['relationship_status'] = $status;
-        // Privacy: If show_in_world is 0, only include if there is a relationship (friend or pending)
-        if (isset($user['show_in_world']) && $user['show_in_world'] == 0 && empty($user['relationship_status'])) {
+        
+        // Privacy: If show_in_world is 0, only include if there is a relationship (friend or pending) OR if it is me
+        if (isset($user['show_in_world']) && $user['show_in_world'] == 0 && empty($user['relationship_status']) && $status !== 'self') {
             continue;
         }
         // Last Seen Privacy Rules:
@@ -81,11 +88,20 @@ try {
             $user['bio'] = null;
         }
 
+        // Store real username for frontend search/reference
+        $user['real_username'] = $user['username'];
+
         // Scramble logic
-        // If this user in the list IS the requester AND they have scrambling enabled
-        if ((string)$user['id'] === (string)$user_id && !empty($user['scramble_enabled']) && !empty($user['scramble_value'])) {
+        // Scramble if: 1. Scramble is enabled, 2. They are NOT friends
+        // UPDATED: Now includes 'self' so the user can see their own scrambled profile
+        $shouldScramble = !empty($user['scramble_enabled']) && 
+                          !empty($user['scramble_value']) && 
+                          $status !== 'accepted';
+
+        if ($shouldScramble) {
             $user['display_name'] = $user['scramble_value'];
-            $user['username'] = "scrambled_" . substr($user['scramble_value'], -4);
+            // UPDATED: Simply use the scrambled value as the username, no prefix
+            $user['username'] = $user['scramble_value'];
         }
         
         // Remove sensitive fields

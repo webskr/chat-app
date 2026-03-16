@@ -69,6 +69,7 @@ const io = new Server(httpServer, {
 
 httpServer.listen(3000, () => {
     console.log("Socket.IO + Internal API running on port 3000");
+    console.log("PHP Backend pointed to:", PHP_BACKEND_URL);
 });
 
 io.on("connection", (socket) => {
@@ -124,6 +125,10 @@ io.on("connection", (socket) => {
     // Forward read/seen receipts
     socket.on("message:read", (data) => {
         socket.to(data.room).emit("message:read", data);
+    });
+
+    socket.on("message:seen", (data) => {
+        socket.to(data.room).emit("message:seen", data);
     });
 
     // Forward generic message deletion events

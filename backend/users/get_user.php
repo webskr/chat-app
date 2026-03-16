@@ -26,15 +26,13 @@ try {
 
     if ($user) {
         // Handle scramble name privacy
-        // Requirement: if requester_id == user_id AND scramble_enabled return scramble_value else return real_name
-        // In get_user.php, normally the requester IS the user (fetching own profile)
-        // or someone else fetching this profile.
-        $requester_id = isset($_GET['requester_id']) ? $_GET['requester_id'] : $user_id;
+        // Requirement: Only scramble if: 1. Scramble is enabled, 2. Requester is NOT the user themselves
+        $requester_id = isset($_GET['requester_id']) ? $_GET['requester_id'] : null;
 
-        if ((string)$requester_id === (string)$user['id'] && !empty($user['scramble_enabled']) && !empty($user['scramble_value'])) {
+        if ($requester_id && (string)$requester_id !== (string)$user['id'] && !empty($user['scramble_enabled']) && !empty($user['scramble_value'])) {
              $user['display_name'] = $user['scramble_value'];
-             // Also scramble username for full privacy on their own screen
-             $user['username'] = "scrambled_" . substr($user['scramble_value'], -4);
+             // UPDATED: Use the scrambled value directly as the username
+             $user['username'] = $user['scramble_value'];
         }
 
         // Remove sensitive data

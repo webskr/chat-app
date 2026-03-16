@@ -76,7 +76,7 @@ export const ChatAttachmentPanel: React.FC<ChatAttachmentPanelProps> = ({ visibl
         { id: 'contact', label: 'Contact', icon: User, color: '#30D158', onPress: () => onSelect('contact') },
         { id: 'poll', label: 'Poll', icon: BarChart2, color: '#FFCC00', onPress: () => onSelect('poll') },
         { id: 'schedule', label: 'Schedule', icon: Clock, color: '#FF9500', onPress: () => onSelect('schedule') },
-        { id: 'ai', label: 'AI Gen', icon: Sparkles, color: '#007AFF', onPress: () => onSelect('ai') },
+        // { id: 'ai', label: 'AI Gen', icon: Sparkles, color: '#007AFF', onPress: () => onSelect('ai') },
     ];
 
     return (

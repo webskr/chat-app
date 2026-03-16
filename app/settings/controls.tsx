@@ -6,7 +6,7 @@ import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
-import { ChevronLeft, Check, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { ChevronLeft, Check, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react-native';
 
 if (Platform.OS === 'android') {
     if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -73,33 +73,51 @@ export default function ControlsScreen() {
         }
     };
 
-    const updateNameScramble = async (enabled: boolean) => {
+    const updateNameScramble = async (enabled: boolean, forceRefresh: boolean = false) => {
         if (!user) return;
 
-        // Optimistic update
-        // Note: We need to extend the User type to include scramble_name locally for this to work perfectly with TypeScript,
-        // but for now we'll assume it's handled or ignore the TS error if the type isn't updated yet.
-        // Ideally, update UserContext type definition.
-        const prevValue = (user as any).scramble_name;
-        setUser({ ...user, scramble_name: enabled ? 1 : 0 } as any);
+        // If it's already enabled and we're just toggling OFF, no need to refresh scramble_value
+        // If we want to refresh specifically, we pass forceRefresh = true.
 
+        const prevValue = (user as any).scramble_name;
+        
+        // If forceRefresh is true, we keep scramble_name enabled but tell the backend to rotate
+        if (!forceRefresh) {
+            setUser({ ...user, scramble_name: enabled ? 1 : 0 } as any);
+        }
+
+        setIsUpdating(true);
         try {
             const response = await fetch(`${Config.API_URL}/chat/update_global_chat_settings.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     user_id: user.id,
-                    scramble_name: enabled
+                    scramble_name: forceRefresh ? true : enabled // Always send true to backend to trigger new value if forceRefresh
                 }),
             });
 
-            if (!response.ok) {
-                setUser({ ...user, scramble_name: prevValue } as any);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.scramble_value) {
+                    setUser({ ...user, scramble_name: forceRefresh ? 1 : (enabled ? 1 : 0), scramble_value: data.scramble_value } as any);
+                } else if (!forceRefresh) {
+                    setUser({ ...user, scramble_name: enabled ? 1 : 0 } as any);
+                }
+
+                if (forceRefresh || enabled) {
+                     if (Platform.OS === 'web') alert('Identity scrambled!');
+                     else Alert.alert('Success', 'New scrambled name generated.');
+                }
+            } else {
+                if (!forceRefresh) setUser({ ...user, scramble_name: prevValue } as any);
                 Alert.alert('Error', 'Failed to update settings.');
             }
         } catch (error) {
             console.error('Scramble update error:', error);
-            setUser({ ...user, scramble_name: prevValue } as any);
+            if (!forceRefresh) setUser({ ...user, scramble_name: prevValue } as any);
+        } finally {
+            setIsUpdating(false);
         }
     };
 
@@ -295,13 +313,35 @@ export default function ControlsScreen() {
 
                     <View style={styles.controlContainer}>
                         <View style={styles.switchRow}>
-                            <ThemedText style={styles.settingLabel}>Name Scramble</ThemedText>
-                            <Switch
-                                value={!!(user as any)?.scramble_name}
-                                onValueChange={updateNameScramble}
-                                trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
-                                thumbColor={Colors.white}
-                            />
+                            <View style={styles.settingTextContainer}>
+                                <ThemedText style={styles.settingLabel}>Name Scramble</ThemedText>
+                                <ThemedText style={styles.settingCaption}>Rotate identity for non-friends.</ThemedText>
+                                {!!(user as any)?.scramble_name && (user as any)?.scramble_value && (
+                                    <View style={styles.previewBadge}>
+                                        <ThemedText style={styles.previewText}>
+                                            Current: {(user as any).scramble_value}
+                                        </ThemedText>
+                                    </View>
+                                )}
+                            </View>
+                            <View style={styles.rowRight}>
+                                {!!(user as any)?.scramble_name && (
+                                    <TouchableOpacity 
+                                        onPress={() => updateNameScramble(true, true)}
+                                        style={styles.reloadButton}
+                                        disabled={isUpdating}
+                                    >
+                                        <RotateCcw size={20} color={Colors.primary} />
+                                    </TouchableOpacity>
+                                )}
+                                <Switch
+                                    value={!!(user as any)?.scramble_name}
+                                    onValueChange={(val) => updateNameScramble(val)}
+                                    trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
+                                    thumbColor={Colors.white}
+                                    disabled={isUpdating}
+                                />
+                            </View>
                         </View>
                     </View>
                 </View>
@@ -414,5 +454,29 @@ const styles = StyleSheet.create({
     optionLabel: {
         fontSize: 15,
         color: Colors.textSecondary,
+    },
+    reloadButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 8,
+    },
+    previewBadge: {
+        marginTop: 6,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        alignSelf: 'flex-start',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    previewText: {
+        fontSize: 12,
+        color: Colors.primary,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     },
 });

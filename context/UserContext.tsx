@@ -31,6 +31,7 @@ interface User {
     button_color?: string;
     auto_delete_otv?: number | boolean;
     scramble_name?: number | boolean;
+    scramble_value?: string;
     links?: string; // JSON string of { label: string, url: string }[]
     is_official?: number | boolean;
 }

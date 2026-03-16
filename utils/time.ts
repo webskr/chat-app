@@ -12,31 +12,41 @@
 const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000; // 330 min in ms
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-export const formatChatTime = (dateString: string | Date): string => {
-    if (!dateString) return '';
+/**
+ * Parses a date string into a Date object, handling server IST strings vs client UTC strings.
+ * - Server: '2024-01-10 14:30:00' (Naive, always IST)
+ * - Client: '2024-01-10T14:30:00.000Z' (ISO, always UTC)
+ */
+export const parseToDate = (dateString: string | Date | number): Date => {
+    if (dateString instanceof Date) return dateString;
+    if (typeof dateString === 'number') return new Date(dateString);
+    if (!dateString) return new Date();
 
-    // ── 1. Parse to UTC Date ────────────────────────────────────────────────
-    let date: Date;
-    if (typeof dateString === 'string') {
-        let s = dateString.trim();
-        // PHP/MySQL: '2024-01-10 14:30:00' → needs T separator
-        if (s.includes(' ') && !s.includes('T')) {
-            s = s.replace(' ', 'T');
-        }
-        // No timezone indicator → server is UTC, append Z
-        if (!s.endsWith('Z') && !/[+\-]\d{2}:\d{2}$/.test(s)) {
-            s += 'Z';
-        }
-        date = new Date(s);
-        if (isNaN(date.getTime())) date = new Date(dateString);
-    } else {
-        date = dateString;
+    let s = dateString.trim();
+
+    // 1. Detect MySQL Naive format (Space instead of T, no TZ info)
+    // We assume these are ALWAYS IST because the server is set to Kolkata.
+    if (s.includes(' ') && !s.includes('T') && !s.endsWith('Z') && !/[+\-]\d{2}:\d{2}$/.test(s)) {
+        s = s.replace(' ', 'T') + '+05:30';
     }
 
+    const date = new Date(s);
+    if (isNaN(date.getTime())) return new Date(dateString); // Fallback
+    return date;
+};
+
+/**
+ * Formats a date into a user-friendly chat timestamp in IST.
+ */
+export const formatChatTime = (dateInput: string | Date | number): string => {
+    if (!dateInput) return '';
+
+    // ── 1. Normalize to real Date object ───────────────────────────────────
+    const date = parseToDate(dateInput);
     if (isNaN(date.getTime())) return '';
 
-    // ── 2. Shift to IST (UTC+5:30) ─────────────────────────────────────────
-    // Create a synthetic UTC Date whose getUTC* methods give the IST values.
+    // ── 2. Shift to IST Synthetic Date (for getUTC* methods) ───────────────
+    // We want the getUTC* methods to return the IST values.
     const istDate = new Date(date.getTime() + IST_OFFSET_MS);
     const nowIST = new Date(Date.now() + IST_OFFSET_MS);
 
@@ -58,6 +68,13 @@ export const formatChatTime = (dateString: string | Date): string => {
     // ── 5. Return appropriate format ────────────────────────────────────────
     if (msgDay === today) return timeStr;
     if (msgDay === yesterday) return `Yesterday, ${timeStr}`;
+
+    const currentYear = new Date().getFullYear();
+    const isThisYear = istDate.getUTCFullYear() === currentYear;
+
+    if (isThisYear) {
+        return `${istDate.getUTCDate()} ${MONTHS[istDate.getUTCMonth()]}, ${timeStr}`;
+    }
 
     return `${istDate.getUTCDate()} ${MONTHS[istDate.getUTCMonth()]} ${istDate.getUTCFullYear()}, ${timeStr}`;
 };

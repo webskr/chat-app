@@ -29,6 +29,7 @@ if (!empty($user_id)) {
         $oneOnOneQuery = "SELECT c.id, 
                          c.user1_id, c.user2_id,
                          c.is_group, c.group_id,
+                         c.auto_delete_minutes,
                          (SELECT message_text FROM messages m WHERE m.conversation_id = c.id 
                             AND (
                                 (m.sender_id = :me_check1 AND (m.hidden_for_sender = 0 OR m.hidden_for_sender IS NULL))
@@ -86,7 +87,7 @@ if (!empty($user_id)) {
         // 2. Fetch Group Conversations
         $groupQuery = "SELECT c.id,
                         NULL as user1_id, NULL as user2_id,
-                        c.is_group, c.group_id,
+                        c.is_group, c.group_id, c.auto_delete_minutes,
                         (SELECT message_text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) as latest_msg_text,
                         (SELECT message_type FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) as latest_msg_type,
                         (SELECT created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) as latest_msg_time,

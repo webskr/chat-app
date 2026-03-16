@@ -138,7 +138,7 @@ export default function SettingsScreen() {
                 <GlassCard style={styles.profileCard}>
                     <TouchableOpacity
                         style={styles.profileRow}
-                        onPress={() => router.push('/(tabs)/profile-edit')}
+                        onPress={() => router.push('/profile-edit')}
                         activeOpacity={0.7}
                     >
                         <Avatar
@@ -170,7 +170,7 @@ export default function SettingsScreen() {
                                         style={styles.settingItem}
                                         disabled={item.type === 'toggle'}
                                         onPress={() => {
-                                            if (item.id === 'profile') router.push('/(tabs)/profile-edit');
+                                            if (item.id === 'profile') router.push('/profile-edit');
                                             if (item.id === 'invite') router.push('/invite');
                                             if (item.id === 'controls') router.push('/settings/controls');
                                             if (item.id === 'privacy') router.push('/settings/privacy');

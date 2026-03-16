@@ -11,7 +11,7 @@ import { parseNaturalLanguageTime } from '../../../utils/timeParser';
 
 const { width } = Dimensions.get('window');
 
-export const ChatInputBar = ({
+export const ChatInputBar = React.memo(({
     inputText,
     editingMessage,
     handleTyping,
@@ -43,9 +43,6 @@ export const ChatInputBar = ({
     permissions,
     groupMembers = [] // New prop: List of group members
 }: any) => {
-
-
-
     // Schedule Logic State
     const [showSlashSuggestions, setShowSlashSuggestions] = useState(false);
     const [showScheduleGuidance, setShowScheduleGuidance] = useState(false);
@@ -57,8 +54,6 @@ export const ChatInputBar = ({
     const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
     const [mentionFilter, setMentionFilter] = useState('');
     const [cursorPosition, setCursorPosition] = useState(0);
-
-
 
     const handleTextChange = (text: string) => {
         handleTyping(text);
@@ -125,27 +120,19 @@ export const ChatInputBar = ({
 
     const handleSendWithSchedule = () => {
         // ONE-TIME VIEW COMMAND
-        if (inputText.startsWith('/otv')) {
-            const content = inputText.replace('/otv', '').trim();
+        if (inputText.trim().startsWith('/otv')) {
+            const content = inputText.trim().replace('/otv', '').trim();
             if (content) {
                 // Send as One-Time View
-                // handleSend signature: (text, mediaPath, mediaType, isRetry, isOneTime, scheduledAt)
                 handleSend(content, null, 'text', false, true);
+                handleTyping(''); // Clear input
             }
             return;
         }
 
         // SCHEDULE COMMAND
         if (scheduledTime && !scheduleError && inputText.startsWith('/schedule')) {
-            // Extract message content by removing command and time
-            // We know 'usedText' matches the time part.
-            // But we need to be careful matching it in the full string if we didn't save it perfectly.
-            // Using scheduleUsedText which we saved during parsing.
-
             const timePart = inputText.replace('/schedule', '').trim();
-            // Remove the used time text from the timePart to get the message
-            // This is a bit tricky if usedText is not unique, but usually sufficient.
-
             let messageContent = timePart;
             if (scheduleUsedText) {
                 messageContent = timePart.replace(scheduleUsedText, '').trim();
@@ -453,7 +440,7 @@ export const ChatInputBar = ({
             )}
         </View>
     );
-};
+});
 
 const styles = StyleSheet.create({
     inputArea: {

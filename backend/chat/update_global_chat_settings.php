@@ -41,11 +41,23 @@ if (!empty($data->user_id) && (
             $fieldsToUpdate[] = "scramble_enabled = :sc_enabled";
             $params[':sc_enabled'] = $enabled;
             
-            // If toggling ON, generate a new scramble_value
+            // If toggling ON, generate a new scramble_value by shuffling username
             if ($enabled) {
-                $newScramble = "User_" . substr(md5(uniqid(mt_rand(), true)), 0, 8);
-                $fieldsToUpdate[] = "scramble_value = :sc_value";
-                $params[':sc_value'] = $newScramble;
+                $uStmt = $pdo->prepare("SELECT username FROM users WHERE id = :uid");
+                $uStmt->execute([':uid' => $data->user_id]);
+                $username = $uStmt->fetchColumn();
+                
+                if ($username) {
+                    // Character shuffle logic
+                    $newScramble = str_shuffle($username);
+                    // Ensure it's different if possible (rare cases where shuffle returns same string)
+                    if ($newScramble === $username && strlen($username) > 1) {
+                        $newScramble = str_shuffle($username);
+                    }
+                    
+                    $fieldsToUpdate[] = "scramble_value = :sc_value";
+                    $params[':sc_value'] = $newScramble;
+                }
             }
         }
 
@@ -112,10 +124,14 @@ if (!empty($data->user_id) && (
         $pdo->commit();
 
         http_response_code(200);
-        echo json_encode(array(
+        $response = array(
             "message" => "Global settings updated.",
             "updated_conversations" => $count
-        ));
+        );
+        if (isset($newScramble)) {
+            $response["scramble_value"] = $newScramble;
+        }
+        echo json_encode($response);
     } catch (PDOException $e) {
         $pdo->rollBack();
         http_response_code(500);

@@ -8,7 +8,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Check, X, MoreVertical, Clock } from 'lucide-react-native';
+import { Check, X, MoreVertical, Clock, BadgeCheck } from 'lucide-react-native';
 
 import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
@@ -109,9 +109,14 @@ export default function RequestsScreen() {
                     />
 
                     <View style={styles.textInfo}>
-                        <ThemedText type="defaultSemiBold" numberOfLines={1}>
-                            {item.display_name || item.username}
-                        </ThemedText>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <ThemedText type="defaultSemiBold" numberOfLines={1} style={{ flexShrink: 1 }}>
+                                {item.display_name || item.username}
+                            </ThemedText>
+                            {item.is_official == 1 && (
+                                <BadgeCheck size={16} color={Colors.background} fill={Colors.verifiedBackground} />
+                            )}
+                        </View>
                         <ThemedText type="caption" style={styles.meta}>
                             @{item.username}
                         </ThemedText>
