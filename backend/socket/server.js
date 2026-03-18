@@ -67,8 +67,10 @@ const io = new Server(httpServer, {
     }
 });
 
-httpServer.listen(3000, () => {
-    console.log("Socket.IO + Internal API running on port 3000");
+const SOCKET_PORT = process.env.PORT || 3000;
+
+httpServer.listen(SOCKET_PORT, '0.0.0.0', () => {
+    console.log(`Socket.IO + Internal API running on port ${SOCKET_PORT}`);
     console.log("PHP Backend pointed to:", PHP_BACKEND_URL);
 });
 

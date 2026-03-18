@@ -6,8 +6,13 @@ interface RequestOptions extends RequestInit {
 }
 
 export class ApiService {
+    private static onAuthFailure: (() => void) | null = null;
     private static isRefreshing = false;
     private static refreshSubscribers: { resolve: (token: string) => void; reject: (error: any) => void }[] = [];
+
+    static setAuthFailureListener(listener: () => void) {
+        this.onAuthFailure = listener;
+    }
 
     private static onTokenRefreshed(token: string) {
         this.refreshSubscribers.forEach((subscriber) => subscriber.resolve(token));
@@ -33,6 +38,7 @@ export class ApiService {
             ...(fetchOptions.headers as Record<string, string> || {}),
         };
 
+
         if (!skipAuth) {
             const token = await SecureStoreHelper.getAccessToken();
             if (token) {
@@ -41,7 +47,8 @@ export class ApiService {
 
             const refreshToken = await SecureStoreHelper.getRefreshToken();
             if (!refreshToken) {
-                console.log(`[ApiService] 🛑 Blocked request to ${url} due to missing refresh token`);
+                console.warn(`[ApiService] 🛑 Request to ${url} refused: No refresh token (session expired)`);
+                if (this.onAuthFailure) this.onAuthFailure();
                 throw new Error("User not authenticated");
             }
         }
@@ -74,27 +81,44 @@ export class ApiService {
                             await SecureStoreHelper.setRefreshToken(data.refresh_token);
                             console.log('[ApiService] ✅ Token refreshed successfully');
                             this.isRefreshing = false;
-                            // Notify any queued callers (isRefreshing=true while we were refreshing)
                             this.onTokenRefreshed(data.access_token);
 
-                            // ✅ KEY FIX: First caller retries directly.
-                            // onTokenRefreshed() already fired + cleared the subscriber list,
-                            // so we CANNOT use the subscriber pattern here — we'd add a subscriber
-                            // after the list is cleared and it would never be called.
                             headers['Authorization'] = `Bearer ${data.access_token}`;
                             return fetch(url, { ...fetchOptions, headers });
                         } else {
-                            // Refresh failed — token invalid or expired on server
+                            // Refresh failed on server
                             let body = '';
                             try { body = await refreshResponse.text(); } catch (_) { }
-                            console.warn(`[ApiService] ❌ Refresh token rejected by server (HTTP ${refreshResponse.status}): ${body.substring(0, 200)}`);
-                            await SecureStoreHelper.clearTokens();
-                            const error = new Error('Refresh token invalid');
-                            this.onTokenRefreshFailed(error);
-                            this.isRefreshing = false;
-                            throw error;
+                            const status = refreshResponse.status;
+                            
+                            console.warn(`[ApiService] ❌ Refresh failed (HTTP ${status}): ${body.substring(0, 100)}`);
+                            
+                            if (status === 401 || status === 403) {
+                                // Explicitly invalid session/token
+                                console.error('[ApiService] 🛑 Session invalid. Clearing tokens.');
+                                await SecureStoreHelper.clearTokens();
+                                const error = new Error('Refresh token invalid');
+                                this.onTokenRefreshFailed(error);
+                                this.isRefreshing = false;
+
+                                if (this.onAuthFailure) {
+                                    console.log('[ApiService] 📣 Triggering global auth failure (401/403)');
+                                    this.onAuthFailure();
+                                }
+                                throw error;
+                            } else {
+                                // Server error (5xx) or other transient error
+                                // Keep the current refresh token! Do not logout.
+                                console.warn('[ApiService] ⚠️ Transient server error during refresh. Retaining tokens for retry.');
+                                const error = new Error(`Server error ${status}`);
+                                this.onTokenRefreshFailed(error);
+                                this.isRefreshing = false;
+                                throw error;
+                            }
                         }
                     } catch (error) {
+                        // Network error or unexpected exception
+                        console.error('[ApiService] ⚠️ Network error during token refresh. Keeping session for retry.');
                         this.onTokenRefreshFailed(error);
                         this.isRefreshing = false;
                         throw error;

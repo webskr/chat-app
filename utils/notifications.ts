@@ -3,16 +3,32 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configure how notifications behave when the app is in foreground
 Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-    }),
+    handleNotification: async () => {
+        let shouldNotify = true;
+        try {
+            const userData = await AsyncStorage.getItem('user');
+            if (userData) {
+                const user = JSON.parse(userData);
+                if (user.notifications_enabled === 0) {
+                    shouldNotify = false;
+                }
+            }
+        } catch (e) {
+            console.error("Error checking notification preference", e);
+        }
+
+        return {
+            shouldShowAlert: shouldNotify,
+            shouldPlaySound: shouldNotify,
+            shouldSetBadge: false,
+            shouldShowBanner: shouldNotify,
+            shouldShowList: shouldNotify,
+        };
+    },
 });
 
 /**

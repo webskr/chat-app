@@ -35,7 +35,8 @@ export default function ChatScreen() {
             setChats(localChats.map(c => ({
                 ...c,
                 last_message: c.last_message_preview || c.last_message,
-                last_message_time: c.last_message_time_real || c.last_message_time
+                last_message_time: c.last_message_time_real || c.last_message_time,
+                other_is_official: c.other_is_official != null ? Number(c.other_is_official) : 0
             })));
 
             const totalUnread = localChats.reduce((sum: number, chat: any) => sum + (Number(chat.unread_count) || 0), 0);
@@ -44,13 +45,14 @@ export default function ChatScreen() {
 
             // STEP 2: Background sync from server (Unified Sync)
             if (syncWithServer) {
-                await SyncService.syncEverything(user.id);
+                await SyncService.syncEverything(Number(user.id));
                 // Refresh local UI after sync
                 const refreshedChats = await LocalDatabaseService.getConversations();
                 setChats(refreshedChats.map(c => ({
                     ...c,
                     last_message: c.last_message_preview || c.last_message,
-                    last_message_time: c.last_message_time_real || c.last_message_time
+                    last_message_time: c.last_message_time_real || c.last_message_time,
+                    other_is_official: c.other_is_official != null ? Number(c.other_is_official) : 0
                 })));
                 const refreshUnread = refreshedChats.reduce((sum: number, chat: any) => sum + (Number(chat.unread_count) || 0), 0);
                 setUnreadCount(refreshUnread);
@@ -88,7 +90,7 @@ export default function ChatScreen() {
 
 
     const renderItem = ({ item }: { item: any }) => {
-        const isGroup = item.is_group == 1;
+        const isGroup = Number(item.is_group) === 1;
         const displayName = (isGroup ? item.group_name : (String(item.other_user_id) === String(user?.id) ? 'Note to self' : item.other_username)) || 'Unknown';
         const displayAvatar = isGroup ? item.group_icon : item.other_avatar_url; // Group icon is path, user avatar_url is path
         // For groups, other_avatar_id is 0. 
@@ -126,8 +128,14 @@ export default function ChatScreen() {
                                 <ThemedText type="defaultSemiBold" style={styles.username} numberOfLines={1}>
                                     {displayName}
                                 </ThemedText>
-                                {!isGroup && item.other_is_official == 1 && (
-                                    <BadgeCheck size={16} color={Colors.background} fill={Colors.verifiedBackground} />
+                                {!isGroup && (
+                                    item.other_is_official == 1 || 
+                                    item.other_is_official === '1' || 
+                                    displayName === 'Vegram Official' || 
+                                    displayName === 'VegarmOfficial' || 
+                                    item.other_username === 'VegarmOfficial'
+                                ) && (
+                                    <BadgeCheck size={16} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
                                 )}
                             </View>
                             <ThemedText style={[styles.time, (item.unread_count > 0 || (item.unread_count_raw > 0)) && styles.timeActive]}>
@@ -317,7 +325,7 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        marginRight: 8,
+        gap: 4,
     },
     time: {
         color: Colors.textSecondary,

@@ -25,6 +25,16 @@ $other_id = isset($_GET['receiver_id']) ? (int)$_GET['receiver_id'] : null;
 $group_id = isset($_GET['group_id']) ? (int)$_GET['group_id'] : null;
 $after_id = isset($_GET['after_id']) ? (int)$_GET['after_id'] : 0;
 
+// Fetch user's global auto-delete preferences
+$userPrefsStmt = $pdo->prepare("SELECT global_auto_delete_minutes, global_auto_delete_individual, global_auto_delete_group FROM users WHERE id = :uid");
+$userPrefsStmt->execute([':uid' => $me]);
+$userPrefs = $userPrefsStmt->fetch(PDO::FETCH_ASSOC);
+
+$globalTimer = isset($userPrefs['global_auto_delete_minutes']) ? (int)$userPrefs['global_auto_delete_minutes'] : 0;
+$individualEnabled = isset($userPrefs['global_auto_delete_individual']) ? (int)$userPrefs['global_auto_delete_individual'] : 1;
+$groupEnabled = isset($userPrefs['global_auto_delete_group']) ? (int)$userPrefs['global_auto_delete_group'] : 0;
+
+
 if (!$me || (!$other_id && !$group_id)) {
     http_response_code(400);
     echo json_encode(["message" => "Incomplete parameters"]);
@@ -81,40 +91,57 @@ try {
         exit;
     }
 
-    // 1.5️⃣ Auto-Delete Cleanup (Strictly for 1-on-1, non-self, non-official)
-    if (!empty($conv['auto_delete_minutes']) && $conv['auto_delete_minutes'] > 0) {
-        // Condition 1: Must NOT be a group (redundant if $conv fetch logic is correct, but safe)
-        // Condition 2: Must NOT be self-chat
-        // Condition 3: Must NOT be official account
-        
-        $canAutoDelete = true;
-        
-        if ($group_id) {
-            $canAutoDelete = false;
-        }
-        
-        if ($me == $other_id) {
-             $canAutoDelete = false;
-        }
-
-        // Check verification status of OTHER user
-        if ($canAutoDelete && $other_id) {
-            $verifyStmt = $pdo->prepare("SELECT is_verified, is_official FROM users WHERE id = :uid");
-            $verifyStmt->execute([':uid' => $other_id]);
-            $targetUser = $verifyStmt->fetch(PDO::FETCH_ASSOC);
-            if ($targetUser && ($targetUser['is_official'] == 1)) {
-                $canAutoDelete = false;
+    // 1.5️⃣ Auto-Delete Logic (Refined: Self-side hide, respects individual/group toggles)
+    $activeAutoDelete = false;
+    if ($globalTimer > 0) {
+        if ($group_id && $groupEnabled) {
+            $activeAutoDelete = true;
+        } else if (!$group_id && $individualEnabled) {
+            // Must NOT be self-chat and NOT official
+            if ($me != $other_id) {
+                $canIndividualDelete = true;
+                if ($other_id) {
+                    $verifyStmt = $pdo->prepare("SELECT is_official FROM users WHERE id = :uid");
+                    $verifyStmt->execute([':uid' => $other_id]);
+                    if ($verifyStmt->fetchColumn() == 1) $canIndividualDelete = false;
+                }
+                if ($canIndividualDelete) $activeAutoDelete = true;
             }
         }
+    }
 
-        if ($canAutoDelete) {
-            $minutes = (int)$conv['auto_delete_minutes'];
-            // Explicitly use DATE_SUB for consistency with other parts of the app
-            $deleteSql = "DELETE FROM messages 
-                          WHERE conversation_id = :cid 
-                          AND created_at < DATE_SUB(NOW(), INTERVAL :min MINUTE)";
-            $delStmt = $pdo->prepare($deleteSql);
-            $delStmt->execute([':cid' => $conv['id'], ':min' => $minutes]);
+    if ($activeAutoDelete) {
+        if ($group_id) {
+            // For Groups: Update group_members.cleared_at for THIS user
+            // We set it to the timestamp of messages older than globalTimer
+            $updateClearedSql = "
+                UPDATE group_members 
+                SET cleared_at = (
+                    SELECT MAX(created_at) FROM messages 
+                    WHERE conversation_id = :cid 
+                    AND created_at < DATE_SUB(NOW(), INTERVAL :min MINUTE)
+                )
+                WHERE group_id = :gid AND user_id = :uid";
+            $upStmt = $pdo->prepare($updateClearedSql);
+            $upStmt->execute([':cid' => $conv['id'], ':min' => $globalTimer, ':gid' => $group_id, ':uid' => $me]);
+        } else {
+            // For 1-on-1: Update hidden_for_sender or hidden_for_receiver
+            $hideSql = "
+                UPDATE messages 
+                SET 
+                    hidden_for_sender = CASE WHEN sender_id = :me THEN 1 ELSE hidden_for_sender END,
+                    hidden_for_receiver = CASE WHEN receiver_id = :me2 THEN 1 ELSE hidden_for_receiver END
+                WHERE conversation_id = :cid 
+                AND created_at < DATE_SUB(NOW(), INTERVAL :min MINUTE)
+                AND (
+                    (sender_id = :me3 AND hidden_for_sender = 0)
+                    OR (receiver_id = :me4 AND hidden_for_receiver = 0)
+                )";
+            $hideStmt = $pdo->prepare($hideSql);
+            $hideStmt->execute([
+                ':cid' => $conv['id'], ':min' => $globalTimer, 
+                ':me' => $me, ':me2' => $me, ':me3' => $me, ':me4' => $me
+            ]);
         }
     }
 

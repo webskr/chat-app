@@ -378,14 +378,25 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
                 } else {
                     // 1-on-1 Notifications
                     // ... (Existing Logic)
-                    // Check Mute
-                    $notif_query = "SELECT d.fcm_token as device_token, (SELECT COUNT(*) FROM muted_chats WHERE user_id = :rid AND target_id = :sid AND mute_until > NOW()) as is_muted FROM users u LEFT JOIN user_devices d ON u.id = d.user_id WHERE u.id = :rid";
+                    // Check Mute & Global Notification Toggle & Privacy Settings
+                    $notif_query = "
+                        SELECT d.fcm_token as device_token, 
+                               (SELECT COUNT(*) FROM muted_chats WHERE user_id = :rid AND target_id = :sid AND mute_until > NOW()) as is_muted,
+                               u.notifications_enabled,
+                               u.hide_notification_message,
+                               u.hide_notification_name
+                        FROM users u 
+                        LEFT JOIN user_devices d ON u.id = d.user_id 
+                        WHERE u.id = :rid
+                    ";
                     $notif_stmt = $pdo->prepare($notif_query);
                     $notif_stmt->execute([':rid' => $receiver_id, ':sid' => $sender_id]);
                     $receiver_info = $notif_stmt->fetch(PDO::FETCH_ASSOC);
 
-                    if ($receiver_info && !empty($receiver_info['device_token']) && $receiver_info['is_muted'] == 0) {
-                        $title = $sender_name;
+                    if ($receiver_info && !empty($receiver_info['device_token']) && $receiver_info['is_muted'] == 0 && $receiver_info['notifications_enabled'] == 1) {
+                        $title = $receiver_info['hide_notification_name'] == 1 ? "Vegarm" : $sender_name;
+                        $notificationBody = $receiver_info['hide_notification_message'] == 1 ? "New message" : $body;
+
                         $payload = [
                             'type' => 'new_message',
                             'conversation_id' => $conv_id,
@@ -393,7 +404,7 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
                             'sender_name' => $sender_name,
                             'message_id' => $message_id
                         ];
-                        sendFCMNotification($receiver_info['device_token'], $title, $body, $payload);
+                        sendFCMNotification($receiver_info['device_token'], $title, $notificationBody, $payload);
                     }
                 }
             }

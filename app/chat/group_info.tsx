@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, FlatList, TextInput, Switch, Modal, Pressable, Platform } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { UserPlus, LogOut, Trash2, Camera, Shield, User, MessageSquare, Flag, Lock, Clock, Settings, MoreVertical, Edit2 } from 'lucide-react-native';
+import { MoreVertical, UserPlus, Shield, Clock, Lock, Flag, LogOut, MessageSquare, Edit2, BadgeCheck, Trash2 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -90,6 +90,73 @@ export default function GroupInfoScreen() {
         } catch (error) {
             console.error(error);
             Alert.alert("Error", "Network error.");
+        }
+    };
+
+    const pickImage = async () => {
+        if (!isOwner && group?.my_role !== 'admin') {
+            Alert.alert("Error", "Only owners and admins can change the group icon.");
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        });
+
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            handleUpdateIcon(result.assets[0].uri);
+        }
+    };
+
+    const handleUpdateIcon = async (uri: string) => {
+        if (!user || !id) return;
+        setUpdating(true);
+        try {
+            const formData = new FormData();
+            formData.append('group_id', id.toString());
+            formData.append('user_id', user.id.toString());
+            
+            // @ts-ignore
+            formData.append('icon', {
+                uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
+                type: 'image/jpeg',
+                name: 'group_icon.jpg',
+            });
+
+            const response = await fetch(`${Config.API_URL}/chat/update_group.php`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    // Note: Don't set Content-Type header when using FormData; 
+                    // the browser/fetch will set it with the correct boundary.
+                },
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                Alert.alert("Success", "Group icon updated successfully.");
+                fetchGroupDetails(); // Refresh to show new icon
+                
+                // Update local metadata
+                LocalDatabaseService.updateChatMetadata({
+                    id: id.toString(),
+                    is_group: true,
+                    group_icon: data.icon_path // Backend returns the new path
+                }).catch(e => console.error("Local metadata update failed", e));
+
+            } else {
+                Alert.alert("Error", data.message || "Failed to update icon.");
+            }
+        } catch (error) {
+            console.error("Icon upload error:", error);
+            Alert.alert("Error", "Network error.");
+        } finally {
+            setUpdating(false);
         }
     };
 
@@ -318,7 +385,12 @@ export default function GroupInfoScreen() {
                 size={40}
             />
             <View style={{ flex: 1, marginLeft: 12 }}>
-                <ThemedText type="defaultSemiBold">{item.username}</ThemedText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <ThemedText type="defaultSemiBold">{item.username}</ThemedText>
+                    {item.is_official == 1 && (
+                        <BadgeCheck size={14} color={Colors.white} fill={Colors.verifiedBackground} />
+                    )}
+                </View>
                 <ThemedText style={{
                     fontSize: 12,
                     color: item.role === 'owner' ? Colors.error : (item.role === 'admin' ? '#FF9500' : Colors.textSecondary)
@@ -429,13 +501,25 @@ export default function GroupInfoScreen() {
             <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
                 {/* Group Details */}
                 <View style={styles.groupHeader}>
-                    <Avatar
-                        source={group?.icon_path ? `${Config.API_URL}/${group.icon_path}` : undefined}
-                        size={100}
-                        style={{ marginBottom: 16 }}
-                        fallbackComponent={<GroupDefaultIcon size={100} />}
-                    />
-                    <ThemedText type="title" style={{ fontSize: 24 }}>{group?.name}</ThemedText>
+                    <TouchableOpacity 
+                        onPress={pickImage} 
+                        disabled={!isOwner && group?.my_role !== 'admin'}
+                        activeOpacity={0.7}
+                        style={styles.avatarContainer}
+                    >
+                        <Avatar
+                            source={group?.icon_path ? `${Config.API_URL}/${group.icon_path}` : undefined}
+                            size={120}
+                            style={{ marginBottom: 16 }}
+                            fallbackComponent={<GroupDefaultIcon size={120} />}
+                        />
+                        {(isOwner || group?.my_role === 'admin') && (
+                            <View style={styles.editIconBadge}>
+                                <Edit2 size={16} color="#fff" />
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                    <ThemedText type="title" style={{ fontSize: 24, marginBottom: 4 }}>{group?.name}</ThemedText>
                     <ThemedText style={styles.memberCount}>Group • {group?.member_count} members</ThemedText>
                 </View>
 
@@ -704,7 +788,24 @@ const styles = StyleSheet.create({
     },
     groupHeader: {
         alignItems: 'center',
-        paddingVertical: 20,
+        paddingVertical: 30,
+    },
+    avatarContainer: {
+        position: 'relative',
+        alignItems: 'center',
+    },
+    editIconBadge: {
+        position: 'absolute',
+        right: 0,
+        bottom: 16,
+        backgroundColor: Colors.primary,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: Colors.background,
     },
     description: {
         color: Colors.textSecondary,

@@ -41,7 +41,8 @@ export const ChatInputBar = React.memo(({
     isGroup,
     userRole,
     permissions,
-    groupMembers = [] // New prop: List of group members
+    groupMembers = [], // New prop: List of group members
+    isOfficialChat = false
 }: any) => {
     // Schedule Logic State
     const [showSlashSuggestions, setShowSlashSuggestions] = useState(false);
@@ -308,6 +309,12 @@ export const ChatInputBar = React.memo(({
                 <GlassCard style={{ padding: 12, alignItems: 'center' }}>
                     <ThemedText style={{ color: Colors.textSecondary, textAlign: 'center' }}>
                         Only admins can send messages in this group.
+                    </ThemedText>
+                </GlassCard>
+            ) : isOfficialChat ? (
+                <GlassCard style={{ padding: 12, alignItems: 'center' }}>
+                    <ThemedText style={{ color: Colors.textSecondary, textAlign: 'center' }}>
+                        Only Vegram can send messages
                     </ThemedText>
                 </GlassCard>
             ) : (

@@ -27,27 +27,23 @@ export const Config = {
 
     get SOCKET_URL() {
         if (this.BACKEND_URL) {
-            // If backend is https (ngrok), we assume socket might be at the same domain or specialized
-            // Usually for local dev with ngrok, you might need a separate tunnel for port 3000
-            // but for simplicity, we provide a fallback logic.
             try {
                 const url = new URL(this.BACKEND_URL);
-                // If it's a typical local IP or localhost, just change port
+                // If it's a typical local IP or localhost, use port 8082
+                // (Cloudflare tunnels usually proxy to 8082 anyway if configured for single-tunnel)
                 if (url.hostname === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(url.hostname)) {
-                    return `${url.protocol}//${url.hostname}:3000`;
+                    return `${url.protocol}//${url.hostname}:8082`;
                 }
-                // For ngrok, the user might provide the full backend URL, 
-                // but the socket might need its own tunnel. 
-                // We'll return the base domain as a guess if it's not local.
+                // For ngrok/cloudflare (non-IP hostnames), we might use the base URL (port 80 proxy)
                 return `${url.protocol}//${url.hostname}`;
             } catch (e) {
-                return `http://${this.IP_ADDRESS}:3000`;
+                return `http://${this.IP_ADDRESS}:8082`;
             }
         }
 
         if (this.USE_LOCALHOST) {
-            return 'http://localhost:3000';
+            return 'http://localhost:8082';
         }
-        return `http://${this.IP_ADDRESS}:3000`;
+        return `http://${this.IP_ADDRESS}:8082`;
     }
 };

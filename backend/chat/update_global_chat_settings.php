@@ -15,6 +15,8 @@ $data = json_decode(file_get_contents("php://input"));
 
 if (!empty($data->user_id) && (
     isset($data->auto_delete_minutes) || 
+    isset($data->global_auto_delete_individual) ||
+    isset($data->global_auto_delete_group) ||
     isset($data->scramble_name) || 
     isset($data->privacy_last_seen) || 
     isset($data->privacy_read_receipts) || 
@@ -33,7 +35,17 @@ if (!empty($data->user_id) && (
 
         if (isset($data->auto_delete_minutes)) {
             $fieldsToUpdate[] = "global_auto_delete_minutes = :minutes";
-            $params[':minutes'] = $data->auto_delete_minutes;
+            $params[':minutes'] = (int)$data->auto_delete_minutes;
+        }
+
+        if (isset($data->global_auto_delete_individual)) {
+            $fieldsToUpdate[] = "global_auto_delete_individual = :gadi";
+            $params[':gadi'] = $data->global_auto_delete_individual ? 1 : 0;
+        }
+
+        if (isset($data->global_auto_delete_group)) {
+            $fieldsToUpdate[] = "global_auto_delete_group = :gadg";
+            $params[':gadg'] = $data->global_auto_delete_group ? 1 : 0;
         }
 
         if (isset($data->scramble_name)) {

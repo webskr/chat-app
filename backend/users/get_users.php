@@ -20,8 +20,8 @@ if (!$user_id) {
 }
 
 try {
-    // Calculate a 24-hour seed based on the current date
-    $day_seed = floor(time() / 86400);
+    // Calculate an hourly seed based on the current date and hour
+    $hour_seed = floor(time() / 3600);
 
      $query = "SELECT u.id, u.username, u.display_name, u.scramble_enabled, u.scramble_value, u.email, u.avatar_id, u.avatar_url, u.bio, 
                      u.links,
@@ -29,7 +29,7 @@ try {
               (SELECT status FROM relationships WHERE user_id = :uid1 AND target_id = u.id) as sent_status,
               (SELECT status FROM relationships WHERE user_id = u.id AND target_id = :uid2) as received_status
               FROM users u 
-              ORDER BY (u.id = :uid3) DESC, RAND($day_seed)";
+              ORDER BY (u.id = :uid3) DESC, RAND($hour_seed)";
     $stmt = $pdo->prepare($query);
     $stmt->execute([':uid1' => $user_id, ':uid2' => $user_id, ':uid3' => $user_id]);
     
@@ -60,9 +60,15 @@ try {
         }
         $user['relationship_status'] = $status;
         
-        // Privacy: If show_in_world is 0, only include if there is a relationship (friend or pending) OR if it is me
-        if (isset($user['show_in_world']) && $user['show_in_world'] == 0 && empty($user['relationship_status']) && $status !== 'self') {
-            continue;
+        // Privacy: If show_in_world is 0:
+        // 1. If it happens to be 'me' (self), and I have it off, I should not see myself.
+        // 2. If it's someone else, and they have it off, only show if we have an existing relationship (friend/pending).
+        if (isset($user['show_in_world']) && $user['show_in_world'] == 0) {
+            if ($status === 'self') {
+                continue; // User wants to hide themselves if global is off
+            } elseif ($status === 'none') {
+                continue; // Hide strangers who opted out of "World"
+            }
         }
         // Last Seen Privacy Rules:
         // 1. If I have mine OFF, I see no one's last seen.

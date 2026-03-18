@@ -621,7 +621,11 @@ export class LocalDatabaseService {
                 other_username    = COALESCE(excluded.other_username, chats.other_username),
                 other_avatar_url  = COALESCE(excluded.other_avatar_url, chats.other_avatar_url),
                 other_avatar_id   = COALESCE(excluded.other_avatar_id, chats.other_avatar_id),
-                other_is_official = CASE WHEN excluded.other_is_official IS NOT NULL AND excluded.other_is_official != 0 THEN excluded.other_is_official ELSE chats.other_is_official END,
+                other_is_official = CASE 
+                                        WHEN excluded.other_is_official = 1 THEN 1 
+                                        WHEN chats.other_is_official = 1 THEN 1 
+                                        ELSE COALESCE(excluded.other_is_official, chats.other_is_official, 0) 
+                                    END,
                 group_name        = COALESCE(excluded.group_name, chats.group_name),
                 group_icon        = COALESCE(excluded.group_icon, chats.group_icon),
                 unread_count      = COALESCE(excluded.unread_count, chats.unread_count),
@@ -660,14 +664,24 @@ export class LocalDatabaseService {
         }
     }
 
-    static async markChatRead(chatId: string): Promise<void> {
+    static async markChatRead(chatId: string, currentUserId?: string | number): Promise<void> {
         const db = this.getDB();
         await db.execute(`UPDATE chats SET unread_count = 0 WHERE id = ?`, [chatId]);
-        await db.execute(`UPDATE messages SET status = 'seen' WHERE chat_id = ? AND status != 'seen'`, [chatId]);
+        
+        if (currentUserId) {
+            // Only mark messages sent TO me as seen
+            await db.execute(
+                `UPDATE messages SET status = 'seen' WHERE chat_id = ? AND receiver_id = ? AND status != 'seen'`, 
+                [chatId, currentUserId.toString()]
+            );
+        } else {
+            // Fallback for legacy calls (less safe)
+            await db.execute(`UPDATE messages SET status = 'seen' WHERE chat_id = ? AND status != 'seen'`, [chatId]);
+        }
     }
 
-    static async markAllMessagesSeen(chatId: string): Promise<void> {
-        return this.markChatRead(chatId);
+    static async markAllMessagesSeen(chatId: string, currentUserId?: string | number): Promise<void> {
+        return this.markChatRead(chatId, currentUserId);
     }
 
     static resetConnection(): void {

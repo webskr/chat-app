@@ -478,7 +478,8 @@ export default function ChatDetailScreen() {
             deleted_for_everyone: r.deleted_for_everyone === 1,
             is_one_time: r.is_one_time === 1,
             created_at: r.timestamp,
-            sender_name: r.sender_name
+            sender_name: r.sender_name,
+            sender_is_official: r.sender_is_official
         };
     };
 
@@ -517,8 +518,12 @@ export default function ChatDetailScreen() {
             const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
 
             // Update locally first for immediate feedback
-            if (status === 'seen' && messageIds) {
-                await LocalDatabaseService.markMessagesSeenLocally(messageIds);
+            if (status === 'seen') {
+                if (messageIds.length > 0) {
+                    await LocalDatabaseService.markMessagesSeenLocally(messageIds);
+                } else {
+                    await LocalDatabaseService.markChatRead(chatId, currentUser.id);
+                }
             }
 
             await SyncService.reportStatus(
@@ -629,7 +634,7 @@ export default function ChatDetailScreen() {
             // Set active chat ID for unread count logic
             const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
             setActiveChatId(chatId);
-            LocalDatabaseService.markChatRead(chatId).catch(() => { });
+            LocalDatabaseService.markChatRead(chatId, currentUser.id).catch(() => { });
 
             // Listen for user status changes (online/offline)
             socket.current.on('user_online', (data: { user_id: string }) => {
@@ -871,12 +876,16 @@ export default function ChatDetailScreen() {
                 socket.current.on('message:delivered', async (data: any) => {
                     console.log(`[Socket] Received message:delivered for ${data.message_ids?.length || 'all'} messages`);
 
-                    // 1. Update UI
-                    safeSetMessages(prev => prev.map(m =>
-                        (data.message_ids && data.message_ids.map(String).includes(String(m.id))) || !data.message_ids
-                            ? { ...m, status: m.status === 'seen' ? 'seen' : 'delivered' }
-                            : m
-                    ));
+                    // 1. Update UI: Only for messages SENT by ME
+                    safeSetMessages(prev => prev.map(m => {
+                        const isMessageMatch = (data.message_ids && data.message_ids.map(String).includes(String(m.id))) || !data.message_ids;
+                        const isSentByMe = String(m.sender_id) === String(currentUser.id);
+                        
+                        if (isMessageMatch && isSentByMe && m.status !== 'seen') {
+                            return { ...m, status: 'delivered' };
+                        }
+                        return m;
+                    }));
 
                     // 2. Update Local DB
                     if (data.message_ids && currentUser) {
@@ -896,12 +905,16 @@ export default function ChatDetailScreen() {
                 socket.current.on('message:seen', async (data: any) => {
                     console.log(`[Socket] Received message:seen for ${data.message_ids?.length || 'all'} messages`);
 
-                    // 1. Update UI
-                    safeSetMessages(prev => prev.map(m =>
-                        (data.message_ids && data.message_ids.map(String).includes(String(m.id))) || !data.message_ids
-                            ? { ...m, status: 'seen' }
-                            : m
-                    ));
+                    // 1. Update UI: Only for messages SENT by ME
+                    safeSetMessages(prev => prev.map(m => {
+                        const isMessageMatch = (data.message_ids && data.message_ids.map(String).includes(String(m.id))) || !data.message_ids;
+                        const isSentByMe = String(m.sender_id) === String(currentUser.id);
+
+                        if (isMessageMatch && isSentByMe) {
+                            return { ...m, status: 'seen' };
+                        }
+                        return m;
+                    }));
 
                     // 2. Update Local DB
                     if (!currentUser) return;
@@ -916,7 +929,7 @@ export default function ChatDetailScreen() {
                                 }
                             }
                         } else {
-                            await LocalDatabaseService.markAllMessagesSeen(chatId);
+                            await LocalDatabaseService.markAllMessagesSeen(chatId, currentUser.id);
                         }
                     } catch (e) { }
                 });
@@ -2681,6 +2694,7 @@ export default function ChatDetailScreen() {
                 onCancelSelection={() => setSelectedMessageIds([])}
                 onDeleteSelected={handleDeleteSelected}
                 onCopySelected={handleCopySelected}
+                isOfficialParam={isOfficialParam}
             />
 
             <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -2744,9 +2758,9 @@ export default function ChatDetailScreen() {
                                 <ThemedText style={styles.unblockText}>Tap to unblock</ThemedText>
                             </TouchableOpacity>
                         </View>
-                    ) : ((targetUserProfile?.is_official == 1 || isOfficialParam === '1') && currentUser?.is_official != 1) ? (
+                    ) : ((targetUserProfile?.is_official == 1 || isOfficialParam === '1' || otherUsername === 'Vegram Official' || otherUsername === 'VegarmOfficial' || targetUserProfile?.username === 'VegarmOfficial') && currentUser?.is_official != 1) ? (
                         <View style={{ height: 60, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.glassBorder }}>
-                            <ThemedText style={{ color: Colors.textSecondary, fontSize: 13, fontWeight: '600' }}>🚫 Only Vegarm can send messages</ThemedText>
+                            <ThemedText style={{ color: Colors.textSecondary, fontSize: 13, fontWeight: '600' }}>Only Vegram can send messages</ThemedText>
                         </View>
                     ) : (
                         <Animated.View
@@ -2764,7 +2778,10 @@ export default function ChatDetailScreen() {
                                 editingMessage={editingMessage}
                                 handleTyping={handleTyping}
                                 handleAttachmentSelect={handleAttachmentSelect}
+                                handlePickImage={handlePickImage}
+                                handleSaveEdit={handleSaveEdit}
                                 handleSend={handleSend}
+                                handleCancelEdit={handleCancelEdit}
                                 startRecording={startRecording}
                                 stopRecording={stopRecording}
                                 cancelRecording={cancelRecording}
@@ -2786,6 +2803,7 @@ export default function ChatDetailScreen() {
                                 userRole={userRole}
                                 permissions={permissions}
                                 groupMembers={groupMembers}
+                                isOfficialChat={targetUserProfile?.is_official == 1 && currentUser?.is_official != 1}
                             />
                         </Animated.View>
                     )}

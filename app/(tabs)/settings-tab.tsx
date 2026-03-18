@@ -27,6 +27,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '../../context/UserContext';
 import { Config } from '../../constants/Config';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
+import { ApiService } from '../../utils/ApiService';
 
 const SECTIONS = [
     {
@@ -35,7 +36,6 @@ const SECTIONS = [
             { id: 'profile', icon: User, label: 'Profile', type: 'link' },
             { id: 'invite', icon: UserPlus, label: 'Invite Friends', type: 'link' },
             { id: 'privacy', icon: Lock, label: 'Privacy', type: 'link' },
-            { id: 'security', icon: Shield, label: 'Security', type: 'link' },
             { id: 'backup', icon: Database, label: 'Backup & Restore', type: 'link' },
             { id: 'blocked', icon: UserX, label: 'Blocked Contacts', type: 'link' },
         ],
@@ -43,7 +43,7 @@ const SECTIONS = [
     {
         title: 'Preferences',
         items: [
-            { id: 'notifications', icon: Bell, label: 'Notifications', type: 'toggle', value: true },
+            { id: 'notifications', icon: Bell, label: 'Notifications', type: 'link' },
             { id: 'controls', icon: Sliders, label: 'Controls', type: 'link' },
             { id: 'appearance', icon: Palette, label: 'Appearance', type: 'link' },
         ],
@@ -67,37 +67,16 @@ const AUTO_DELETE_OPTIONS = [
 ];
 
 export default function SettingsScreen() {
-    const { user, setUser, reloadUser } = useUser();
-    const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+    const { user, setUser, reloadUser, isProfileComplete, updateUserProfile } = useUser();
     const [avatarKey, setAvatarKey] = React.useState(Date.now());
 
     useFocusEffect(
         React.useCallback(() => {
             reloadUser();
             setAvatarKey(Date.now()); // Force refresh image
-            loadSettings();
         }, [])
     );
 
-    const loadSettings = async () => {
-        try {
-            const val = await AsyncStorage.getItem('notifications_enabled');
-            if (val !== null) {
-                setNotificationsEnabled(val === 'true');
-            }
-        } catch (e) {
-            console.error("Error loading settings", e);
-        }
-    };
-
-    const toggleNotifications = async (value: boolean) => {
-        setNotificationsEnabled(value);
-        try {
-            await AsyncStorage.setItem('notifications_enabled', String(value));
-        } catch (e) {
-            console.error("Error saving settings", e);
-        }
-    };
     const handleLogout = () => {
         Alert.alert(
             'Log Out',
@@ -155,6 +134,9 @@ export default function SettingsScreen() {
                         </View>
                         <View style={styles.editButton}>
                             <ThemedText style={{ color: Colors.primary }}>Edit</ThemedText>
+                            {!isProfileComplete && (
+                                <View style={styles.inlineRedDot} />
+                            )}
                         </View>
                     </TouchableOpacity>
                 </GlassCard>
@@ -172,6 +154,7 @@ export default function SettingsScreen() {
                                         onPress={() => {
                                             if (item.id === 'profile') router.push('/profile-edit');
                                             if (item.id === 'invite') router.push('/invite');
+                                            if (item.id === 'notifications') router.push('/settings/notifications');
                                             if (item.id === 'controls') router.push('/settings/controls');
                                             if (item.id === 'privacy') router.push('/settings/privacy');
                                             if (item.id === 'appearance') router.push('/appearance');
@@ -184,18 +167,16 @@ export default function SettingsScreen() {
                                             <View style={styles.iconContainer}>
                                                 <item.icon size={20} color={Colors.text} />
                                             </View>
-                                            <ThemedText>{item.label}</ThemedText>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                <ThemedText>{item.label}</ThemedText>
+                                                {item.id === 'profile' && !isProfileComplete && (
+                                                    <View style={styles.smallRedDot} />
+                                                )}
+                                            </View>
                                         </View>
 
                                         {item.type === 'link' ? (
                                             <ChevronRight size={20} color={Colors.textSecondary} />
-                                        ) : item.id === 'notifications' ? (
-                                            <Switch
-                                                value={notificationsEnabled}
-                                                onValueChange={toggleNotifications}
-                                                trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
-                                                thumbColor={Colors.white}
-                                            />
                                         ) : null}
                                     </TouchableOpacity>
 
@@ -327,5 +308,18 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 24,
         opacity: 0.5,
+    },
+    inlineRedDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: Colors.error,
+        marginLeft: 4,
+    },
+    smallRedDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: Colors.error,
     },
 });

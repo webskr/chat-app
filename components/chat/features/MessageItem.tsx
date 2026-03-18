@@ -223,8 +223,13 @@ export const MessageItem = React.memo(({
                                     }]}>
                                         {item.sender_name || 'Unknown'}
                                     </ThemedText>
-                                    {item.sender_is_official == 1 && (
-                                        <BadgeCheck size={14} color={Colors.background} fill={Colors.verifiedBackground} />
+                                    {(
+                                        item.sender_is_official == 1 || 
+                                        item.sender_is_official === '1' ||
+                                        item.sender_name === 'Vegram Official' ||
+                                        item.sender_name === 'VegarmOfficial'
+                                    ) && (
+                                        <BadgeCheck size={14} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
                                     )}
                                 </View>
                             )}

@@ -22,7 +22,7 @@ import { useFocusEffect } from 'expo-router';
 import { Config } from '../../constants/Config';
 
 export default function RequestsScreen() {
-    const { user } = useUser();
+    const { user, fetchRequestCount } = useUser();
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedUser, setSelectedUser] = useState<any>(null);
     const [activeTab, setActiveTab] = useState<'received' | 'sent'>('received');
@@ -74,6 +74,7 @@ export default function RequestsScreen() {
             });
             if (response.ok) {
                 fetchRequests();
+                fetchRequestCount(); // Update the tab badge immediately
                 if (action === 'accept') {
                     Alert.alert('Success', 'Friend request accepted!');
                 } else if (action === 'unsend') {
@@ -113,8 +114,14 @@ export default function RequestsScreen() {
                             <ThemedText type="defaultSemiBold" numberOfLines={1} style={{ flexShrink: 1 }}>
                                 {item.display_name || item.username}
                             </ThemedText>
-                            {item.is_official == 1 && (
-                                <BadgeCheck size={16} color={Colors.background} fill={Colors.verifiedBackground} />
+                            {(
+                                item.is_official == 1 || 
+                                item.is_official === '1' ||
+                                item.display_name === 'Vegram Official' ||
+                                item.username === 'VegarmOfficial' ||
+                                item.display_name === 'VegarmOfficial'
+                            ) && (
+                                <BadgeCheck size={16} color={Colors.white} fill={Colors.verifiedBackground} />
                             )}
                         </View>
                         <ThemedText type="caption" style={styles.meta}>

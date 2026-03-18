@@ -14,14 +14,31 @@ import { ThemedText } from '../components/ThemedText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
 
+const PLATFORMS = [
+    { id: 'instagram', label: 'Instagram', icon: 'logo-instagram', color: '#E4405F', match: 'instagram.com' },
+    { id: 'whatsapp', label: 'WhatsApp', icon: 'logo-whatsapp', color: '#25D366', match: 'whatsapp' },
+    { id: 'telegram', label: 'Telegram', icon: 'paper-plane-outline', color: '#0088cc', match: 't.me' },
+    { id: 'github', label: 'GitHub', icon: 'logo-github', color: '#FFFFFF', match: 'github.com' },
+    { id: 'twitter', label: 'X (Twitter)', icon: 'logo-twitter', color: '#1DA1F2', match: 'x.com' },
+    { id: 'facebook', label: 'Facebook', icon: 'logo-facebook', color: '#1877F2', match: 'facebook.com' },
+    { id: 'linkedin', label: 'LinkedIn', icon: 'logo-linkedin', color: '#0077B5', match: 'linkedin.com' },
+    { id: 'youtube', label: 'YouTube', icon: 'logo-youtube', color: '#FF0000', match: 'youtube.com' },
+    { id: 'discord', label: 'Discord', icon: 'logo-discord', color: '#5865F2', match: 'discord' },
+    { id: 'other', label: 'Other', icon: 'globe-outline', color: '#6366f1', match: '' },
+];
+
 export default function ProfileEditScreen() {
     const { user, updateUserProfile, reloadUser } = useUser();
     const [username, setUsername] = useState(user?.username || '');
     const [displayName, setDisplayName] = useState(user?.display_name || '');
     const [bio, setBio] = useState(user?.bio || '');
-    const [links, setLinks] = useState<{ label: string, url: string }[]>([]);
+    const [country, setCountry] = useState(user?.country || '');
+    const [stateField, setStateField] = useState(user?.state || '');
+    const [district, setDistrict] = useState(user?.district || '');
+    const [links, setLinks] = useState<{ platform: string, label: string, url: string }[]>([]);
     const [isLinkModalVisible, setIsLinkModalVisible] = useState(false);
-    const [currentLink, setCurrentLink] = useState({ label: '', url: '' });
+    const [isPlatformModalVisible, setIsPlatformModalVisible] = useState(false);
+    const [currentLink, setCurrentLink] = useState({ platform: 'other', label: '', url: '' });
 
     const [avatarId, setAvatarId] = useState(user?.avatar_id || '1');
     const [customAvatar, setCustomAvatar] = useState<string | null>(user?.avatar_url ? `${Config.API_URL}/${user.avatar_url}` : null);
@@ -46,6 +63,9 @@ export default function ProfileEditScreen() {
             setUsername(user.username);
             setDisplayName(user.display_name || '');
             setBio(user.bio || '');
+            setCountry(user.country || '');
+            setStateField(user.state || '');
+            setDistrict(user.district || '');
             try {
                 setLinks(user.links ? JSON.parse(user.links) : []);
             } catch (e) {
@@ -148,8 +168,13 @@ export default function ProfileEditScreen() {
             return;
         }
 
-        if (!username.trim()) {
-            Alert.alert('Error', 'Username cannot be empty');
+        if (!username.trim() || !displayName.trim()) {
+            Alert.alert('Error', 'Username and Display Name are mandatory');
+            return;
+        }
+
+        if (!country.trim() || !stateField.trim() || !district.trim()) {
+            Alert.alert('Error', 'Country, State, and District are mandatory');
             return;
         }
 
@@ -173,6 +198,9 @@ export default function ProfileEditScreen() {
                 username: username,
                 display_name: displayName,
                 bio: bio,
+                country: country,
+                state: stateField,
+                district: district,
                 links: JSON.stringify(links),
                 avatar_id: avatarId
             };
@@ -194,6 +222,9 @@ export default function ProfileEditScreen() {
                     username: username,
                     display_name: displayName,
                     bio: bio,
+                    country: country,
+                    state: stateField,
+                    district: district,
                     links: JSON.stringify(links),
                     avatar_id: avatarId,
                     avatar_url: newAvatarUrl || (avatarId === 'custom' ? user.avatar_url : undefined), // Keep existing if custom and not changed, or new one
@@ -277,9 +308,25 @@ export default function ProfileEditScreen() {
                             {bio ? <Text style={styles.headerBio}>{bio}</Text> : null}
                             
                             <View style={styles.socialLinksRow}>
-                                <Ionicons name="logo-instagram" size={20} color={Colors.textSecondary} />
-                                <Ionicons name="logo-twitter" size={20} color={Colors.textSecondary} />
-                                <Ionicons name="globe-outline" size={20} color={Colors.textSecondary} />
+                                {links.length > 0 ? (
+                                    links.slice(0, 5).map((link, idx) => {
+                                        const platform = PLATFORMS.find(p => p.id === link.platform) || PLATFORMS[PLATFORMS.length - 1]; // Default to 'other'
+                                        return (
+                                            <Ionicons 
+                                                key={idx} 
+                                                name={platform.icon as any} 
+                                                size={20} 
+                                                color={platform.color} 
+                                            />
+                                        );
+                                    })
+                                ) : (
+                                    <>
+                                        <Ionicons name="logo-instagram" size={20} color={Colors.textSecondary} />
+                                        <Ionicons name="logo-twitter" size={20} color={Colors.textSecondary} />
+                                        <Ionicons name="globe-outline" size={20} color={Colors.textSecondary} />
+                                    </>
+                                )}
                             </View>
                         </View>
 
@@ -315,7 +362,9 @@ export default function ProfileEditScreen() {
                         {/* 3. Profile Information Section */}
                         <View style={styles.infoCard}>
                             <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Display Name</Text>
+                                <Text style={styles.inputLabel}>
+                                    Display Name <Text style={{ color: Colors.error }}>*</Text>
+                                </Text>
                                 <TextInput
                                     style={styles.textInput}
                                     placeholder="Your full name"
@@ -326,7 +375,9 @@ export default function ProfileEditScreen() {
                             </View>
 
                             <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Username</Text>
+                                <Text style={styles.inputLabel}>
+                                    Username <Text style={{ color: Colors.error }}>*</Text>
+                                </Text>
                                 <TextInput
                                     style={[styles.textInput, !canUpdateUsername && { opacity: 0.5 }]}
                                     placeholder="Unique username"
@@ -343,7 +394,7 @@ export default function ProfileEditScreen() {
                                 )}
                             </View>
 
-                            <View style={[styles.inputGroup, { marginBottom: 0 }]}>
+                            <View style={styles.inputGroup}>
                                 <Text style={styles.inputLabel}>Bio</Text>
                                 <TextInput
                                     style={[styles.textInput, styles.bioInput]}
@@ -355,6 +406,45 @@ export default function ProfileEditScreen() {
                                     maxLength={120}
                                 />
                                 <Text style={styles.charCount}>{bio.length}/120</Text>
+                            </View>
+
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>
+                                    Country <Text style={{ color: Colors.error }}>*</Text>
+                                </Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    placeholder="Enter your country"
+                                    placeholderTextColor={Colors.textSecondary}
+                                    value={country}
+                                    onChangeText={setCountry}
+                                />
+                            </View>
+
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>
+                                    State <Text style={{ color: Colors.error }}>*</Text>
+                                </Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    placeholder="Enter your state"
+                                    placeholderTextColor={Colors.textSecondary}
+                                    value={stateField}
+                                    onChangeText={setStateField}
+                                />
+                            </View>
+
+                            <View style={[styles.inputGroup, { marginBottom: 0 }]}>
+                                <Text style={styles.inputLabel}>
+                                    District <Text style={{ color: Colors.error }}>*</Text>
+                                </Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    placeholder="Enter your district"
+                                    placeholderTextColor={Colors.textSecondary}
+                                    value={district}
+                                    onChangeText={setDistrict}
+                                />
                             </View>
                         </View>
 
@@ -368,32 +458,37 @@ export default function ProfileEditScreen() {
                                             Alert.alert('Limit Reached', 'You can only add up to 5 links.');
                                             return;
                                         }
-                                        setCurrentLink({ label: '', url: '' });
+                                        setCurrentLink({ platform: 'instagram', label: 'Instagram', url: '' });
                                         setIsLinkModalVisible(true);
                                     }}
                                 >
-                                    <Ionicons name="add-circle" size={24} color={Colors.primary} />
+                                    <View style={styles.addIconCircle}>
+                                        <Ionicons name="add" size={20} color={Colors.primary} />
+                                    </View>
                                 </TouchableOpacity>
                             </View>
 
-                            {links.map((link, index) => (
-                                <View key={index} style={styles.addedLinkItem}>
-                                    <View style={styles.linkIconBox}>
-                                        <Ionicons name="link-outline" size={18} color={Colors.text} />
+                             {links.map((link, index) => {
+                                const platform = PLATFORMS.find(p => p.id === link.platform) || PLATFORMS[PLATFORMS.length - 1];
+                                return (
+                                    <View key={index} style={styles.addedLinkItem}>
+                                        <View style={[styles.linkIconBox, { backgroundColor: `${platform.color}15` }]}>
+                                            <Ionicons name={platform.icon as any} size={18} color={platform.color} />
+                                        </View>
+                                        <View style={styles.linkData}>
+                                            <Text style={styles.linkLabel}>{link.label}</Text>
+                                            <Text style={styles.linkUrl} numberOfLines={1}>{link.url}</Text>
+                                        </View>
+                                        <TouchableOpacity onPress={() => {
+                                            const newLinks = [...links];
+                                            newLinks.splice(index, 1);
+                                            setLinks(newLinks);
+                                        }}>
+                                            <Ionicons name="close-circle-outline" size={22} color={Colors.error} />
+                                        </TouchableOpacity>
                                     </View>
-                                    <View style={styles.linkData}>
-                                        <Text style={styles.linkLabel}>{link.label}</Text>
-                                        <Text style={styles.linkUrl} numberOfLines={1}>{link.url}</Text>
-                                    </View>
-                                    <TouchableOpacity onPress={() => {
-                                        const newLinks = [...links];
-                                        newLinks.splice(index, 1);
-                                        setLinks(newLinks);
-                                    }}>
-                                        <Ionicons name="close-circle-outline" size={22} color={Colors.error} />
-                                    </TouchableOpacity>
-                                </View>
-                            ))}
+                                );
+                            })}
                             
                             {links.length === 0 && (
                                 <Text style={{ color: Colors.textSecondary, textAlign: 'center', fontSize: 13, paddingVertical: 10 }}>
@@ -490,18 +585,40 @@ export default function ProfileEditScreen() {
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                     <View style={styles.modalOverlay}>
                         <BlurView intensity={90} tint="dark" style={styles.modalContent}>
-                            <Text style={styles.modalTitle}>Add Link</Text>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Label</Text>
-                                <TextInput
-                                    style={styles.textInput}
-                                    placeholder="e.g. Portfolio"
-                                    placeholderTextColor={Colors.textSecondary}
-                                    value={currentLink.label}
-                                    onChangeText={(text) => setCurrentLink({ ...currentLink, label: text })}
-                                />
+                             <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Platform</Text>
+                                <TouchableOpacity 
+                                    style={styles.platformSelector}
+                                    onPress={() => setIsPlatformModalVisible(true)}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        {PLATFORMS.find(p => p.id === currentLink.platform)?.icon && (
+                                            <Ionicons 
+                                                name={PLATFORMS.find(p => p.id === currentLink.platform)?.icon as any} 
+                                                size={20} 
+                                                color={PLATFORMS.find(p => p.id === currentLink.platform)?.color} 
+                                            />
+                                        )}
+                                        <Text style={{ color: Colors.text, fontSize: 16 }}>
+                                            {PLATFORMS.find(p => p.id === currentLink.platform)?.label || 'Select Platform'}
+                                        </Text>
+                                    </View>
+                                    <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} />
+                                </TouchableOpacity>
                             </View>
+
+                            {currentLink.platform === 'other' && (
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Label</Text>
+                                    <TextInput
+                                        style={styles.textInput}
+                                        placeholder="e.g. Portfolio"
+                                        placeholderTextColor={Colors.textSecondary}
+                                        value={currentLink.label}
+                                        onChangeText={(text) => setCurrentLink({ ...currentLink, label: text })}
+                                    />
+                                </View>
+                            )}
 
                             <View style={styles.inputGroup}>
                                 <Text style={styles.inputLabel}>URL</Text>
@@ -526,11 +643,42 @@ export default function ProfileEditScreen() {
                                 <TouchableOpacity
                                     style={[styles.modalBtn, { backgroundColor: Colors.primary }]}
                                     onPress={() => {
-                                        if (!currentLink.label || !currentLink.url) {
-                                            Alert.alert('Error', 'Please fill in both fields');
+                                        if (!currentLink.url) {
+                                            Alert.alert('Error', 'Please enter a URL');
                                             return;
                                         }
-                                        setLinks([...links, currentLink]);
+
+                                        const selectedPlatform = PLATFORMS.find(p => p.id === currentLink.platform);
+                                        
+                                        // 1. Uniqueness check (except other)
+                                        if (currentLink.platform !== 'other' && links.some(l => l.platform === currentLink.platform)) {
+                                            Alert.alert('Error', `You have already added an ${selectedPlatform?.label} link.`);
+                                            return;
+                                        }
+
+                                        // 2. URL Validation
+                                        if (selectedPlatform && selectedPlatform.match && !currentLink.url.toLowerCase().includes(selectedPlatform.match)) {
+                                            Alert.alert('Invalid URL', `The URL does not look like a valid ${selectedPlatform.label} link.`);
+                                            return;
+                                        }
+
+                                        if (currentLink.platform === 'other' && !currentLink.label) {
+                                            Alert.alert('Error', 'Please enter a label');
+                                            return;
+                                        }
+                                        
+                                        // 3. Absolute Limit Check
+                                        if (links.length >= 5) {
+                                            Alert.alert('Limit Reached', 'You can only add up to 5 links total.');
+                                            return;
+                                        }
+
+                                        // Auto-set label if not "other"
+                                        const finalLabel = currentLink.platform === 'other' 
+                                            ? currentLink.label 
+                                            : (selectedPlatform?.label || 'Link');
+
+                                        setLinks([...links, { ...currentLink, label: finalLabel }]);
                                         setIsLinkModalVisible(false);
                                     }}
                                 >
@@ -540,6 +688,60 @@ export default function ProfileEditScreen() {
                         </BlurView>
                     </View>
                 </KeyboardAvoidingView>
+            </Modal>
+
+            {/* Platform Selection Modal */}
+            <Modal
+                visible={isPlatformModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsPlatformModalVisible(false)}
+            >
+                <TouchableOpacity 
+                    style={styles.modalOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setIsPlatformModalVisible(false)}
+                >
+                    <BlurView intensity={95} tint="dark" style={[styles.modalContent, { maxHeight: '70%' }]}>
+                        <Text style={styles.modalTitle}>Choose Platform</Text>
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            <View style={styles.platformGrid}>
+                                {PLATFORMS.map((p) => {
+                                    const isUsed = p.id !== 'other' && links.some(l => l.platform === p.id);
+                                    return (
+                                        <TouchableOpacity
+                                            key={p.id}
+                                            style={[
+                                                styles.platformItem,
+                                                currentLink.platform === p.id && styles.platformItemSelected,
+                                                isUsed && { opacity: 0.4 }
+                                            ]}
+                                            disabled={isUsed}
+                                            onPress={() => {
+                                                setCurrentLink({ 
+                                                    ...currentLink, 
+                                                    platform: p.id, 
+                                                    label: p.id === 'other' ? '' : p.label 
+                                                });
+                                                setIsPlatformModalVisible(false);
+                                            }}
+                                        >
+                                            <View style={[styles.platformIconOuter, { backgroundColor: `${p.color}20` }]}>
+                                                <Ionicons name={p.icon as any} size={24} color={p.color} />
+                                            </View>
+                                            <Text style={styles.platformLabel}>{p.label}</Text>
+                                            {isUsed && (
+                                                <View style={styles.usedBadge}>
+                                                    <Ionicons name="checkmark-circle" size={12} color={Colors.primary} />
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </ScrollView>
+                    </BlurView>
+                </TouchableOpacity>
             </Modal>
         </SafeAreaView>
     );
@@ -673,14 +875,13 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
     },
     textInput: {
-        backgroundColor: 'rgba(0, 0, 0, 0.2)',
-        borderRadius: 14,
-        paddingHorizontal: 16,
-        height: 52,
+        backgroundColor: 'transparent',
+        borderBottomWidth: 1.5,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        paddingHorizontal: 4,
+        height: 48,
         color: Colors.text,
         fontSize: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)',
     },
     bioInput: {
         height: 100,
@@ -835,5 +1036,64 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    addIconCircle: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: 'rgba(37, 211, 102, 0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    platformSelector: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: 'transparent',
+        paddingHorizontal: 4,
+        height: 52,
+        borderBottomWidth: 1.5,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    platformGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+        justifyContent: 'center',
+        paddingVertical: 10,
+    },
+    platformItem: {
+        width: '30%',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderRadius: 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    },
+    platformItemSelected: {
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        borderWidth: 1,
+        borderColor: Colors.primary,
+    },
+    platformIconOuter: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    platformLabel: {
+        fontSize: 12,
+        color: Colors.text,
+        textAlign: 'center',
+        fontWeight: '500',
+    },
+    usedBadge: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        borderRadius: 10,
+        padding: 2,
     },
 });

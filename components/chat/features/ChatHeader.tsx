@@ -37,6 +37,7 @@ export const ChatHeader = ({
     onDeleteSelected,
     onForwardSelected,
     onCopySelected,
+    isOfficialParam
 }: any) => {
 
     const isOnline = presence?.isOnline;
@@ -55,7 +56,13 @@ export const ChatHeader = ({
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={styles.headerInfo}
-                    onPress={() => setModalVisible(true)}
+                    onPress={() => {
+                        if (isGroup) {
+                            router.push({ pathname: '/chat/group_info', params: { id: id } });
+                        } else {
+                            setModalVisible(true);
+                        }
+                    }}
                     activeOpacity={0.7}
                 >
                     <Avatar
@@ -71,12 +78,20 @@ export const ChatHeader = ({
                         fallbackComponent={isGroup ? <GroupDefaultIcon size={40} /> : undefined}
                     />
                     <View style={styles.nameContainer}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <ThemedText type="defaultSemiBold">
-                                {String(id) === String(currentUser?.id) ? 'Note to self' : otherUsername}
+                        <View style={styles.nameRow}>
+                            <ThemedText type="defaultSemiBold" numberOfLines={1} style={styles.username}>
+                                {String(id) === String(currentUser?.id) ? 'Note to self' : (otherUsername || targetUserProfile?.username || 'Chat')}
                             </ThemedText>
-                            {targetUserProfile?.is_official == 1 && (
-                                <BadgeCheck size={16} color={Colors.background} fill={Colors.verifiedBackground} />
+                            {(
+                                targetUserProfile?.is_official == 1 || 
+                                targetUserProfile?.is_official === '1' || 
+                                isOfficialParam == 1 || 
+                                isOfficialParam === '1' ||
+                                otherUsername === 'Vegram Official' ||
+                                otherUsername === 'VegarmOfficial' ||
+                                targetUserProfile?.username === 'VegarmOfficial'
+                            ) && (
+                                <BadgeCheck size={16} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
                             )}
                         </View>
 
@@ -169,5 +184,15 @@ const styles = StyleSheet.create({
     },
     moreButton: {
         padding: 4,
+    },
+    nameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        flex: 1,
+    },
+    username: {
+        fontSize: 16,
+        flexShrink: 1,
     },
 });

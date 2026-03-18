@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { registerForPushNotificationsAsync } from '../utils/notifications';
@@ -20,7 +20,13 @@ interface User {
     avatar_url?: string;
     bio?: string;
     username_last_updated?: string;
+    country?: string;
+    state?: string;
+    district?: string;
     global_auto_delete_minutes?: number;
+    global_auto_delete_individual?: number;
+    global_auto_delete_group?: number;
+
     last_seen?: string;
     privacy_last_seen?: number;
     privacy_read_receipts?: number;
@@ -34,20 +40,26 @@ interface User {
     scramble_value?: string;
     links?: string; // JSON string of { label: string, url: string }[]
     is_official?: number | boolean;
+    notifications_enabled?: number;
+    hide_notification_message?: number;
+    hide_notification_name?: number;
 }
 
 interface UserContextType {
     user: User | null;
+    isProfileComplete: boolean;
     setUser: (user: User | null, tokens?: { access_token: string, refresh_token: string }) => Promise<void>;
     updateUserProfile: (data: Partial<User>) => Promise<void>;
     reloadUser: () => Promise<void>;
     isLoading: boolean;
     isDbReady: boolean;
     unreadCount: number;
+    requestCount: number;
     setUnreadCount: (count: number) => void;
     activeChatId: string | null;
     setActiveChatId: (id: string | null) => void;
     safeSync: () => Promise<void>;
+    fetchRequestCount: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -106,8 +118,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         const accessToken = await SecureStoreHelper.getAccessToken();
         const refreshToken = await SecureStoreHelper.getRefreshToken();
         if (!accessToken || !refreshToken) {
-            console.log("[UserContext] 🛑 No auth tokens, forcing logout");
-            await setUser(null); // This clears AsyncStorage and SecureStore
+            console.log("[UserContext] ⚠️ Some tokens missing in safeSync, skipping sync cycle (ApiService will handle if needed)");
             return;
         }
 
@@ -133,6 +144,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     };
 
     useEffect(() => {
+        // Register global auth failure listener
+        ApiService.setAuthFailureListener(async () => {
+            console.warn("[UserContext] 🚨 Irrecoverable auth failure detected via ApiService. Forcing logout.");
+            await setUser(null);
+        });
+
         loadUser();
     }, []); // Only on mount
 
@@ -168,12 +185,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 console.log(`[UserContext] Refresh token exists: ${!!refreshToken}`);
 
                 if (!accessToken || !refreshToken) {
-                    console.log("[UserContext] 🛑 User session invalid (missing tokens), expunging user storage.");
-                    // Completely clear user state manually instead of using setUser so we don't trigger recursive loads during mount
-                    await AsyncStorage.removeItem('user');
-                    await SecureStoreHelper.clearTokens();
-                    setUserState(null);
-                    return; // Stop loading DB and Context mapping immediately.
+                    console.warn("[UserContext] ⚠️ Some auth tokens missing during load. Attempting to proceed (ApiService will handle actual expiry)");
+                    // We don't clear storage here anymore to prevent accidental logouts on secure store glitches
                 }
 
                 setUserState(parsedUser);
@@ -262,12 +275,47 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         await setUser(updatedUser);
     };
 
+    const isProfileComplete = useMemo(() => {
+        if (!user) return true;
+        return !!(
+            user.username && 
+            user.display_name?.trim() && 
+            user.country?.trim() && 
+            user.state?.trim() && 
+            user.district?.trim()
+        );
+    }, [user]);
+
     const [unreadCount, setUnreadCount] = useState(0);
+    const [requestCount, setRequestCount] = useState(0);
+
+    const fetchRequestCount = useCallback(async () => {
+        if (!user?.id) return;
+        try {
+            const response = await fetch(`${Config.API_URL}/users/get_requests.php?user_id=${user.id}`);
+            if (response.ok) {
+                const data = await response.json();
+                setRequestCount(data.received?.length || 0);
+            }
+        } catch (error) {
+            console.error('[UserContext] Error fetching request count:', error);
+        }
+    }, [user?.id]);
+
+    useEffect(() => {
+        if (user?.id) {
+            fetchRequestCount();
+            const interval = setInterval(fetchRequestCount, 15000); // Poll every 15s
+            return () => clearInterval(interval);
+        } else {
+            setRequestCount(0);
+        }
+    }, [user?.id, fetchRequestCount]);
 
     return (
         <UserContext.Provider value={{
-            user, setUser, updateUserProfile, reloadUser, isLoading, isDbReady,
-            unreadCount, setUnreadCount, activeChatId, setActiveChatId, safeSync
+            user, isProfileComplete, setUser, updateUserProfile, reloadUser, isLoading, isDbReady,
+            unreadCount, setUnreadCount, requestCount, fetchRequestCount, activeChatId, setActiveChatId, safeSync
         }}>
             {children}
         </UserContext.Provider>

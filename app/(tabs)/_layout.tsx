@@ -9,7 +9,7 @@ import { registerForPushNotificationsAsync } from '~/utils/notifications';
 import { Config } from '../../constants/Config';
 
 export default function TabLayout() {
-    const { user, unreadCount } = useUser();
+    const { user, unreadCount, isProfileComplete, requestCount } = useUser();
 
     // console.log('TabLayout: unreadCount', unreadCount);
 
@@ -78,17 +78,18 @@ export default function TabLayout() {
                     tabBarIcon: ({ color, focused }) => (
                         <MessageSquareText size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
                     ),
-                    // Use a space to force the badge to render, then style it as a dot
-                    tabBarBadge: unreadCount > 0 ? '' : undefined,
+                    // Use actual count, but show '9+' for more than 9
+                    tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
                     tabBarBadgeStyle: {
-                        backgroundColor: Colors.online, // Use bright green for visibility
-                        minWidth: 12,
-                        height: 12,
-                        maxHeight: 12,
-                        maxWidth: 12,
-                        borderRadius: 6,
+                        backgroundColor: Colors.online, // Green for chats
+                        color: '#000', // Black text for readability
+                        fontSize: 10,
+                        fontWeight: '800',
+                        minWidth: 16,
+                        height: 16,
+                        borderRadius: 8,
                         borderWidth: 1.5,
-                        borderColor: Colors.background, // Add border to make it pop
+                        borderColor: Colors.background,
                         marginTop: 4,
                     },
                 }}
@@ -106,6 +107,18 @@ export default function TabLayout() {
                 options={{
                     title: 'Requests',
                     tabBarIcon: ({ color, focused }) => <Group size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,
+                    tabBarBadge: requestCount > 0 ? '' : undefined,
+                    tabBarBadgeStyle: {
+                        backgroundColor: Colors.error, // Red dot for requests
+                        minWidth: 10,
+                        height: 10,
+                        maxHeight: 10,
+                        maxWidth: 10,
+                        borderRadius: 5,
+                        borderWidth: 1.5,
+                        borderColor: Colors.background,
+                        marginTop: 4,
+                    },
                 }}
             />
 
@@ -114,6 +127,18 @@ export default function TabLayout() {
                 options={{
                     title: 'Settings',
                     tabBarIcon: ({ color, focused }) => <Settings size={24} color={color} strokeWidth={focused ? 2.5 : 2} />,
+                    tabBarBadge: !isProfileComplete ? '' : undefined,
+                    tabBarBadgeStyle: {
+                        backgroundColor: Colors.error,
+                        minWidth: 10,
+                        height: 10,
+                        maxHeight: 10,
+                        maxWidth: 10,
+                        borderRadius: 5,
+                        borderWidth: 1.5,
+                        borderColor: Colors.background,
+                        marginTop: 4,
+                    },
                 }}
             />
         </Tabs>

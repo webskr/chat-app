@@ -262,10 +262,42 @@ export default function ControlsScreen() {
                 <View style={styles.section}>
                     <ThemedText style={styles.sectionTitle}>Chat Management</ThemedText>
                     <ThemedText style={styles.description}>
-                        Choose a timer to apply to all your chats. Messages older than the selected time will be automatically deleted for both you and the recipient.
+                        Control how long messages stay in your account. Messages older than the selected time will be automatically hidden for you. This does not affect the recipient's view.
                     </ThemedText>
 
                     <View style={styles.controlContainer}>
+                        {/* Individual Chat Toggle */}
+                        <View style={styles.switchRow}>
+                            <View style={styles.settingTextContainer}>
+                                <ThemedText style={styles.settingLabel}>Individual Chats</ThemedText>
+                                <ThemedText style={styles.settingCaption}>Apply auto-delete to 1-on-1 conversations.</ThemedText>
+                            </View>
+                            <Switch
+                                value={user?.global_auto_delete_individual !== 0}
+                                onValueChange={(val) => updatePrivacySetting('global_auto_delete_individual', val)}
+                                trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
+                                thumbColor={Colors.white}
+                                disabled={isUpdating}
+                            />
+                        </View>
+                        <View style={styles.innerDivider} />
+
+                        {/* Group Chat Toggle */}
+                        <View style={styles.switchRow}>
+                            <View style={styles.settingTextContainer}>
+                                <ThemedText style={styles.settingLabel}>Group Chats</ThemedText>
+                                <ThemedText style={styles.settingCaption}>Apply auto-delete to group conversations.</ThemedText>
+                            </View>
+                            <Switch
+                                value={user?.global_auto_delete_group !== 0}
+                                onValueChange={(val) => updatePrivacySetting('global_auto_delete_group', val)}
+                                trackColor={{ false: Colors.surfaceLight, true: Colors.primary }}
+                                thumbColor={Colors.white}
+                                disabled={isUpdating}
+                            />
+                        </View>
+                        <View style={styles.innerDivider} />
+
                         <TouchableOpacity
                             style={[styles.dropdownHeader, isDropdownOpen && styles.dropdownHeaderOpen]}
                             onPress={toggleDropdown}

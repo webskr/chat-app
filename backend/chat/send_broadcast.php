@@ -110,8 +110,15 @@ if (!empty($data->sender_id) && (!empty($data->message) || !empty($data->image_p
 
         $successCount = 0;
         
-        // Prepare token statement once
-        $tokenStmt = $pdo->prepare("SELECT fcm_token FROM user_devices WHERE user_id = :id AND fcm_token IS NOT NULL");
+        // Prepare token statement once - Only for users with notifications enabled
+        $tokenStmt = $pdo->prepare("
+            SELECT d.fcm_token, u.hide_notification_message, u.hide_notification_name
+            FROM user_devices d 
+            JOIN users u ON d.user_id = u.id 
+            WHERE d.user_id = :id 
+            AND d.fcm_token IS NOT NULL 
+            AND u.notifications_enabled = 1
+        ");
 
         foreach ($allUsers as $receiver_id) {
             $user1_id = min((int)$data->sender_id, (int)$receiver_id);
@@ -150,19 +157,22 @@ if (!empty($data->sender_id) && (!empty($data->message) || !empty($data->image_p
             // Push Notification (only if sent immediately)
             if ($status === 'sent') {
                  $tokenStmt->execute([':id' => $receiver_id]);
-                 $tokens = $tokenStmt->fetchAll(PDO::FETCH_COLUMN);
+                 $tokens = $tokenStmt->fetchAll(PDO::FETCH_ASSOC);
                  
-                 foreach ($tokens as $token) {
-                     if ($token) {
+                  foreach ($tokens as $row) {
+                     if ($row['fcm_token']) {
                          try {
-                             sendFCMNotification($token, $push_title, $push_body, [
-                                 'type' => 'new_message',
-                                 'conversation_id' => $convId,
-                                 'sender_id' => $data->sender_id
-                             ]);
+                              $title = $row['hide_notification_name'] == 1 ? "Vegarm Official" : $push_title;
+                              $body = $row['hide_notification_message'] == 1 ? "New Notification" : $push_body;
+
+                              sendFCMNotification($row['fcm_token'], $title, $body, [
+                                  'type' => 'new_message',
+                                  'conversation_id' => $convId,
+                                  'sender_id' => $data->sender_id
+                              ]);
                          } catch (Exception $e) {}
                      }
-                 }
+                  }
             }
         }
 

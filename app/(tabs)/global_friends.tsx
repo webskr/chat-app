@@ -117,23 +117,34 @@ export default function GlobalFriendsScreen() {
                                     )}
                                 </ThemedText>
                                 {item.is_official == 1 && (
-                                    <BadgeCheck size={16} color={Colors.background} fill={Colors.verifiedBackground} />
+                                    <BadgeCheck size={16} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
                                 )}
                             </View>
                         </View>
 
                         {isFriend ? (
                             <TouchableOpacity
-                                style={[styles.actionButton, styles.chatButton]}
-                                onPress={() => router.push({
-                                    pathname: '/chat/[id]',
-                                    params: {
-                                        id: item.id,
-                                        user: item.username,
-                                        avatar_id: item.avatar_id,
-                                        avatar_url: item.avatar_url // Pass it here
+                                style={[
+                                    styles.actionButton, 
+                                    styles.chatButton,
+                                    (item.is_official == 1 && currentUser?.is_official != 1) && { opacity: 0.5 }
+                                ]}
+                                onPress={() => {
+                                    if (item.is_official == 1 && currentUser?.is_official != 1) {
+                                        Alert.alert('Note', 'Only official accounts can receive messages from other official accounts or initiate chats.');
+                                        return;
                                     }
-                                })}
+                                    router.push({
+                                        pathname: '/chat/[id]',
+                                        params: {
+                                            id: item.id,
+                                            user: item.username,
+                                            avatar_id: item.avatar_id,
+                                            avatar_url: item.avatar_url,
+                                            is_official: item.is_official?.toString()
+                                        }
+                                    });
+                                }}
                             >
                                 <MessageSquare size={18} color={Colors.white} />
                                 <ThemedText style={styles.btnText}>Chat</ThemedText>
@@ -270,6 +281,8 @@ const styles = StyleSheet.create({
     username: {
         fontSize: 16,
         color: Colors.text,
+        flexShrink: 1,
+        marginRight: 4,
     },
     youIndicator: {
         fontSize: 14,

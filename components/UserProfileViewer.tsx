@@ -200,7 +200,7 @@ export function UserProfileViewer({
                                     {user.display_name || user.username}
                                 </ThemedText>
                                 {user.is_official == 1 && (
-                                    <BadgeCheck size={24} color={Colors.background} fill={Colors.verifiedBackground} />
+                                    <BadgeCheck size={24} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
                                 )}
                             </View>
                             <ThemedText style={styles.handle}>@{user.username}</ThemedText>

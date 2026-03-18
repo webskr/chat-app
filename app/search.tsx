@@ -11,7 +11,7 @@ import { formatChatTime } from '../utils/time';
 import { useUser } from '../context/UserContext';
 import { HighlightedText } from '../components/HighlightedText';
 import { router } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, BadgeCheck } from 'lucide-react-native';
 import { Config } from '../constants/Config';
 import { getAvatarById } from '../constants/Avatars';
 import { GroupDefaultIcon } from '../components/icons/GroupDefaultIcon';
@@ -110,9 +110,20 @@ export default function SearchScreen() {
                     />
                     <View style={styles.content}>
                         <View style={styles.topRow}>
-                            <ThemedText type="defaultSemiBold" style={styles.name} numberOfLines={1}>
-                                {chatName}
-                            </ThemedText>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                                <ThemedText type="defaultSemiBold" style={styles.name} numberOfLines={1}>
+                                    {chatName}
+                                </ThemedText>
+                                {(
+                                    item.other_is_official == 1 || 
+                                    item.other_is_official === '1' ||
+                                    chatName === 'Vegram Official' ||
+                                    chatName === 'VegarmOfficial' ||
+                                    item.other_username === 'VegarmOfficial'
+                                ) && (
+                                    <BadgeCheck size={16} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
+                                )}
+                            </View>
                             <ThemedText style={styles.time}>{formatChatTime(item.timestamp)}</ThemedText>
                         </View>
                         <HighlightedText

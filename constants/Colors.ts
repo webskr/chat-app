@@ -21,6 +21,10 @@ export const Colors = {
   glassBorder: 'rgba(255, 255, 255, 0.12)',
   verifiedBackground: '#4ADE80', // Green for Verified Badge
 
+  // Official Account Badge
+  officialBadge: '#026614ff', // Blue for Official Account Badge
+  officialBadgeBorder: '#5aff57', // Border/Tick color for Official Account Badge
+
   // Status
   online: '#25D366', // Matching primary green
   offline: '#64748B',
