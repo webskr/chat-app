@@ -461,7 +461,7 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
                         ]
                     ];
 
-                    $ch = curl_init('http://localhost:3000/internal-emit');
+                    $ch = curl_init('http://localhost:8082/internal-emit');
                     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($socket_payload));
                     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
                     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);

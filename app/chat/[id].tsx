@@ -616,6 +616,7 @@ export default function ChatDetailScreen() {
                 if (currentUser) {
                     socket.current?.emit('user:identify', currentUser.id);
                     socket.current?.emit('user_online', { user_id: currentUser.id });
+                    socket.current?.emit('chat_open', { chatId: id });
                 }
 
                 // [Sync] Trigger offline sync on reconnect using safeSync (lock + throttle)
@@ -1217,6 +1218,7 @@ export default function ChatDetailScreen() {
                 clearInterval(heartbeatInterval);
                 setActiveChatId(null);
                 if (socket.current) {
+                    socket.current.emit('chat_close');
                     socket.current.disconnect();
                     socket.current = null;
                 }

@@ -8700,3 +8700,5 @@
 2026-03-14 22:00:26 - REQUEST RECEIVED
 2026-03-14 22:00:26 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
 2026-03-14 22:00:26 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11403202611000058892.png
+2026-03-19 00:12:26 - AUDIO UPLOAD REQUEST RECEIVED
+2026-03-19 00:12:26 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/voice/voice_69baf2125489d_1773859346.m4a

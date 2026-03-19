@@ -32,7 +32,7 @@ export const Config = {
                 // If it's a typical local IP or localhost, use port 8082
                 // (Cloudflare tunnels usually proxy to 8082 anyway if configured for single-tunnel)
                 if (url.hostname === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(url.hostname)) {
-                    return `${url.protocol}//${url.hostname}:8082`;
+                    return `${url.protocol}//${url.hostname}:3000`;
                 }
                 // For ngrok/cloudflare (non-IP hostnames), we might use the base URL (port 80 proxy)
                 return `${url.protocol}//${url.hostname}`;
@@ -42,7 +42,7 @@ export const Config = {
         }
 
         if (this.USE_LOCALHOST) {
-            return 'http://localhost:8082';
+            return 'http://localhost:3000';
         }
         return `http://${this.IP_ADDRESS}:8082`;
     }

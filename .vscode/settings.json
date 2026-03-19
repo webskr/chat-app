@@ -1,3 +1,15 @@
 {
-    "java.configuration.updateBuildConfiguration": "automatic"
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "files.exclude": {
+        "backend/vendor/**/.php-cs-fixer.dist.php": true,
+        "backend/vendor/**/tests": true,
+        "backend/vendor/**/src/CachedKeySet.php": true
+    },
+    "intelephense.files.exclude": [
+        "**/node_modules/**",
+        "**/bower_components/**",
+        "**/vendor/**/tests/**",
+        "**/vendor/**/vendor/**",
+        "**/vendor/**/src/CachedKeySet.php"
+    ]
 }
