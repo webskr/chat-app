@@ -7,6 +7,7 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Updates from 'expo-updates';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 import { GoogleDriveService } from '../../utils/GoogleDriveService';
 const LAST_BACKUP_KEY = 'last_backup_timestamp';
@@ -284,7 +285,7 @@ export default function BackupSettingsScreen() {
                     <ShieldCheck color="#22c55e" size={48} />
                     <Text style={styles.statusTitle}>Your chats are E2EE</Text>
                     <Text style={styles.statusSubtitle}>
-                        Backups are encrypted using your password. Not even Vegarm can read them.
+                        Backups are encrypted using your password. Not even Vegram can read them.
                     </Text>
                     {lastBackup && (
                         <Text style={styles.lastBackup}>Last backup: {lastBackup}</Text>

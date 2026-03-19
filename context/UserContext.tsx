@@ -196,7 +196,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 setIsDbReady(true);
 
                 console.log("[UserContext] isDbReady set to true.");
-                // 🗂️ Ensure Android/media/com.skr.vegarm folder exists
+                // 🗂️ Ensure Android/media/com.skr.vegram folder exists
                 initMediaFolder().catch(() => { });
             }
         } catch (error) {
@@ -259,7 +259,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             if (newUser) {
                 await LocalDatabaseService.initDB(newUser.id.toString());
                 setIsDbReady(true);
-                // 🗂️ Ensure Android/media/com.skr.vegarm folder exists (first login)
+                // 🗂️ Ensure Android/media/com.skr.vegram folder exists (first login)
                 initMediaFolder().catch(() => { });
             } else {
                 setIsDbReady(false);

@@ -198,7 +198,7 @@ export default function GlobalFriendsScreen() {
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
-                <ThemedText type="title" style={styles.headerTitle}>Vegarm</ThemedText>
+                <ThemedText type="title" style={styles.headerTitle}>Vegram</ThemedText>
                 <TouchableOpacity onPress={() => {/* More options */ }}>
                     <MoreVertical size={22} color={Colors.textSecondary} />
                 </TouchableOpacity>

@@ -17,8 +17,8 @@ if (empty($name) || empty($email) || empty($message)) {
 
 // Configuration
 $to = 'draj88540@gmail.com'; // User provided email
-$subject = "New Feedback from Vegarm App: " . substr($message, 0, 30) . "...";
-$headers = "From: no-reply@vegarm.com\r\n";
+$subject = "New Feedback from Vegram App: " . substr($message, 0, 30) . "...";
+$headers = "From: no-reply@vegram.app\r\n";
 $headers .= "Reply-To: $email\r\n";
 $headers .= "X-Mailer: PHP/" . phpversion();
 $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";

@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "vegarm",
-    "slug": "vegarm",
-    "scheme": "vegarm",
+    "name": "vegram",
+    "slug": "vegram",
+    "scheme": "vegram",
     "version": "1.0.0",
     "orientation": "portrait",
     "newArchEnabled": false,
@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.skr.vegarm"
+      "bundleIdentifier": "com.skr.vegram"
     },
     "android": {
-      "package": "com.skr.vegarm",
+      "package": "com.skr.vegram",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -46,10 +46,10 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow Vegarm to access your photos",
-          "savePhotosPermission": "Allow Vegarm to save photos",
+          "photosPermission": "Allow Vegram to access your photos",
+          "savePhotosPermission": "Allow Vegram to save photos",
           "isAccessMediaLocationEnabled": true,
-          "videoPermission": "Allow Vegarm to access your videos"
+          "videoPermission": "Allow Vegram to access your videos"
         }
       ],
       "expo-image-picker",

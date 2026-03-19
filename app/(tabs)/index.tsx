@@ -132,8 +132,8 @@ export default function ChatScreen() {
                                     item.other_is_official == 1 || 
                                     item.other_is_official === '1' || 
                                     displayName === 'Vegram Official' || 
-                                    displayName === 'VegarmOfficial' || 
-                                    item.other_username === 'VegarmOfficial'
+                                    displayName === 'VegramOfficial' || 
+                                    item.other_username === 'VegramOfficial'
                                 ) && (
                                     <BadgeCheck size={16} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
                                 )}
@@ -201,7 +201,7 @@ export default function ChatScreen() {
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
-                <ThemedText type="title" style={styles.headerTitle}>Vegarm</ThemedText>
+                <ThemedText type="title" style={styles.headerTitle}>Vegram</ThemedText>
 
                 <View style={{ flexDirection: 'row', gap: 16 }}>
                     {/* Independent Create Group button REMOVED */}

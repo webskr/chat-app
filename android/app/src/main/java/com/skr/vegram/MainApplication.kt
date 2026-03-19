@@ -1,4 +1,4 @@
-package com.skr.vegarm
+package com.skr.vegram
 
 import android.app.Application
 import android.content.res.Configuration

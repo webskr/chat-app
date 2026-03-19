@@ -18,7 +18,7 @@ export default function AccountDeletionScreen() {
 
             <ScrollView contentContainerStyle={styles.content}>
                 <ThemedText style={styles.intro}>
-                    We respect your right to control your data. If you no longer wish to use Vegarm, you can permanently delete your account at any time.
+                    We respect your right to control your data. If you no longer wish to use Vegram, you can permanently delete your account at any time.
                 </ThemedText>
 
                 <ThemedText style={styles.paragraph}>
@@ -26,14 +26,14 @@ export default function AccountDeletionScreen() {
                 </ThemedText>
 
                 <View style={styles.section}>
-                    <ThemedText type="subtitle" style={styles.sectionTitle}>How to Delete Your Vegarm Account</ThemedText>
+                    <ThemedText type="subtitle" style={styles.sectionTitle}>How to Delete Your Vegram Account</ThemedText>
                     <ThemedText style={styles.paragraph}>
                         You can delete your account in two simple ways:
                     </ThemedText>
 
                     <ThemedText style={styles.subTitle}>Option 1: Delete Account from the App (Recommended)</ThemedText>
                     <View style={styles.bulletList}>
-                        <BulletPoint text="Open the Vegarm app." />
+                        <BulletPoint text="Open the Vegram app." />
                         <BulletPoint text="Go to Settings." />
                         <BulletPoint text="Select Account." />
                         <BulletPoint text="Tap Delete Account." />
@@ -55,7 +55,7 @@ export default function AccountDeletionScreen() {
                         <ThemedText style={[styles.paragraph, { marginTop: 8 }]}>📌 Include the following details:</ThemedText>
                         <View style={styles.bulletList}>
                             <BulletPoint text="Registered email address." />
-                            <BulletPoint text="Subject: Account Deletion Request – Vegarm" />
+                            <BulletPoint text="Subject: Account Deletion Request – Vegram" />
                         </View>
                         <ThemedText style={[styles.paragraph, { marginTop: 8 }]}>
                             We may ask for verification to ensure account security.
@@ -66,7 +66,7 @@ export default function AccountDeletionScreen() {
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>What Happens When You Delete Your Account</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        When your Vegarm account is deleted:
+                        When your Vegram account is deleted:
                     </ThemedText>
 
                     <ThemedText style={styles.subTitle}>Data That Is Deleted</ThemedText>
@@ -108,7 +108,7 @@ export default function AccountDeletionScreen() {
                     <ThemedText type="subtitle" style={styles.sectionTitle}>Important Notes</ThemedText>
                     <View style={styles.bulletList}>
                         <BulletPoint text="Deleted accounts cannot be restored." />
-                        <BulletPoint text="You will need to create a new account if you wish to use Vegarm again." />
+                        <BulletPoint text="You will need to create a new account if you wish to use Vegram again." />
                         <BulletPoint text="Deleting the app does not delete your account. You must follow the deletion process to remove your data." />
                     </View>
                 </View>
@@ -116,7 +116,7 @@ export default function AccountDeletionScreen() {
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>Children’s Data</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm does not allow users under 13 years of age. If a child account is discovered, it will be removed immediately.
+                        Vegram does not allow users under 13 years of age. If a child account is discovered, it will be removed immediately.
                     </ThemedText>
                 </View>
 

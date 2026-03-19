@@ -107,7 +107,7 @@ export default function SettingsScreen() {
         <SafeAreaView style={styles.container} edges={['top']}>
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.header}>
-                    <ThemedText type="title" style={styles.headerTitle}>Vegarm</ThemedText>
+                    <ThemedText type="title" style={styles.headerTitle}>Vegram</ThemedText>
                     <TouchableOpacity onPress={() => {/* More options */ }}>
                         <MoreVertical size={22} color={Colors.textSecondary} />
                     </TouchableOpacity>

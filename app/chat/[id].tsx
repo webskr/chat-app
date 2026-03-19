@@ -2760,7 +2760,7 @@ export default function ChatDetailScreen() {
                                 <ThemedText style={styles.unblockText}>Tap to unblock</ThemedText>
                             </TouchableOpacity>
                         </View>
-                    ) : ((targetUserProfile?.is_official == 1 || isOfficialParam === '1' || otherUsername === 'Vegram Official' || otherUsername === 'VegarmOfficial' || targetUserProfile?.username === 'VegarmOfficial') && currentUser?.is_official != 1) ? (
+                    ) : ((targetUserProfile?.is_official == 1 || isOfficialParam === '1' || otherUsername === 'Vegram Official' || otherUsername === 'VegramOfficial' || targetUserProfile?.username === 'VegramOfficial') && currentUser?.is_official != 1) ? (
                         <View style={{ height: 60, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.glassBorder }}>
                             <ThemedText style={{ color: Colors.textSecondary, fontSize: 13, fontWeight: '600' }}>Only Vegram can send messages</ThemedText>
                         </View>

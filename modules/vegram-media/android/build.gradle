@@ -5,11 +5,11 @@ apply from: "${project.rootDir}/../node_modules/expo-modules-core/android/ExpoMo
 applyKotlinExpoModulesCorePlugin()
 useDefaultAndroidSdkVersions()
 
-group = 'expo.modules.vegarmmedia'
+group = 'expo.modules.vegrammedia'
 version = '1.0.0'
 
 android {
-  namespace "expo.modules.vegarmmedia"
+  namespace "expo.modules.vegrammedia"
 
   defaultConfig {
     versionCode 1

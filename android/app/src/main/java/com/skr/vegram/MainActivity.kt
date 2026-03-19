@@ -1,4 +1,4 @@
-package com.skr.vegarm
+package com.skr.vegram
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

@@ -1,8 +1,8 @@
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
-import { Platform } from 'react-native';
+import { Platform, Dimensions } from 'react-native';
 import { Config } from '../constants/Config';
-import { getPublicMediaDirectory, downloadMedia } from '../modules/vegarm-media';
+import { getPublicMediaDirectory, downloadMedia } from '../modules/vegram-media';
 
 /**
  * Media Type enum for folder organization
@@ -11,7 +11,7 @@ export type MediaType = 'Images' | 'Videos' | 'Documents' | 'Thumbnails' | 'Cach
 
 // Hardened: Use native path if available (Android Scoped Storage), fallback to internal.
 const publicDir = getPublicMediaDirectory();
-const INTERNAL_BASE_DIR = `${FileSystem.documentDirectory}vegarm/`;
+const INTERNAL_BASE_DIR = `${FileSystem.documentDirectory}vegram/`;
 let MEDIA_BASE_DIR = publicDir ? publicDir : INTERNAL_BASE_DIR;
 
 const FOLDERS: { [key in MediaType]: string } = {
@@ -29,7 +29,7 @@ export class MediaStorageService {
      */
     static async init(): Promise<void> {
         try {
-            // If using public native directory, folders are pre-created in VegarmMediaModule.kt
+            // If using public native directory, folders are pre-created in VegramMediaModule.kt
             if (publicDir && Platform.OS === 'android') {
                 console.log('[Storage] Using native public directory, skipping Expo folder creation.');
                 return;
@@ -160,7 +160,7 @@ export class MediaStorageService {
             if (Platform.OS === 'android' && isGalleryMedia) {
                 const { status } = await MediaLibrary.requestPermissionsAsync(true); // Request write-only
                 if (status === 'granted') {
-                    const ALBUM_NAME = 'Vegarm';
+                    const ALBUM_NAME = 'Vegram';
                     const asset = await MediaLibrary.createAssetAsync(resultUri);
 
                     // Check if album exists
@@ -196,8 +196,8 @@ export class MediaStorageService {
                 if (publicDir && Platform.OS === 'android') {
                     const subfolder = FOLDERS[mediaType].replace('/', '');
                     console.log(`[Storage] Using native copy for ${expectedFilename} into ${subfolder}`);
-                    const VegarmMedia = require('../modules/vegarm-media');
-                    const result = await VegarmMedia.copyMedia(localUri, expectedFilename, subfolder);
+                    const VegramMedia = require('../modules/vegram-media');
+                    const result = await VegramMedia.copyMedia(localUri, expectedFilename, subfolder);
                     if (result) return result;
                     
                     console.warn('[Storage] Native copyMedia failed or unavailable, falling back to internal storage.');

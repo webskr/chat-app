@@ -105,7 +105,7 @@ if (!empty($data->sender_id) && (!empty($data->message) || !empty($data->image_p
         
         // Push notification preparation
         include_once '../includes/fcm_service.php';
-        $push_title = "Vegarm Official";
+        $push_title = "Vegram Official";
         $push_body = $message_type === 'image' ? "📷 New Announcement" : (mb_substr($message_text, 0, 40) . "...");
 
         $successCount = 0;
@@ -162,7 +162,7 @@ if (!empty($data->sender_id) && (!empty($data->message) || !empty($data->image_p
                   foreach ($tokens as $row) {
                      if ($row['fcm_token']) {
                          try {
-                              $title = $row['hide_notification_name'] == 1 ? "Vegarm Official" : $push_title;
+                              $title = $row['hide_notification_name'] == 1 ? "Vegram Official" : $push_title;
                               $body = $row['hide_notification_message'] == 1 ? "New Notification" : $push_body;
 
                               sendFCMNotification($row['fcm_token'], $title, $body, [

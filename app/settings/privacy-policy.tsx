@@ -13,7 +13,7 @@ export default function PrivacyPolicyScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <ChevronLeft size={24} color={Colors.text} />
                 </TouchableOpacity>
-                <ThemedText type="title" style={styles.headerTitle}>Privacy Policy for Vegarm</ThemedText>
+                <ThemedText type="title" style={styles.headerTitle}>Privacy Policy for Vegram</ThemedText>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
@@ -21,15 +21,15 @@ export default function PrivacyPolicyScreen() {
                 <ThemedText style={styles.lastUpdated}>Last Updated: Feb 16, 2026</ThemedText>
 
                 <View style={styles.section}>
-                    <ThemedText type="subtitle" style={styles.sectionTitle}>Welcome to Vegarm.</ThemedText>
+                    <ThemedText type="subtitle" style={styles.sectionTitle}>Welcome to Vegram.</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Your privacy and trust matter to us. This Privacy Policy explains what data we collect, why we collect it, how we protect it, and what control you have over your information when using Vegarm.
+                        Your privacy and trust matter to us. This Privacy Policy explains what data we collect, why we collect it, how we protect it, and what control you have over your information when using Vegram.
                     </ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm is a secure human-to-human chatting application, including personal self-chat, designed to give users private and safe communication.
+                        Vegram is a secure human-to-human chatting application, including personal self-chat, designed to give users private and safe communication.
                     </ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        By installing or using Vegarm, you agree to this Privacy Policy.
+                        By installing or using Vegram, you agree to this Privacy Policy.
                     </ThemedText>
                 </View>
 
@@ -41,7 +41,7 @@ export default function PrivacyPolicyScreen() {
 
                     <ThemedText style={styles.subTitle}>1.1 Account Information</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        When you create a Vegarm account, we collect:
+                        When you create a Vegram account, we collect:
                     </ThemedText>
                     <View style={styles.bulletList}>
                         <BulletPoint text="Email address: Required to create your account, secure your login, and help recover your account if you forget your password." />
@@ -57,7 +57,7 @@ export default function PrivacyPolicyScreen() {
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>2. Chat & Message Data (Very Important)</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm is built with privacy-first architecture.
+                        Vegram is built with privacy-first architecture.
                     </ThemedText>
 
                     <ThemedText style={styles.subTitle}>2.1 End-to-End Encrypted Messages</ThemedText>
@@ -66,7 +66,7 @@ export default function PrivacyPolicyScreen() {
                     </ThemedText>
                     <View style={styles.bulletList}>
                         <BulletPoint text="Only you and the person you chat with can read messages." />
-                        <BulletPoint text="Even Vegarm cannot read your messages." />
+                        <BulletPoint text="Even Vegram cannot read your messages." />
                     </View>
 
                     <ThemedText style={styles.subTitle}>2.2 What We Do NOT Read</ThemedText>
@@ -97,7 +97,7 @@ export default function PrivacyPolicyScreen() {
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>3. Media, Voice & Files (Explained Simply)</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm allows users to send images, videos, voice messages, GIFs, and files (if supported).
+                        Vegram allows users to send images, videos, voice messages, GIFs, and files (if supported).
                     </ThemedText>
 
                     <ThemedText style={styles.subTitle}>3.1 How Media Is Used</ThemedText>
@@ -127,7 +127,7 @@ export default function PrivacyPolicyScreen() {
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>4. Device & Technical Information</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        To keep Vegarm stable and secure, we may collect:
+                        To keep Vegram stable and secure, we may collect:
                     </ThemedText>
                     <View style={styles.bulletList}>
                         <BulletPoint text="Device type (Android model, etc.)." />
@@ -144,7 +144,7 @@ export default function PrivacyPolicyScreen() {
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>5. App Permissions (Why We Ask Them)</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm requests permissions only when required.
+                        Vegram requests permissions only when required.
                     </ThemedText>
 
                     <View style={styles.bulletList}>
@@ -247,7 +247,7 @@ export default function PrivacyPolicyScreen() {
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>10. Children’s Privacy</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm is intended for users 13 years and older.
+                        Vegram is intended for users 13 years and older.
                     </ThemedText>
                     <View style={styles.bulletList}>
                         <BulletPoint text="We do not knowingly collect data from children under 13." />
@@ -276,7 +276,7 @@ export default function PrivacyPolicyScreen() {
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>13. Your Consent</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        By using Vegarm:
+                        By using Vegram:
                     </ThemedText>
                     <View style={styles.bulletList}>
                         <BulletPoint text="You agree to this Privacy Policy." />

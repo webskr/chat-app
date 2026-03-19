@@ -394,7 +394,7 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
                     $receiver_info = $notif_stmt->fetch(PDO::FETCH_ASSOC);
 
                     if ($receiver_info && !empty($receiver_info['device_token']) && $receiver_info['is_muted'] == 0 && $receiver_info['notifications_enabled'] == 1) {
-                        $title = $receiver_info['hide_notification_name'] == 1 ? "Vegarm" : $sender_name;
+                        $title = $receiver_info['hide_notification_name'] == 1 ? "Vegram" : $sender_name;
                         $notificationBody = $receiver_info['hide_notification_message'] == 1 ? "New message" : $body;
 
                         $payload = [

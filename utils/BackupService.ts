@@ -11,14 +11,14 @@ import { AES } from '@stablelib/aes';
 import { GCM } from '@stablelib/gcm';
 import JSZip from 'jszip';
 
-import { getPublicMediaDirectory, writeMedia } from '../modules/vegarm-media';
+import { getPublicMediaDirectory, writeMedia } from '../modules/vegram-media';
 
 export class BackupService {
     private static getBaseDir() {
         const publicDir = getPublicMediaDirectory();
         if (publicDir) return publicDir;
         // Fallback for Expo Go
-        return `${FileSystem.documentDirectory?.replace('files/', 'media/')}com.skr.vegarm/`;
+        return `${FileSystem.documentDirectory?.replace('files/', 'media/')}com.skr.vegram/`;
     }
 
     private static get BACKUP_DIR() { return `${this.getBaseDir()}backups/`; }

@@ -1,4 +1,4 @@
-package expo.modules.vegarmmedia
+package expo.modules.vegrammedia
 
 import android.content.Context
 import expo.modules.kotlin.modules.Module
@@ -9,35 +9,35 @@ import java.net.HttpURLConnection
 import java.net.URL
 import android.util.Base64
 
-class VegarmMediaModule : Module() {
+class VegramMediaModule : Module() {
   override fun definition() = ModuleDefinition {
-    Name("VegarmMedia")
+    Name("VegramMedia")
 
     Function("getPublicMediaDirectory") {
       val context: Context = appContext.reactContext ?: return@Function ""
       
-      // Get the primary external media directory (Android/media/com.skr.vegarm/)
+      // Get the primary external media directory (Android/media/com.skr.vegram/)
       val mediaDirs = context.externalMediaDirs
       if (mediaDirs.isNotEmpty() && mediaDirs[0] != null) {
           val mediaDir = mediaDirs[0]
           
-          // Create the app-specific subfolder inside Android/media/com.skr.vegarm/
-          val vegarmDir = File(mediaDir, "Vegarm")
-          if (!vegarmDir.exists()) {
-              vegarmDir.mkdirs()
+          // Create the app-specific subfolder inside Android/media/com.skr.vegram/
+          val vegramDir = File(mediaDir, "Vegram")
+          if (!vegramDir.exists()) {
+              vegramDir.mkdirs()
           }
           
           // Pre-create all subdirectories natively to avoid Expo FileSystem Scoped Storage errors
           val subFolders = listOf("images", "videos", "documents", "thumbnails", "backups", "cache")
           for (folder in subFolders) {
-              val subDir = File(vegarmDir, folder)
+              val subDir = File(vegramDir, folder)
               if (!subDir.exists()) {
                   subDir.mkdirs()
               }
           }
           
           // Return absolute URI with file:// scheme and trailing slash
-          return@Function "file://${vegarmDir.absolutePath}/"
+          return@Function "file://${vegramDir.absolutePath}/"
       }
       
       // Fallback: native path not available
@@ -46,7 +46,7 @@ class VegarmMediaModule : Module() {
 
     /**
      * Downloads a file from a URL using native Java HTTP, writing directly into
-     * Android/media/com.skr.vegarm/Vegarm/<subfolder>/<filename>
+     * Android/media/com.skr.vegram/Vegram/<subfolder>/<filename>
      * This bypasses Expo FileSystem which lacks WRITE access to Android/media.
      *
      * @param url       The full HTTP/HTTPS URL to download from.
@@ -63,7 +63,7 @@ class VegarmMediaModule : Module() {
       }
       
       val mediaDir = mediaDirs[0]
-      val destDir = File(File(mediaDir, "Vegarm"), subfolder)
+      val destDir = File(File(mediaDir, "Vegram"), subfolder)
       if (!destDir.exists()) {
           destDir.mkdirs()
       }
@@ -114,7 +114,7 @@ class VegarmMediaModule : Module() {
       }
       
       val mediaDir = mediaDirs[0]
-      val destDir = File(File(mediaDir, "Vegarm"), subfolder)
+      val destDir = File(File(mediaDir, "Vegram"), subfolder)
       if (!destDir.exists()) {
           destDir.mkdirs()
       }
@@ -142,7 +142,7 @@ class VegarmMediaModule : Module() {
       }
       
       val mediaDir = mediaDirs[0]
-      val destDir = File(File(mediaDir, "Vegarm"), subfolder)
+      val destDir = File(File(mediaDir, "Vegram"), subfolder)
       if (!destDir.exists()) {
           destDir.mkdirs()
       }

@@ -21,19 +21,19 @@ export default function TermsAndConditionsScreen() {
                 <ThemedText style={styles.lastUpdated}>Last Updated: Feb 16, 2026</ThemedText>
 
                 <View style={styles.section}>
-                    <ThemedText type="subtitle" style={styles.sectionTitle}>Welcome to Vegarm.</ThemedText>
+                    <ThemedText type="subtitle" style={styles.sectionTitle}>Welcome to Vegram.</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        These Terms & Conditions (“Terms”) explain the rules, responsibilities, and rights that apply when you use the Vegarm application.
+                        These Terms & Conditions (“Terms”) explain the rules, responsibilities, and rights that apply when you use the Vegram application.
                     </ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        By downloading, installing, creating an account, or using Vegarm, you agree to these Terms. If you do not agree, please do not use the app.
+                        By downloading, installing, creating an account, or using Vegram, you agree to these Terms. If you do not agree, please do not use the app.
                     </ThemedText>
                 </View>
 
                 <View style={styles.section}>
-                    <ThemedText type="subtitle" style={styles.sectionTitle}>1. About Vegarm</ThemedText>
+                    <ThemedText type="subtitle" style={styles.sectionTitle}>1. About Vegram</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm is a human-to-human chatting application, including self-chat, that allows users to:
+                        Vegram is a human-to-human chatting application, including self-chat, that allows users to:
                     </ThemedText>
                     <View style={styles.bulletList}>
                         <BulletPoint text="Send messages." />
@@ -41,14 +41,14 @@ export default function TermsAndConditionsScreen() {
                         <BulletPoint text="Communicate privately using secure technologies." />
                     </View>
                     <ThemedText style={[styles.paragraph, { marginTop: 8 }]}>
-                        Vegarm is provided to help users communicate safely and responsibly.
+                        Vegram is provided to help users communicate safely and responsibly.
                     </ThemedText>
                 </View>
 
                 <View style={styles.section}>
-                    <ThemedText type="subtitle" style={styles.sectionTitle}>2. Eligibility to Use Vegarm</ThemedText>
+                    <ThemedText type="subtitle" style={styles.sectionTitle}>2. Eligibility to Use Vegram</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        To use Vegarm:
+                        To use Vegram:
                     </ThemedText>
                     <View style={styles.bulletList}>
                         <BulletPoint text="You must be 13 years of age or older." />
@@ -56,7 +56,7 @@ export default function TermsAndConditionsScreen() {
                         <BulletPoint text="You must provide accurate and truthful information during registration." />
                     </View>
                     <ThemedText style={[styles.paragraph, { marginTop: 8, fontWeight: 'bold' }]}>
-                        If you are under 13, you are not permitted to use Vegarm.
+                        If you are under 13, you are not permitted to use Vegram.
                     </ThemedText>
                 </View>
 
@@ -65,7 +65,7 @@ export default function TermsAndConditionsScreen() {
 
                     <ThemedText style={styles.subTitle}>3.1 Account Creation</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        To use Vegarm, you must create an account using a valid email address and a password.
+                        To use Vegram, you must create an account using a valid email address and a password.
                     </ThemedText>
                     <ThemedText style={styles.paragraph}>
                         You are responsible for keeping your login credentials secure and all activities that occur under your account.
@@ -78,14 +78,14 @@ export default function TermsAndConditionsScreen() {
                         <BulletPoint text="If you believe your account is compromised, contact us immediately." />
                     </View>
                     <ThemedText style={[styles.paragraph, { marginTop: 8 }]}>
-                        Vegarm is not responsible for losses caused by unauthorized access due to user negligence.
+                        Vegram is not responsible for losses caused by unauthorized access due to user negligence.
                     </ThemedText>
                 </View>
 
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>4. User Conduct (Very Important)</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm is built for respectful and lawful communication.
+                        Vegram is built for respectful and lawful communication.
                     </ThemedText>
 
                     <ThemedText style={styles.subTitle}>4.1 What You Agree NOT to Do</ThemedText>
@@ -93,7 +93,7 @@ export default function TermsAndConditionsScreen() {
                         You agree that you will not:
                     </ThemedText>
                     <View style={styles.bulletList}>
-                        <BulletPoint text="Use Vegarm for illegal activities." />
+                        <BulletPoint text="Use Vegram for illegal activities." />
                         <BulletPoint text="Harass, threaten, abuse, or harm others." />
                         <BulletPoint text="Send hateful, violent, or discriminatory content." />
                         <BulletPoint text="Share sexually explicit content involving minors." />
@@ -105,7 +105,7 @@ export default function TermsAndConditionsScreen() {
                     <ThemedText style={styles.subTitle}>4.2 Content Responsibility</ThemedText>
                     <View style={styles.bulletList}>
                         <BulletPoint text="You are fully responsible for the content you send or share." />
-                        <BulletPoint text="Vegarm does not control or monitor private messages." />
+                        <BulletPoint text="Vegram does not control or monitor private messages." />
                         <BulletPoint text="However, accounts involved in abuse or illegal activity may be restricted or terminated." />
                     </View>
                 </View>
@@ -117,7 +117,7 @@ export default function TermsAndConditionsScreen() {
                     <View style={styles.bulletList}>
                         <BulletPoint text="Messages are end-to-end encrypted." />
                         <BulletPoint text="Only communicating users can read messages." />
-                        <BulletPoint text="Vegarm cannot read your private messages." />
+                        <BulletPoint text="Vegram cannot read your private messages." />
                     </View>
 
                     <ThemedText style={styles.subTitle}>5.2 One-Time View & Auto-Delete</ThemedText>
@@ -132,42 +132,42 @@ export default function TermsAndConditionsScreen() {
 
                     <ThemedText style={styles.subTitle}>5.3 Media Sharing</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        When sharing media, you confirm you have the right to share it and it does not violate laws or rights of others. Vegarm is not responsible for content shared by users.
+                        When sharing media, you confirm you have the right to share it and it does not violate laws or rights of others. Vegram is not responsible for content shared by users.
                     </ThemedText>
                 </View>
 
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>6. Permissions & Device Access</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm may request permissions such as Camera, Microphone, Storage/Media access, and Notifications. These permissions are used only to provide app features. You may manage permissions in your device settings.
+                        Vegram may request permissions such as Camera, Microphone, Storage/Media access, and Notifications. These permissions are used only to provide app features. You may manage permissions in your device settings.
                     </ThemedText>
                 </View>
 
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>7. Third-Party Services</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm integrates third-party services to function properly, including push notification services and GIF services (e.g., GIPHY). Use of these services is subject to their respective terms and policies. Vegarm is not responsible for third-party service behavior.
+                        Vegram integrates third-party services to function properly, including push notification services and GIF services (e.g., GIPHY). Use of these services is subject to their respective terms and policies. Vegram is not responsible for third-party service behavior.
                     </ThemedText>
                 </View>
 
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>8. Intellectual Property</ThemedText>
 
-                    <ThemedText style={styles.subTitle}>8.1 Vegarm Content</ThemedText>
+                    <ThemedText style={styles.subTitle}>8.1 Vegram Content</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        The app design, logo, interface, and branding belong to Vegarm. You may not copy, modify, or distribute them without permission.
+                        The app design, logo, interface, and branding belong to Vegram. You may not copy, modify, or distribute them without permission.
                     </ThemedText>
 
                     <ThemedText style={styles.subTitle}>8.2 User Content</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        You retain ownership of the content you create. By sending content through Vegarm, you grant us limited rights only to deliver that content to intended recipients. We do not claim ownership of your messages or media.
+                        You retain ownership of the content you create. By sending content through Vegram, you grant us limited rights only to deliver that content to intended recipients. We do not claim ownership of your messages or media.
                     </ThemedText>
                 </View>
 
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>9. Account Suspension & Termination</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm reserves the right to suspend or terminate accounts that violate these Terms, restrict access for abusive, illegal, or harmful behavior, and remove content if required by law. Termination may occur with or without prior notice, depending on severity.
+                        Vegram reserves the right to suspend or terminate accounts that violate these Terms, restrict access for abusive, illegal, or harmful behavior, and remove content if required by law. Termination may occur with or without prior notice, depending on severity.
                     </ThemedText>
                 </View>
 
@@ -189,14 +189,14 @@ export default function TermsAndConditionsScreen() {
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>11. Service Availability</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        Vegarm is provided “as is” and “as available.” We do not guarantee uninterrupted service, error-free operation, or message delivery at all times. We may update features, temporarily suspend service for maintenance, or modify or discontinue parts of the app.
+                        Vegram is provided “as is” and “as available.” We do not guarantee uninterrupted service, error-free operation, or message delivery at all times. We may update features, temporarily suspend service for maintenance, or modify or discontinue parts of the app.
                     </ThemedText>
                 </View>
 
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>12. Limitation of Liability</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        To the maximum extent allowed by law, Vegarm is not responsible for user-generated content, nor liable for indirect or incidental damages. Use of the app is at your own risk.
+                        To the maximum extent allowed by law, Vegram is not responsible for user-generated content, nor liable for indirect or incidental damages. Use of the app is at your own risk.
                     </ThemedText>
                 </View>
 
@@ -228,7 +228,7 @@ export default function TermsAndConditionsScreen() {
                 <View style={styles.section}>
                     <ThemedText type="subtitle" style={styles.sectionTitle}>16. Acceptance of Terms</ThemedText>
                     <ThemedText style={styles.paragraph}>
-                        By using Vegarm, you confirm that:
+                        By using Vegram, you confirm that:
                     </ThemedText>
                     <View style={styles.bulletList}>
                         <BulletPoint text="You have read and understood these Terms." />

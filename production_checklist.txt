@@ -1,4 +1,4 @@
-VEGARM CHAT APP - PRODUCTION READINESS CHECKLIST
+VEGRAM CHAT APP - PRODUCTION READINESS CHECKLIST
 ================================================
 
 This checklist is based on the current codebase, recent bug fixes, and feature implementations.
@@ -30,7 +30,7 @@ Ensure all items are verified before the final production release.
 💾 BACKUP & DATA SAFETY
 ----------------------
 [ ] ANDROID BACKUP MODAL: Confirm that the custom password modal for backups works on Android (since `Alert.prompt` is iOS-only).
-[ ] PUBLIC MEDIA PATHS: Verify that media files and backups are saved to the correct public directory (e.g., `com.skr.vegarm`) on Android 11+.
+[ ] PUBLIC MEDIA PATHS: Verify that media files and backups are saved to the correct public directory (e.g., `com.skr.vegram`) on Android 11+.
 [ ] RESTORE INTEGRITY: Test a full "Backup -> Uninstall App -> Reinstall -> Restore" flow to ensure no data loss.
 [ ] MEDIA EXPORT: Check if large media files (videos/images) are correctly packaged into the backup ZIP without memory issues.
 
@@ -52,7 +52,7 @@ Ensure all items are verified before the final production release.
 --------------------
 [ ] Play Store / App Store Compliance check.
 [ ] End-to-end walkthrough of the onboarding process.
-[ ] Verification of the "Vegarm Official" account announcement flow.
+[ ] Verification of the "Vegram Official" account announcement flow.
 
 ---
 Version 1.0.0 Checklist

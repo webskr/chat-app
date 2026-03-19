@@ -1,7 +1,7 @@
 {
-    "name": "vegarm-media",
+    "name": "vegram-media",
     "version": "1.0.0",
-    "description": "Custom Android media storage module for Vegarm.",
+    "description": "Custom Android media storage module for Vegram.",
     "main": "index.ts",
     "dependencies": {},
     "peerDependencies": {

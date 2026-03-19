@@ -35,9 +35,9 @@
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
-        <data android:scheme="vegarm"/>
-        <data android:scheme="com.skr.vegarm"/>
-        <data android:scheme="exp+vegarm"/>
+        <data android:scheme="vegram"/>
+        <data android:scheme="com.skr.vegram"/>
+        <data android:scheme="exp+vegram"/>
       </intent-filter>
     </activity>
   </application>

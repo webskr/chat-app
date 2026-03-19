@@ -142,7 +142,7 @@ export default function FeedbackScreen() {
 
                     <View style={styles.contactInfo}>
                         <Text style={styles.contactText}>Or email us directly at</Text>
-                        <Text style={styles.emailText}>support@vegarm.com</Text>
+                        <Text style={styles.emailText}>support@vegram.app</Text>
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>

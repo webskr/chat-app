@@ -1,11 +1,11 @@
 {
-    "name": "vegarm-media",
+    "name": "vegram-media",
     "platforms": [
         "android"
     ],
     "android": {
         "modules": [
-            "expo.modules.vegarmmedia.VegarmMediaModule"
+            "expo.modules.vegrammedia.VegramMediaModule"
         ]
     }
 }

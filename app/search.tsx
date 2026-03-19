@@ -118,8 +118,8 @@ export default function SearchScreen() {
                                     item.other_is_official == 1 || 
                                     item.other_is_official === '1' ||
                                     chatName === 'Vegram Official' ||
-                                    chatName === 'VegarmOfficial' ||
-                                    item.other_username === 'VegarmOfficial'
+                                    chatName === 'VegramOfficial' ||
+                                    item.other_username === 'VegramOfficial'
                                 ) && (
                                     <BadgeCheck size={16} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
                                 )}

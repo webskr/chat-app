@@ -118,8 +118,8 @@ export default function RequestsScreen() {
                                 item.is_official == 1 || 
                                 item.is_official === '1' ||
                                 item.display_name === 'Vegram Official' ||
-                                item.username === 'VegarmOfficial' ||
-                                item.display_name === 'VegarmOfficial'
+                                item.username === 'VegramOfficial' ||
+                                item.display_name === 'VegramOfficial'
                             ) && (
                                 <BadgeCheck size={16} color={Colors.white} fill={Colors.verifiedBackground} />
                             )}

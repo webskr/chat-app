@@ -1,4 +1,4 @@
-# Vegarm - Development Guide
+# Vegram - Development Guide
 
 ## Local Development with Local IP
 

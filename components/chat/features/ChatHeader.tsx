@@ -88,8 +88,8 @@ export const ChatHeader = ({
                                 isOfficialParam == 1 || 
                                 isOfficialParam === '1' ||
                                 otherUsername === 'Vegram Official' ||
-                                otherUsername === 'VegarmOfficial' ||
-                                targetUserProfile?.username === 'VegarmOfficial'
+                                otherUsername === 'VegramOfficial' ||
+                                targetUserProfile?.username === 'VegramOfficial'
                             ) && (
                                 <BadgeCheck size={16} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
                             )}

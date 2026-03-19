@@ -227,7 +227,7 @@ export const MessageItem = React.memo(({
                                         item.sender_is_official == 1 || 
                                         item.sender_is_official === '1' ||
                                         item.sender_name === 'Vegram Official' ||
-                                        item.sender_name === 'VegarmOfficial'
+                                        item.sender_name === 'VegramOfficial'
                                     ) && (
                                         <BadgeCheck size={14} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
                                     )}

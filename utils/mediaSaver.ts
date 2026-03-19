@@ -4,12 +4,12 @@
  * Downloads a remote media URL and saves it to the user's gallery.
  *
  * Save locations:
- *  • Images/Videos → MediaLibrary → "Vegarm" album  (Pictures/Vegarm/)
+ *  • Images/Videos → MediaLibrary → "Vegram" album  (Pictures/Vegram/)
  *  • Documents      → Expo Sharing sheet (system file picker / Files app)
  *
- * Android/media/com.skr.vegarm is the app's EXTERNAL FILES dir, not the
+ * Android/media/com.skr.vegram is the app's EXTERNAL FILES dir, not the
  * public gallery.  It is created automatically by initMediaFolder on first
- * login via MediaLibrary. The gallery album (Pictures/Vegarm) is the correct
+ * login via MediaLibrary. The gallery album (Pictures/Vegram) is the correct
  * public location for user-saved media.
  */
 
@@ -19,7 +19,7 @@ import * as Sharing from 'expo-sharing';
 import { Platform, Alert } from 'react-native';
 import { Config } from '../constants/Config';
 
-const ALBUM_NAME = 'Vegarm';
+const ALBUM_NAME = 'Vegram';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ export const saveMedia = async (
 
     // Derive a sensible filename
     const ext = fullUrl.split('?')[0].split('.').pop()?.toLowerCase() || 'bin';
-    const name = fileName || `vegarm_${Date.now()}.${ext}`;
+    const name = fileName || `vegram_${Date.now()}.${ext}`;
     const localUri = `${FileSystem.cacheDirectory}${name}`;
 
     // ── Step 1: Download to local cache ───────────────────────────────────────
@@ -127,7 +127,7 @@ export const saveMedia = async (
 
         let album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
         if (!album) {
-            // First time — createAlbumAsync creates the Pictures/Vegarm directory
+            // First time — createAlbumAsync creates the Pictures/Vegram directory
             // Use copyAssets: true to avoid "Modify this file?" prompt on Android
             await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, true);
         } else {

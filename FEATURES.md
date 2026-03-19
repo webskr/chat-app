@@ -1,6 +1,6 @@
-# Vegarm Chat App Features
+# Vegram Chat App Features
 
-A comprehensive list of features implemented in the Vegarm Chat Application, covering backend, frontend, and UI/UX details.
+A comprehensive list of features implemented in the Vegram Chat Application, covering backend, frontend, and UI/UX details.
 
 ## 💬 Core Messaging
 - **Real-time Chat:** One-on-one messaging system with auto-refresh (3s interval).
