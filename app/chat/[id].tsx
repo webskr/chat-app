@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton, Animated, BackHandler } from 'react-native';
+import { View, TextInput, TouchableOpacity, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton, Animated, BackHandler } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { FlashList } from '@shopify/flash-list';
 // @ts-ignore
 import { io, Socket } from 'socket.io-client';
@@ -2597,8 +2598,8 @@ export default function ChatDetailScreen() {
 
             <View style={{ flex: 1, backgroundColor: Colors.background }}>
                 <KeyboardAvoidingView
-                    style={{ flex: 1, paddingBottom: isKeyboardVisible ? 0 : insets.bottom }}
-                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
                 >
                     {mergedMessages.length === 0 && isReady && !isLoading && (

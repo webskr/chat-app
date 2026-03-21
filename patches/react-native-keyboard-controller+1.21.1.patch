@@ -1,0 +1,12 @@
+diff --git a/node_modules/react-native-keyboard-controller/src/hooks/index.ts b/node_modules/react-native-keyboard-controller/src/hooks/index.ts
+index 5e458ea..eaa841f 100644
+--- a/node_modules/react-native-keyboard-controller/src/hooks/index.ts
++++ b/node_modules/react-native-keyboard-controller/src/hooks/index.ts
+@@ -292,5 +292,5 @@ export function useFocusedInputHandler(
+   }, deps);
+ }
+ 
+-export * from "./useWindowDimensions";
+-export * from "./useKeyboardState";
++export * from "./useWindowDimensions/index.ts";
++export * from "./useKeyboardState/index.ts";

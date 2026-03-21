@@ -14,6 +14,8 @@ import { useRouter } from 'expo-router';
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
+import { KeyboardProvider } from 'react-native-keyboard-controller';
+
 export default function RootLayout() {
     const router = useRouter();
     const notificationListener = useRef<Notifications.EventSubscription>();
@@ -67,15 +69,17 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <UserProvider>
                 <NeonThemeProvider>
-                    <View style={{ flex: 1, backgroundColor: Colors.background }}>
-                        <StatusBar style="light" />
-                        <Stack screenOptions={{ headerShown: false }}>
-                            <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
-                            <Stack.Screen name="(tabs)" />
-                            <Stack.Screen name="appearance" options={{ presentation: 'modal' }} />
-                            <Stack.Screen name="+not-found" />
-                        </Stack>
-                    </View>
+                    <KeyboardProvider>
+                        <View style={{ flex: 1, backgroundColor: Colors.background }}>
+                            <StatusBar style="light" />
+                            <Stack screenOptions={{ headerShown: false }}>
+                                <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
+                                <Stack.Screen name="(tabs)" />
+                                <Stack.Screen name="appearance" options={{ presentation: 'modal' }} />
+                                <Stack.Screen name="+not-found" />
+                            </Stack>
+                        </View>
+                    </KeyboardProvider>
                 </NeonThemeProvider>
             </UserProvider>
         </GestureHandlerRootView>
