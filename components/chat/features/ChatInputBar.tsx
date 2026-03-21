@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     inputArea: {
         paddingHorizontal: 16,
         paddingTop: 8,
-        paddingBottom: 8,
+        paddingBottom: 12, // Increased from 8 to 12 for optional 4dp spacing (8+4=12)
         backgroundColor: Colors.background, // Ensure background matches
     },
     inputWrapper: {

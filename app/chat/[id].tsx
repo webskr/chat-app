@@ -5,7 +5,7 @@ import { FlashList } from '@shopify/flash-list';
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
@@ -91,7 +91,11 @@ export default function ChatDetailScreen() {
     const [relationshipStatus, setRelationshipStatus] = useState<string | null>(null);
     const [targetUserProfile, setTargetUserProfile] = useState<any>(null);
     const [inputHeight, setInputHeight] = useState(60);
-    const [permissions, setPermissions] = useState({ allow_member_send_messages: true });
+    const [permissions, setPermissions] = useState({ 
+        allow_member_send_messages: true,
+        allow_member_edit_info: false,
+        allow_member_add_members: false
+    });
     const [hasMore, setHasMore] = useState(true);
     const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
@@ -124,6 +128,8 @@ export default function ChatDetailScreen() {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [datePickerMode, setDatePickerMode] = useState<'date' | 'time'>('date');
     const [presenceMap, setPresenceMap] = useState<Record<string, { isOnline: boolean, lastActive?: string, isTyping: boolean }>>({});
+    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+    const insets = useSafeAreaInsets();
     const [actionModalConfig, setActionModalConfig] = useState<{
         visible: boolean;
         title: string;
@@ -157,7 +163,7 @@ export default function ChatDetailScreen() {
     const isFetchingRef = useRef(false);
     const isMediaSearchingRef = useRef(false);
     const sharedSecretCache = useRef<Map<string, Buffer>>(new Map());
-    const translateY = useRef(new Animated.Value(0)).current;
+    // Removed translateY ref as we'll rely on KeyboardAvoidingView
 
     // --- Network & Connectivity Logic ---
     useEffect(() => {
@@ -301,8 +307,7 @@ export default function ChatDetailScreen() {
 
     useEffect(() => {
         if (isGroup && currentUser) {
-            fetchGroupRole();
-            fetchGroupMembers();
+            fetchGroupData();
         }
     }, [id, isGroup, currentUser]);
 
@@ -364,18 +369,19 @@ export default function ChatDetailScreen() {
     }, [activeReactionMessageId, selectedMessageIds]);
 
     useEffect(() => {
-        if (Platform.OS === 'android') return; // Android handles keyboard resizing natively with adjustResize
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
-        const showSubscription = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
+        const showSubscription = Keyboard.addListener(showEvent, (e) => {
+            setIsKeyboardVisible(true);
             const height = e.endCoordinates.height;
             if (height > 100) {
                 setPanelHeight(height);
                 if (!isMediaSearchingRef.current) setIsPanelOpen(false);
             }
-            Animated.timing(translateY, { toValue: -height, duration: 250, useNativeDriver: true }).start();
         });
-        const hideSubscription = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
-            Animated.timing(translateY, { toValue: 0, duration: 250, useNativeDriver: true }).start();
+        const hideSubscription = Keyboard.addListener(hideEvent, () => {
+            setIsKeyboardVisible(false);
         });
         return () => {
             showSubscription.remove();
@@ -621,30 +627,22 @@ export default function ChatDetailScreen() {
         }
     }
 
-    async function fetchGroupRole(signal?: AbortSignal) {
+    async function fetchGroupData(signal?: AbortSignal) {
         if (!isGroup || !currentUser) return;
         try {
-            const res = await ApiService.fetch(`${Config.API_URL}/chat/get_group_role.php?group_id=${id}&user_id=${currentUser.id}`, { signal });
+            const res = await ApiService.fetch(`${Config.API_URL}/chat/get_group_details.php?group_id=${id}&user_id=${currentUser.id}`, { signal });
             if (res.ok) {
                 const data = await res.json();
-                setUserRole(data.role || 'member');
-                setPermissions(data.permissions || { allow_member_send_messages: true });
+                setUserRole(data.my_role || 'member');
+                setGroupMembers(data.members || []);
+                setPermissions({
+                    allow_member_send_messages: data.allow_member_send_messages === 1 || data.allow_member_send_messages === true,
+                    allow_member_edit_info: data.allow_member_edit_info === 1 || data.allow_member_edit_info === true,
+                    allow_member_add_members: data.allow_member_add_members === 1 || data.allow_member_add_members === true,
+                });
             }
         } catch (e: any) {
-            if (e.name !== 'AbortError') console.error('fetchGroupRole error:', e);
-        }
-    }
-
-    async function fetchGroupMembers(signal?: AbortSignal) {
-        if (!isGroup) return;
-        try {
-            const res = await ApiService.fetch(`${Config.API_URL}/chat/get_group_members.php?group_id=${id}`, { signal });
-            if (res.ok) {
-                const data = await res.json();
-                setGroupMembers(data || []);
-            }
-        } catch (e: any) {
-            if (e.name !== 'AbortError') console.error('fetchGroupMembers error:', e);
+            if (e.name !== 'AbortError') console.error('fetchGroupData error:', e);
         }
     }
 
@@ -1774,38 +1772,6 @@ export default function ChatDetailScreen() {
         setScheduleModalVisible(true);
     };
 
-    async function fetchGroupRole() {
-        if (!currentUser || !id || !isGroup) return;
-        try {
-            const response = await fetch(`${Config.API_URL}/chat/get_group_details.php?group_id=${id}&user_id=${currentUser.id}`);
-            const data = await response.json();
-            if (response.ok) {
-                setUserRole(data.my_role);
-                setPermissions({
-                    allow_member_send_messages: !!data.allow_member_send_messages,
-                    // @ts-ignore - Adding other permissions if they exist in state but not yet used
-                    allow_member_edit_info: !!data.allow_member_edit_info,
-                    allow_member_add_members: !!data.allow_member_add_members,
-                });
-            }
-        } catch (error) {
-            console.error('Error fetching group role:', error);
-        }
-    }
-
-    async function fetchGroupMembers() {
-        if (!id || !isGroup) return;
-        try {
-            const response = await fetch(`${Config.API_URL}/chat/get_group_details.php?group_id=${id}`);
-            const data = await response.json();
-            if (response.ok && data.members) {
-                setGroupMembers(data.members);
-            }
-        } catch (error) {
-            console.error('Error fetching group members:', error);
-        }
-    }
-
     const handleMuteToggle = async () => {
         if (!currentUser || !id) return;
         const action = isMuted ? 'unmute' : 'mute';
@@ -1852,7 +1818,7 @@ export default function ChatDetailScreen() {
                         })
                     });
                     if (response.ok) {
-                        fetchRelationshipStatus();
+                        await syncChatData();
                         Alert.alert("Success", "User removed from friends.");
                     }
                 } catch (error) {
@@ -2599,7 +2565,7 @@ export default function ChatDetailScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <SafeAreaView style={styles.container} edges={['top']}>
             <ChatHeader
                 id={id}
                 otherUsername={otherUsername}
@@ -2631,9 +2597,9 @@ export default function ChatDetailScreen() {
 
             <View style={{ flex: 1, backgroundColor: Colors.background }}>
                 <KeyboardAvoidingView
-                    style={{ flex: 1 }}
+                    style={{ flex: 1, paddingBottom: isKeyboardVisible ? 0 : insets.bottom }}
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                    keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
                 >
                     {mergedMessages.length === 0 && isReady && !isLoading && (
                         <View style={{ marginTop: 60, alignItems: 'center', width: '100%' }}>
@@ -2701,13 +2667,8 @@ export default function ChatDetailScreen() {
                             <ThemedText style={{ color: Colors.textSecondary, fontSize: 13, fontWeight: '600' }}>Only Vegram can send messages</ThemedText>
                         </View>
                     ) : (
-                        <Animated.View
-                            style={[
-                                styles.inputContainer,
-                                {
-                                    transform: [{ translateY: isPanelOpen ? 0 : translateY }]
-                                }
-                            ]}
+                        <View
+                            style={styles.inputContainer}
                             onLayout={(e: any) => setInputHeight(e.nativeEvent.layout.height)}
                         >
                             <ReplyPreview replyingToMessage={replyingToMessage} currentUser={currentUser} onCancel={() => setReplyingToMessage(null)} />
@@ -2743,7 +2704,7 @@ export default function ChatDetailScreen() {
                                 groupMembers={groupMembers}
                                 isOfficialChat={targetUserProfile?.is_official == 1 && currentUser?.is_official != 1}
                             />
-                        </Animated.View>
+                        </View>
                     )}
                 </KeyboardAvoidingView>
             </View>
