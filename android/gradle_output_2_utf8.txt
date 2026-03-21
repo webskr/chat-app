@@ -1,0 +1,53 @@
+﻿> Task :gradle-plugin:settings-plugin:checkKotlinGradlePluginConfigurationErrors
+> Task :gradle-plugin:shared:checkKotlinGradlePluginConfigurationErrors
+> Task :gradle-plugin:shared:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:shared:compileJava NO-SOURCE
+> Task :gradle-plugin:shared:processResources NO-SOURCE
+> Task :gradle-plugin:shared:classes UP-TO-DATE
+> Task :gradle-plugin:shared:jar
+> Task :gradle-plugin:settings-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:settings-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:processResources
+> Task :gradle-plugin:settings-plugin:classes
+> Task :gradle-plugin:settings-plugin:jar
+.\gradlew : 
+At line:1 char:1
++ .\gradlew help > gradle_output_2.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified 
+   : (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeComman 
+   dError
+ 
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+java.io.UncheckedIOException: Could not 
+move temporary workspace (C:\xampp\htdocs\c
+hat-app\android\.gradle\8.8\dependencies-ac
+cessors\633563da484e97172e803ec54a276bf953e
+60782-e01c8b46-3cb3-4f08-be2c-70b611dde1c6)
+ to immutable location (C:\xampp\htdocs\cha
+t-app\android\.gradle\8.8\dependencies-acce
+ssors\633563da484e97172e803ec54a276bf953e60
+782)
+> Could not move temporary workspace (C:\xa
+mpp\htdocs\chat-app\android\.gradle\8.8\dep
+endencies-accessors\633563da484e97172e803ec
+54a276bf953e60782-e01c8b46-3cb3-4f08-be2c-7
+0b611dde1c6) to immutable location (C:\xamp
+p\htdocs\chat-app\android\.gradle\8.8\depen
+dencies-accessors\633563da484e97172e803ec54
+a276bf953e60782)
+
+* Try:
+> Run with --stacktrace option to get the 
+stack trace.
+> Run with --info or --debug option to get 
+more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 45s
+8 actionable tasks: 5 executed, 3 up-to-date
