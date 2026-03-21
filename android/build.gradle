@@ -42,12 +42,12 @@ allprojects {
 
     configurations.all {
         resolutionStrategy {
-            force "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
-            force "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
-            force "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
-            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion"
-            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlinVersion"
-            force "org.jetbrains.kotlin:kotlin-stdlib-common:$kotlinVersion"
+            force "org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}"
+            force "org.jetbrains.kotlin:kotlin-reflect:${rootProject.ext.kotlinVersion}"
+            force "org.jetbrains.kotlin:kotlin-gradle-plugin:${rootProject.ext.kotlinVersion}"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${rootProject.ext.kotlinVersion}"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${rootProject.ext.kotlinVersion}"
+            force "org.jetbrains.kotlin:kotlin-stdlib-common:${rootProject.ext.kotlinVersion}"
         }
     }
 }
