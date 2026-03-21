@@ -94,6 +94,13 @@ if (!empty($data->id) && (!empty($data->username) || !empty($data->avatar_id) ||
             $params[':links'] = $linksJson;
         }
 
+        if (isset($data->tags)) {
+            $update_fields[] = "tags = :tags";
+            // Ensure it's stored as a JSON string
+            $tagsJson = is_string($data->tags) ? $data->tags : json_encode($data->tags);
+            $params[':tags'] = $tagsJson;
+        }
+
         if (!empty($data->avatar_id)) {
             $update_fields[] = "avatar_id = :avatar_id";
             $params[':avatar_id'] = $data->avatar_id;
@@ -140,7 +147,7 @@ if (!empty($data->id) && (!empty($data->username) || !empty($data->avatar_id) ||
 
         if ($stmt->execute($params)) {
              // Fetch updated user data to return
-            $fetchStmt = $pdo->prepare("SELECT id, username, display_name, bio, country, state, district, links, avatar_id, avatar_url, username_last_updated, notifications_enabled, global_auto_delete_minutes, hide_notification_message, hide_notification_name FROM users WHERE id = :id");
+            $fetchStmt = $pdo->prepare("SELECT id, username, display_name, bio, country, state, district, links, tags, avatar_id, avatar_url, username_last_updated, notifications_enabled, global_auto_delete_minutes, hide_notification_message, hide_notification_name FROM users WHERE id = :id");
             $fetchStmt->execute([':id' => $data->id]);
             $updatedUser = $fetchStmt->fetch(PDO::FETCH_ASSOC);
 

@@ -30,7 +30,7 @@ if (!empty($data->reporter_id) && !empty($data->group_id) && !empty($data->reaso
         // If the table scheme is unknown, I should probably check it or just try generic insert.
         // I will use a generic insert compatible with what I saw in report_user.php, assuming reported_id can hold group_id.
         
-        $stmt = $pdo->prepare("INSERT INTO reports (reporter_id, reported_id, reason, created_at) VALUES (:rid, :gid, :reason, NOW())");
+        $stmt = $pdo->prepare("INSERT INTO reports (reporter_id, reported_id, reason, is_group, created_at) VALUES (:rid, :gid, :reason, 1, NOW())");
         
         $stmt->bindParam(':rid', $data->reporter_id);
         $stmt->bindParam(':gid', $data->group_id);

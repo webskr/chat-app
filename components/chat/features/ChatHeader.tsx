@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { ChevronLeft, MoreVertical, Trash2, Share, X, Copy, BadgeCheck } from 'lucide-react-native';
+import { ChevronLeft, MoreVertical, Trash2, Share, X, Copy, BadgeCheck, Reply } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { Colors } from '../../../constants/Colors';
 import { ThemedText } from '../../../components/ThemedText';
@@ -37,6 +37,7 @@ export const ChatHeader = ({
     onDeleteSelected,
     onForwardSelected,
     onCopySelected,
+    onReplySelected,
     isOfficialParam
 }: any) => {
 
@@ -45,7 +46,34 @@ export const ChatHeader = ({
     const lastActive = presence?.lastActive || targetUserProfile?.last_active || targetUserProfile?.last_seen;
 
     if (selectionMode) {
-        // ... selection header unchanged ...
+        return (
+            <View style={[styles.header, styles.selectionHeader]}>
+                <View style={styles.leftContainer}>
+                    <TouchableOpacity onPress={onCancelSelection} style={styles.iconButton}>
+                        <X size={24} color={Colors.text} />
+                    </TouchableOpacity>
+                    <ThemedText type="defaultSemiBold" style={styles.selectionTitle}>
+                        {selectedCount}
+                    </ThemedText>
+                </View>
+                <View style={styles.rightContainer}>
+                    {selectedCount === 1 && (
+                        <TouchableOpacity onPress={onReplySelected} style={styles.iconButton}>
+                            <Reply size={24} color={Colors.text} />
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity onPress={onCopySelected} style={styles.iconButton}>
+                        <Copy size={22} color={Colors.text} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onForwardSelected} style={styles.iconButton}>
+                        <Share size={22} color={Colors.text} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onDeleteSelected} style={styles.iconButton}>
+                        <Trash2 size={22} color="#EF4444" />
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
     }
 
     return (

@@ -23,6 +23,8 @@ export default function GroupInfoScreen() {
     const [members, setMembers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
+    const isOwner = group?.my_role === 'owner';
+    const canEdit = isOwner || group?.my_role === 'admin' || !!group?.allow_member_edit_info;
 
     // UI States
     const [showAllMembers, setShowAllMembers] = useState(false);
@@ -53,7 +55,7 @@ export default function GroupInfoScreen() {
                 setMembers(data.members);
 
                 // Fetch mute status
-                const muteRes = await fetch(`${Config.API_URL}/chat/check_mute.php?user_id=${user.id}&target_id=${id}`);
+                const muteRes = await fetch(`${Config.API_URL}/chat/check_mute.php?user_id=${user.id}&target_id=${id}&is_group=1`);
                 const muteData = await muteRes.json();
                 if (muteRes.ok) {
                     setIsMuted(muteData.is_muted);
@@ -78,7 +80,8 @@ export default function GroupInfoScreen() {
                 body: JSON.stringify({
                     user_id: user.id,
                     target_id: id,
-                    action: value ? 'mute' : 'unmute'
+                    action: value ? 'mute' : 'unmute',
+                    is_group: 1
                 })
             });
             const data = await response.json();
@@ -94,8 +97,8 @@ export default function GroupInfoScreen() {
     };
 
     const pickImage = async () => {
-        if (!isOwner && group?.my_role !== 'admin') {
-            Alert.alert("Error", "Only owners and admins can change the group icon.");
+        if (!canEdit) {
+            Alert.alert("Error", "You don't have permission to change the group icon.");
             return;
         }
 
@@ -393,9 +396,9 @@ export default function GroupInfoScreen() {
                 </View>
                 <ThemedText style={{
                     fontSize: 12,
-                    color: item.role === 'owner' ? Colors.error : (item.role === 'admin' ? '#FF9500' : Colors.textSecondary)
+                    color: item.role === 'owner' ? Colors.error : (item.role === 'admin' ? '#2196F3' : Colors.textSecondary)
                 }}>
-                    {item.role === 'owner' ? 'Group Owner' : item.role === 'admin' ? 'Admin' : 'Member'}
+                    {item.role === 'owner' ? 'Group Owner' : item.role === 'admin' ? 'Manager' : 'Member'}
                 </ThemedText>
             </View>
 
@@ -411,12 +414,12 @@ export default function GroupInfoScreen() {
                         if (group?.my_role === 'owner') {
                             if (item.role === 'member') {
                                 options.push({
-                                    text: "Make Group Admin",
+                                    text: "Make Group Manager",
                                     onPress: () => handleAction('promote_admin', item.id)
                                 });
                             } else if (item.role === 'admin') {
                                 options.push({
-                                    text: "Dismiss as Admin",
+                                    text: "Dismiss as Manager",
                                     style: "destructive",
                                     onPress: () => handleAction('demote_admin', item.id)
                                 });
@@ -453,9 +456,6 @@ export default function GroupInfoScreen() {
             </SafeAreaView>
         );
     }
-
-    const isOwner = group?.my_role === 'owner';
-
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
@@ -484,14 +484,16 @@ export default function GroupInfoScreen() {
                             </TouchableOpacity>
                         )}
 
-                        {(group?.my_role === 'owner' || group?.my_role === 'admin') && (
+                        {canEdit && (
                             <>
                                 <TouchableOpacity style={styles.menuItem} onPress={onEditGroup}>
-                                    <ThemedText>Change group name</ThemedText>
+                                    <ThemedText>Edit group name</ThemedText>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={styles.menuItem} onPress={onGroupPermissions}>
-                                    <ThemedText>Group permissions</ThemedText>
-                                </TouchableOpacity>
+                                {(group?.my_role === 'owner' || group?.my_role === 'admin') && (
+                                    <TouchableOpacity style={styles.menuItem} onPress={onGroupPermissions}>
+                                        <ThemedText>Edit permissions</ThemedText>
+                                    </TouchableOpacity>
+                                )}
                             </>
                         )}
                     </View>
@@ -503,7 +505,7 @@ export default function GroupInfoScreen() {
                 <View style={styles.groupHeader}>
                     <TouchableOpacity 
                         onPress={pickImage} 
-                        disabled={!isOwner && group?.my_role !== 'admin'}
+                        disabled={!canEdit}
                         activeOpacity={0.7}
                         style={styles.avatarContainer}
                     >
@@ -513,7 +515,7 @@ export default function GroupInfoScreen() {
                             style={{ marginBottom: 16 }}
                             fallbackComponent={<GroupDefaultIcon size={120} />}
                         />
-                        {(isOwner || group?.my_role === 'admin') && (
+                        {canEdit && (
                             <View style={styles.editIconBadge}>
                                 <Edit2 size={16} color="#fff" />
                             </View>
@@ -571,30 +573,40 @@ export default function GroupInfoScreen() {
                 ) : (
                     /* --- SETTINGS TAB --- */
                     <>
-                        {/* Description */}
-                        {group?.description ? (
-                            <View style={styles.section}>
-                                <GlassCard>
-                                    <View style={{ padding: 16 }}>
-                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                            <ThemedText type="defaultSemiBold">Description</ThemedText>
-                                            {(group?.my_role === 'owner' || group?.my_role === 'admin') && (
-                                                <TouchableOpacity onPress={() => {
-                                                    setEditedDesc(group?.description || '');
-                                                    setEditDescModalVisible(true);
-                                                }}>
-                                                    <Edit2 size={16} color={Colors.primary} />
-                                                </TouchableOpacity>
-                                            )}
-                                        </View>
-                                        <ThemedText style={{ color: Colors.textSecondary, fontSize: 14 }}>{group.description}</ThemedText>
-                                        <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center' }}>
-                                            <ThemedText style={{ color: Colors.textSecondary, fontSize: 12 }}>Created by {group.creator_name || 'Owner'}, {new Date(group.created_at).toLocaleDateString()}</ThemedText>
-                                        </View>
+                        {/* Description Section */}
+                        <View style={styles.section}>
+                            <GlassCard>
+                                <View style={{ padding: 16 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                        <ThemedText type="defaultSemiBold">Description</ThemedText>
+                                        {canEdit && (
+                                            <TouchableOpacity onPress={() => {
+                                                setEditedDesc(group?.description || '');
+                                                setEditDescModalVisible(true);
+                                            }}>
+                                                <Edit2 size={16} color={Colors.primary} />
+                                            </TouchableOpacity>
+                                        )}
                                     </View>
-                                </GlassCard>
-                            </View>
-                        ) : null}
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (canEdit) {
+                                                setEditedDesc(group?.description || '');
+                                                setEditDescModalVisible(true);
+                                            }
+                                        }}
+                                        disabled={!canEdit}
+                                    >
+                                        <ThemedText style={{ color: group?.description ? Colors.textSecondary : Colors.offline, fontSize: 14, fontStyle: group?.description ? 'normal' : 'italic' }}>
+                                            {group?.description || 'No description provided'}
+                                        </ThemedText>
+                                    </TouchableOpacity>
+                                    <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center' }}>
+                                        <ThemedText style={{ color: Colors.textSecondary, fontSize: 12 }}>Created by {group?.creator_name || 'Owner'}, {new Date(group?.created_at).toLocaleDateString()}</ThemedText>
+                                    </View>
+                                </View>
+                            </GlassCard>
+                        </View>
 
                         {/* Settings Section */}
                         <View style={styles.section}>
@@ -611,6 +623,9 @@ export default function GroupInfoScreen() {
                                         thumbColor={'#f4f3f4'}
                                     />
                                 )}
+                                <ThemedText style={styles.settingHelpText}>
+                                    If anybody mentions you, you will still receive a notification.
+                                </ThemedText>
                                 <View style={styles.divider} />
 
                                 {/* Encryption */}
@@ -624,7 +639,7 @@ export default function GroupInfoScreen() {
                                 <View style={styles.divider} />
 
                                 {/* Disappearing Messages (Owner only) */}
-                                {isOwner && (
+                                {group?.my_role === 'owner' && (
                                     <>
                                         {renderSettingRow(
                                             <Clock size={22} color={Colors.text} />,
@@ -682,7 +697,7 @@ export default function GroupInfoScreen() {
                                     <ThemedText style={styles.dangerText}>Exit Group</ThemedText>
                                 </TouchableOpacity>
 
-                                {isOwner && (
+                                {group?.my_role === 'owner' && (
                                     <>
                                         <View style={styles.divider} />
                                         <TouchableOpacity style={styles.dangerRow} onPress={confirmDelete}>
@@ -960,5 +975,13 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: 'bold',
         fontSize: 16,
-    }
+    },
+    settingHelpText: {
+        fontSize: 12,
+        color: Colors.textSecondary,
+        marginLeft: 52,
+        marginTop: -8,
+        marginBottom: 16,
+        fontStyle: 'italic',
+    },
 });

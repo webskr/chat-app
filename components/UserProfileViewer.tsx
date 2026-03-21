@@ -32,6 +32,7 @@ import { BlurView } from 'expo-blur';
 import { Config } from '../constants/Config';
 import { router } from 'expo-router';
 import { formatChatTime } from '../utils/time';
+import { AVAILABLE_TAGS } from '../constants/Tags';
 
 const { width, height } = Dimensions.get('window');
 
@@ -40,7 +41,7 @@ interface UserProfileViewerProps {
     onClose: () => void;
     user: any;
     currentUser: any;
-    relationship?: 'friend' | 'blocked' | 'request_received' | 'pending' | 'none' | 'self';
+    relationship?: 'friend' | 'blocked' | 'request_received' | 'pending' | 'none' | 'self' | 'accepted';
     onActionComplete?: () => void;
 }
 
@@ -110,6 +111,9 @@ export function UserProfileViewer({
     const joinedDate = user.created_at
         ? new Date(user.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
         : '';
+    
+    const isFriend = relationship === 'friend' || relationship === 'accepted';
+    const showFullProfile = isFriend || isSelf;
 
     const handleAction = async (action: string) => {
         try {
@@ -215,31 +219,66 @@ export function UserProfileViewer({
                             )}
                         </View>
 
-                        {/* ACTION ROW */}
-                        {!isSelf && (
-                            <View style={styles.actionRow}>
-                                {/* <ActionButton icon={MessageCircle} label="Message" onPress={handleMessage} primary />
-                                <ActionButton icon={Lock} label="Chat Lock" onPress={() => Alert.alert('Chat Lock', 'Chat lock enabled')} />
-                                <ActionButton icon={UserMinus} label="Unfriend" onPress={() => handleAction('unfriend')} />
-                                <ActionButton icon={Bell} label="Mute" onPress={() => { }} /> */}
-                            </View>
-                        )}
-
-                        {/* CONTENT SECTION */}
+                        {/* CONTENT SECTIONS */}
                         <View style={styles.section}>
                             <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>About</ThemedText>
                             <ThemedText style={styles.bioText}>
-                                {user.bio || "No bio yet."}
+                                {showFullProfile ? (user.bio || "No bio yet.") : "Bio is private."}
                             </ThemedText>
-                            {joinedDate ? (
-                                <View style={styles.metaRow}>
-                                    <MapPin size={14} color={Colors.textSecondary} />
-                                    <ThemedText style={styles.metaText}>Joined {joinedDate}</ThemedText>
-                                </View>
-                            ) : null}
+                            
+                            <View style={{ gap: 8, marginTop: 12 }}>
+                                {joinedDate && (
+                                    <View style={styles.metaRow}>
+                                        <MapPin size={14} color={Colors.textSecondary} />
+                                        <ThemedText style={styles.metaText}>Joined {joinedDate}</ThemedText>
+                                    </View>
+                                )}
+                                
+                                {showFullProfile && user.country && (
+                                    <View style={styles.metaRow}>
+                                        <MapPin size={14} color={Colors.primary} />
+                                        <ThemedText style={[styles.metaText, { color: Colors.primary }]}>{user.country}</ThemedText>
+                                    </View>
+                                )}
+                            </View>
                         </View>
 
-                        {user.links && user.links !== '[]' && (
+                        {showFullProfile && user.tags && (
+                            <View style={styles.section}>
+                                <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Tags</ThemedText>
+                                <View style={styles.tagsContainer}>
+                                    {(() => {
+                                        try {
+                                            const tags = typeof user.tags === 'string' ? JSON.parse(user.tags) : user.tags;
+                                            if (!Array.isArray(tags)) return null;
+                                            return tags.map((tagName: string) => {
+                                                const tagInfo = AVAILABLE_TAGS.find(t => t.label === tagName);
+                                                return (
+                                                    <View 
+                                                        key={tagName} 
+                                                        style={[
+                                                            styles.tagChip, 
+                                                            { 
+                                                                backgroundColor: `${tagInfo?.color || Colors.primary}20`,
+                                                                borderColor: tagInfo?.color || Colors.primary
+                                                            }
+                                                        ]}
+                                                    >
+                                                        <ThemedText style={[styles.tagText, { color: tagInfo?.color || Colors.text }]}>
+                                                            {tagName}
+                                                        </ThemedText>
+                                                    </View>
+                                                );
+                                            });
+                                        } catch (e) {
+                                            return null;
+                                        }
+                                    })()}
+                                </View>
+                            </View>
+                        )}
+
+                        {showFullProfile && user.links && user.links !== '[]' && (
                             <View style={styles.section}>
                                 <View style={styles.sectionHeader}>
                                     <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>Links</ThemedText>
@@ -473,5 +512,21 @@ const styles = StyleSheet.create({
     footerBtnText: {
         fontWeight: '600',
         fontSize: 16,
+    },
+    tagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 8,
+    },
+    tagChip: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 20,
+        borderWidth: 1,
+    },
+    tagText: {
+        fontSize: 14,
+        fontWeight: '500',
     },
 });

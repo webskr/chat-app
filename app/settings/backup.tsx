@@ -20,9 +20,12 @@ const GOOGLE_CONFIG = {
 };
 
 import { useUser } from '../../context/UserContext';
+import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 
 export default function BackupSettingsScreen() {
     const { user } = useUser();
+    const { neonColor } = useTheme();
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [lastBackup, setLastBackup] = useState<string | null>(null);
@@ -272,41 +275,41 @@ export default function BackupSettingsScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: Colors.surface, borderBottomColor: Colors.glassBorder }]}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <ChevronLeft color="#000" size={24} />
+                    <ChevronLeft color={Colors.text} size={24} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Backup & Restore</Text>
+                <Text style={[styles.headerTitle, { color: Colors.text }]}>Backup & Restore</Text>
                 <View style={{ width: 40 }} />
             </View>
 
-            <ScrollView style={styles.content}>
-                <View style={styles.statusCard}>
-                    <ShieldCheck color="#22c55e" size={48} />
-                    <Text style={styles.statusTitle}>Your chats are E2EE</Text>
-                    <Text style={styles.statusSubtitle}>
+            <ScrollView style={[styles.content, { backgroundColor: Colors.background }]}>
+                <View style={[styles.statusCard, { backgroundColor: Colors.surface, borderColor: Colors.glassBorder }]}>
+                    <ShieldCheck color={neonColor} size={48} />
+                    <Text style={[styles.statusTitle, { color: Colors.text }]}>Your chats are E2EE</Text>
+                    <Text style={[styles.statusSubtitle, { color: Colors.textSecondary }]}>
                         Backups are encrypted using your password. Not even Vegram can read them.
                     </Text>
                     {lastBackup && (
-                        <Text style={styles.lastBackup}>Last backup: {lastBackup}</Text>
+                        <Text style={[styles.lastBackup, { color: neonColor }]}>Last backup: {lastBackup}</Text>
                     )}
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Local Backup</Text>
+                    <Text style={[styles.sectionTitle, { color: Colors.textSecondary }]}>Local Backup</Text>
                     <TouchableOpacity
                         style={styles.actionItem}
                         onPress={handleCreateBackup}
                         disabled={loading}
                     >
-                        <View style={[styles.iconBox, { backgroundColor: '#f0fdf4' }]}>
+                        <View style={[styles.iconBox, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
                             <HardDrive color="#22c55e" size={20} />
                         </View>
                         <View style={styles.actionText}>
-                            <Text style={styles.actionTitle}>Create Local Backup</Text>
-                            <Text style={styles.actionSubtitle}>Save an encrypted archive to your storage.</Text>
+                            <Text style={[styles.actionTitle, { color: Colors.text }]}>Create Local Backup</Text>
+                            <Text style={[styles.actionSubtitle, { color: Colors.textSecondary }]}>Save an encrypted archive to your storage.</Text>
                         </View>
-                        {loading && <ActivityIndicator size="small" color="#22c55e" />}
+                        {loading && <ActivityIndicator size="small" color={neonColor} />}
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -314,29 +317,29 @@ export default function BackupSettingsScreen() {
                         onPress={handleRestoreBackup}
                         disabled={loading}
                     >
-                        <View style={[styles.iconBox, { backgroundColor: '#fdf2f8' }]}>
+                        <View style={[styles.iconBox, { backgroundColor: 'rgba(219, 39, 119, 0.1)' }]}>
                             <RotateCcw color="#db2777" size={20} />
                         </View>
                         <View style={styles.actionText}>
-                            <Text style={styles.actionTitle}>Restore from Local</Text>
-                            <Text style={styles.actionSubtitle}>Restore chats and media from a file.</Text>
+                            <Text style={[styles.actionTitle, { color: Colors.text }]}>Restore from Local</Text>
+                            <Text style={[styles.actionSubtitle, { color: Colors.textSecondary }]}>Restore chats and media from a file.</Text>
                         </View>
                     </TouchableOpacity>
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Cloud Backup</Text>
+                    <Text style={[styles.sectionTitle, { color: Colors.textSecondary }]}>Cloud Backup</Text>
                     <TouchableOpacity
                         style={styles.actionItem}
                         onPress={handleBackupToDrive}
                         disabled={loading}
                     >
-                        <View style={[styles.iconBox, { backgroundColor: '#eff6ff' }]}>
+                        <View style={[styles.iconBox, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
                             <Cloud color="#3b82f6" size={20} />
                         </View>
                         <View style={styles.actionText}>
-                            <Text style={styles.actionTitle}>Backup to Google Drive</Text>
-                            <Text style={styles.actionSubtitle}>Create and upload backup to your Google Drive.</Text>
+                            <Text style={[styles.actionTitle, { color: Colors.text }]}>Backup to Google Drive</Text>
+                            <Text style={[styles.actionSubtitle, { color: Colors.textSecondary }]}>Create and upload backup to your Google Drive.</Text>
                         </View>
                     </TouchableOpacity>
 
@@ -345,23 +348,23 @@ export default function BackupSettingsScreen() {
                         onPress={handleRestoreFromDrive}
                         disabled={loading}
                     >
-                        <View style={[styles.iconBox, { backgroundColor: '#fefce8' }]}>
+                        <View style={[styles.iconBox, { backgroundColor: 'rgba(202, 138, 4, 0.1)' }]}>
                             <Download color="#ca8a04" size={20} />
                         </View>
                         <View style={styles.actionText}>
-                            <Text style={styles.actionTitle}>Restore from Drive</Text>
-                            <Text style={styles.actionSubtitle}>Download and restore a backup from Google Drive.</Text>
+                            <Text style={[styles.actionTitle, { color: Colors.text }]}>Restore from Drive</Text>
+                            <Text style={[styles.actionSubtitle, { color: Colors.textSecondary }]}>Download and restore a backup from Google Drive.</Text>
                         </View>
                     </TouchableOpacity>
                 </View>
 
                 <TouchableOpacity style={[styles.actionItem, { marginTop: 20 }]} onPress={handleDeleteBackups}>
-                    <View style={[styles.iconBox, { backgroundColor: '#fef2f2' }]}>
-                        <Trash2 color="#ef4444" size={20} />
+                    <View style={[styles.iconBox, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                        <Trash2 color={Colors.error} size={20} />
                     </View>
                     <View style={styles.actionText}>
-                        <Text style={[styles.actionTitle, { color: '#ef4444' }]}>Delete All Backups</Text>
-                        <Text style={styles.actionSubtitle}>Wipe all local backup files.</Text>
+                        <Text style={[styles.actionTitle, { color: Colors.error }]}>Delete All Backups</Text>
+                        <Text style={[styles.actionSubtitle, { color: Colors.textSecondary }]}>Wipe all local backup files.</Text>
                     </View>
                 </TouchableOpacity>
             </ScrollView>
@@ -374,17 +377,18 @@ export default function BackupSettingsScreen() {
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>
+                        <Text style={[styles.modalTitle, { color: Colors.text }]}>
                             {modalAction === "create" || modalAction === "create_drive" ? "Create Backup Password" : "Enter Backup Password"}
                         </Text>
-                        <Text style={styles.modalSubtitle}>
+                        <Text style={[styles.modalSubtitle, { color: Colors.textSecondary }]}>
                             {modalAction === "create" || modalAction === "create_drive"
                                 ? "This password will be used to encrypt your backup. Don't lose it!"
                                 : "Provide the password used to encrypt this backup archive."}
                         </Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: Colors.background, color: Colors.text, borderColor: Colors.glassBorder }]}
                             placeholder="Min. 4 characters"
+                            placeholderTextColor={Colors.textSecondary}
                             secureTextEntry
                             value={backupPassword}
                             onChangeText={setBackupPassword}
@@ -392,13 +396,13 @@ export default function BackupSettingsScreen() {
                         />
                         <View style={styles.modalButtons}>
                             <TouchableOpacity
-                                style={[styles.modalButton, styles.cancelButton]}
+                                style={[styles.modalButton, styles.cancelButton, { backgroundColor: Colors.surface }]}
                                 onPress={() => setPasswordModalVisible(false)}
                             >
-                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                                <Text style={[styles.cancelButtonText, { color: Colors.textSecondary }]}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.modalButton, styles.confirmButton]}
+                                style={[styles.modalButton, styles.confirmButton, { backgroundColor: neonColor }]}
                                 onPress={() => {
                                     if (modalAction === "create") submitCreateBackup(backupPassword);
                                     else if (modalAction === "restore") submitRestoreBackup(backupPassword);
@@ -423,19 +427,19 @@ export default function BackupSettingsScreen() {
                 onRequestClose={() => setDrivePickerVisible(false)}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={styles.drivePickerContent}>
-                        <Text style={styles.modalTitle}>Select a Backup</Text>
+                    <View style={[styles.drivePickerContent, { backgroundColor: Colors.surface }]}>
+                        <Text style={[styles.modalTitle, { color: Colors.text }]}>Select a Backup</Text>
                         <ScrollView style={{ maxHeight: 300, width: '100%', marginBottom: 16 }}>
                             {driveBackups.map((backup) => (
                                 <TouchableOpacity
                                     key={backup.id}
-                                    style={styles.driveBackupItem}
+                                    style={[styles.driveBackupItem, { borderBottomColor: Colors.glassBorder }]}
                                     onPress={() => selectDriveBackup(backup)}
                                 >
-                                    <Cloud color="#3b82f6" size={20} />
+                                    <Cloud color={neonColor} size={20} />
                                     <View style={{ marginLeft: 12 }}>
-                                        <Text style={styles.driveBackupName}>{backup.name}</Text>
-                                        <Text style={styles.driveBackupDate}>
+                                        <Text style={[styles.driveBackupName, { color: Colors.text }]}>{backup.name}</Text>
+                                        <Text style={[styles.driveBackupDate, { color: Colors.textSecondary }]}>
                                             {new Date(backup.createdTime).toLocaleString()}
                                         </Text>
                                     </View>
@@ -443,10 +447,10 @@ export default function BackupSettingsScreen() {
                             ))}
                         </ScrollView>
                         <TouchableOpacity
-                            style={[styles.modalButton, styles.cancelButton, { width: '100%' }]}
+                            style={[styles.modalButton, styles.cancelButton, { width: '100%', backgroundColor: Colors.background }]}
                             onPress={() => setDrivePickerVisible(false)}
                         >
-                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                            <Text style={[styles.cancelButtonText, { color: Colors.textSecondary }]}>Cancel</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -456,7 +460,7 @@ export default function BackupSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
+    container: { flex: 1, backgroundColor: Colors.background },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -465,24 +469,20 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingBottom: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#f1f1f1',
     },
     backButton: { padding: 8 },
     headerTitle: { fontSize: 18, fontWeight: '700' },
     content: { flex: 1, padding: 20 },
     statusCard: {
-        backgroundColor: '#f8fafc',
         borderRadius: 16,
         padding: 24,
         alignItems: 'center',
         marginBottom: 32,
         borderWidth: 1,
-        borderColor: '#f1f5f9',
     },
     statusTitle: { fontSize: 18, fontWeight: '700', marginTop: 16 },
     statusSubtitle: {
         fontSize: 14,
-        color: '#64748b',
         textAlign: 'center',
         marginTop: 8,
         lineHeight: 20
@@ -491,11 +491,10 @@ const styles = StyleSheet.create({
         marginTop: 16,
         fontSize: 12,
         fontWeight: '600',
-        color: '#94a3b8',
         textTransform: 'uppercase'
     },
     section: { marginBottom: 32 },
-    sectionTitle: { fontSize: 13, fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 12, marginLeft: 4 },
+    sectionTitle: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', marginBottom: 12, marginLeft: 4 },
     actionItem: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -510,17 +509,17 @@ const styles = StyleSheet.create({
         marginRight: 16
     },
     actionText: { flex: 1 },
-    actionTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
-    actionSubtitle: { fontSize: 13, color: '#64748b', marginTop: 2 },
+    actionTitle: { fontSize: 16, fontWeight: '600' },
+    actionSubtitle: { fontSize: 13, marginTop: 2 },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.7)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20
     },
     modalContent: {
-        backgroundColor: '#fff',
+        backgroundColor: Colors.surface,
         borderRadius: 20,
         padding: 24,
         width: '100%',
@@ -531,17 +530,15 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.25,
         shadowRadius: 3.84,
     },
-    modalTitle: { fontSize: 18, fontWeight: '700', color: '#1e293b', marginBottom: 8 },
-    modalSubtitle: { fontSize: 14, color: '#64748b', marginBottom: 20, lineHeight: 20 },
+    modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
+    modalSubtitle: { fontSize: 14, marginBottom: 20, lineHeight: 20 },
     input: {
-        backgroundColor: '#f1f5f9',
         borderRadius: 12,
         paddingHorizontal: 16,
         paddingVertical: 12,
         fontSize: 16,
         marginBottom: 20,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
     },
     modalButtons: { flexDirection: 'row', gap: 12 },
     modalButton: {
@@ -552,10 +549,9 @@ const styles = StyleSheet.create({
     },
     cancelButton: { backgroundColor: '#f1f5f9' },
     confirmButton: { backgroundColor: '#22c55e' },
-    cancelButtonText: { color: '#64748b', fontWeight: '600' },
+    cancelButtonText: { fontWeight: '600' },
     confirmButtonText: { color: '#fff', fontWeight: '600' },
     drivePickerContent: {
-        backgroundColor: '#fff',
         borderRadius: 20,
         padding: 24,
         width: '100%',
@@ -572,16 +568,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#f1f5f9',
     },
     driveBackupName: {
         fontSize: 15,
         fontWeight: '600',
-        color: '#1e293b',
     },
     driveBackupDate: {
         fontSize: 12,
-        color: '#64748b',
         marginTop: 2,
     }
 });

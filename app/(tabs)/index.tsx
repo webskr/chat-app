@@ -45,7 +45,8 @@ export default function ChatScreen() {
 
             // STEP 2: Background sync from server (Unified Sync)
             if (syncWithServer) {
-                await SyncService.syncEverything(Number(user.id));
+                await safeSync(); // Use the throttled safeSync instead of calling SyncService directly
+                
                 // Refresh local UI after sync
                 const refreshedChats = await LocalDatabaseService.getConversations();
                 setChats(refreshedChats.map(c => ({
@@ -62,22 +63,18 @@ export default function ChatScreen() {
         } finally {
             setIsLoading(false);
         }
-    }, [user, setUnreadCount]);
+    }, [user, setUnreadCount, safeSync]);
 
     useFocusEffect(
         React.useCallback(() => {
-            fetchConversations(true); // Sync on focus
-            if (user) safeSync();
+            fetchConversations(true); // Sync on focus (via safeSync)
 
-            // Instead of 10s polling, we rely on WebSockets (handled by UserContext/safeSync)
-            // and the 30s heartbeat in SyncService if implemented.
-            // For now, let's keep a very slow fallback polling (e.g. 60s) or remove it.
             const interval = setInterval(() => {
                 fetchConversations(true);
-            }, 60000); // Reduced polling to 60s as a safety fallback
+            }, 60000); 
 
             return () => clearInterval(interval);
-        }, [fetchConversations, user, safeSync])
+        }, [fetchConversations])
     );
 
     const filteredChats = React.useMemo(() => {

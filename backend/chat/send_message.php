@@ -340,7 +340,7 @@ if ((!empty($data->message) || !empty($data->image_path) || !empty($data->audio_
 
                         // Check Mute Status
                         // Optimized: We could do this in the main query, but keeping PHP logic for now for readability of "Overriding"
-                        $mute_check = $pdo->prepare("SELECT COUNT(*) FROM muted_chats WHERE user_id = :uid AND target_id = :gid AND mute_until > NOW()");
+                        $mute_check = $pdo->prepare("SELECT COUNT(*) FROM muted_chats WHERE user_id = :uid AND target_id = :gid AND is_group = 1 AND mute_until > NOW()");
                         $mute_check->execute([':uid' => $rec['id'], ':gid' => $group_id]); 
                         $is_muted = $mute_check->fetchColumn() > 0;
 

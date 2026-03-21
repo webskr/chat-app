@@ -17,6 +17,7 @@ if (!empty($data->user_id) && !empty($data->target_id) && !empty($data->action))
     try {
         $user_id = $data->user_id;
         $target_id = $data->target_id;
+        $is_group = !empty($data->is_group) ? (int)$data->is_group : 0;
         
         if ($data->action === 'mute') {
             // Default mute duration: 8 hours if not specified, or 'forever' logic if needed.
@@ -24,13 +25,13 @@ if (!empty($data->user_id) && !empty($data->target_id) && !empty($data->action))
             // If duration is provided in minutes.
             $minutes = !empty($data->duration) ? (int)$data->duration : 525600; // Default ~1 year
             
-            $stmt = $pdo->prepare("INSERT INTO muted_chats (user_id, target_id, mute_until) VALUES (:uid, :tid, DATE_ADD(NOW(), INTERVAL :min MINUTE)) ON DUPLICATE KEY UPDATE mute_until = DATE_ADD(NOW(), INTERVAL :min MINUTE)");
-            $stmt->execute([':uid' => $user_id, ':tid' => $target_id, ':min' => $minutes]);
+            $stmt = $pdo->prepare("INSERT INTO muted_chats (user_id, target_id, is_group, mute_until) VALUES (:uid, :tid, :isg, DATE_ADD(NOW(), INTERVAL :min MINUTE)) ON DUPLICATE KEY UPDATE mute_until = DATE_ADD(NOW(), INTERVAL :min MINUTE)");
+            $stmt->execute([':uid' => $user_id, ':tid' => $target_id, ':isg' => $is_group, ':min' => $minutes]);
             
             echo json_encode(["message" => "Chat muted successfully.", "success" => true]);
         } elseif ($data->action === 'unmute') {
-            $stmt = $pdo->prepare("DELETE FROM muted_chats WHERE user_id = :uid AND target_id = :tid");
-            $stmt->execute([':uid' => $user_id, ':tid' => $target_id]);
+            $stmt = $pdo->prepare("DELETE FROM muted_chats WHERE user_id = :uid AND target_id = :tid AND is_group = :isg");
+            $stmt->execute([':uid' => $user_id, ':tid' => $target_id, ':isg' => $is_group]);
             
             echo json_encode(["message" => "Chat unmuted successfully.", "success" => true]);
         } else {

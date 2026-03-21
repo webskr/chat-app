@@ -19,6 +19,7 @@ export class LocalDatabaseService {
     private static initPromise: Promise<void> | null = null;
     private static DB_FILENAME = 'vegram_encrypted.sqlite';
     public static activeChatId: string | null = null;
+    public static currentUserId: string | null = null;
 
     private static async deleteDatabase() {
         const sqliteDir = `${FileSystem.documentDirectory}SQLite/`;
@@ -134,7 +135,8 @@ export class LocalDatabaseService {
                         sender_name     TEXT,
                         is_one_time     INTEGER DEFAULT 0,
                         key_version     INTEGER,
-                        sender_is_official INTEGER DEFAULT 0
+                        sender_is_official INTEGER DEFAULT 0,
+                        reactions       TEXT
                     );
                 `);
 
@@ -148,6 +150,7 @@ export class LocalDatabaseService {
                 try { await this.db.execute(`ALTER TABLE messages ADD COLUMN sender_name TEXT;`); } catch (e) { }
                 try { await this.db.execute(`ALTER TABLE messages ADD COLUMN is_one_time INTEGER DEFAULT 0;`); } catch (e) { }
                 try { await this.db.execute(`ALTER TABLE messages ADD COLUMN sender_is_official INTEGER DEFAULT 0;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE messages ADD COLUMN reactions TEXT;`); } catch (e) { }
 
                 await this.db.execute(`
                     CREATE TABLE IF NOT EXISTS chats (
@@ -202,6 +205,7 @@ export class LocalDatabaseService {
 
                 this.isInitialized = true;
                 this.isInitializing = false;
+                this.currentUserId = String(userSessionToken);
                 console.log("[LocalDatabaseService] --- INIT DB COMPLETE ---");
             } catch (dbError) {
                 this.isInitializing = false;
@@ -260,6 +264,7 @@ export class LocalDatabaseService {
         sender_name?: string;
         sender_is_official?: number | boolean;
         is_one_time?: boolean | number;
+        reactions?: string | any[];
     }): Promise<number> {
         const db = this.getDB();
 
@@ -271,8 +276,8 @@ export class LocalDatabaseService {
                 const result = await db.execute(
                     `INSERT INTO messages
                         (server_id, temp_id, chat_id, sender_id, receiver_id, type,
-                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp, sender_name, sender_is_official, is_one_time)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp, sender_name, sender_is_official, is_one_time, reactions)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                      ON CONFLICT(server_id) DO UPDATE SET
                          status            = CASE
                                                 WHEN messages.status = 'seen' THEN 'seen'
@@ -286,7 +291,8 @@ export class LocalDatabaseService {
                          timestamp         = COALESCE(excluded.timestamp, messages.timestamp),
                          sender_name       = COALESCE(excluded.sender_name, messages.sender_name),
                          sender_is_official = COALESCE(excluded.sender_is_official, messages.sender_is_official),
-                         is_one_time       = COALESCE(messages.is_one_time, excluded.is_one_time)`,
+                         is_one_time       = COALESCE(messages.is_one_time, excluded.is_one_time),
+                         reactions         = COALESCE(excluded.reactions, messages.reactions)`,
                     [
                         msg.server_id,
                         msg.temp_id || null,
@@ -302,7 +308,8 @@ export class LocalDatabaseService {
                         finalTimestamp,
                         msg.sender_name || null,
                         (msg.sender_is_official === true || msg.sender_is_official === 1 || String(msg.sender_is_official) === '1') ? 1 : 0,
-                        (msg.is_one_time === true || msg.is_one_time === 1 || String(msg.is_one_time) === 'true' || String(msg.is_one_time) === '1') ? 1 : 0
+                        (msg.is_one_time === true || msg.is_one_time === 1 || String(msg.is_one_time) === 'true' || String(msg.is_one_time) === '1') ? 1 : 0,
+                        msg.reactions ? (typeof msg.reactions === 'string' ? msg.reactions : JSON.stringify(msg.reactions)) : null
                     ]
                 );
                 insertId = result.insertId || 0;
@@ -310,8 +317,8 @@ export class LocalDatabaseService {
                 const result = await db.execute(
                     `INSERT INTO messages
                         (server_id, temp_id, chat_id, sender_id, receiver_id, type,
-                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp, sender_name, sender_is_official, is_one_time)
-                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                         encrypted_payload, local_file_path, status, retry_count, key_version, timestamp, sender_name, sender_is_official, is_one_time, reactions)
+                     VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         msg.temp_id || null,
                         msg.chat_id,
@@ -326,7 +333,8 @@ export class LocalDatabaseService {
                         finalTimestamp,
                         msg.sender_name || null,
                         (msg.sender_is_official === true || msg.sender_is_official === 1 || String(msg.sender_is_official) === '1') ? 1 : 0,
-                        (msg.is_one_time === true || msg.is_one_time === 1 || String(msg.is_one_time) === 'true' || String(msg.is_one_time) === '1') ? 1 : 0
+                        (msg.is_one_time === true || msg.is_one_time === 1 || String(msg.is_one_time) === 'true' || String(msg.is_one_time) === '1') ? 1 : 0,
+                        msg.reactions ? (typeof msg.reactions === 'string' ? msg.reactions : JSON.stringify(msg.reactions)) : null
                     ]
                 );
                 insertId = result.insertId || 0;
@@ -646,7 +654,27 @@ export class LocalDatabaseService {
         );
     }
 
+    static async ensureSelfChat(userId: string): Promise<void> {
+        if (!this.isInitialized) return;
+        const db = this.getDB();
+        const chatId = `chat_${userId}_${userId}`;
+        try {
+            await db.execute(
+                `INSERT INTO chats (id, is_group, other_user_id, other_username, unread_count)
+                 VALUES (?, 0, ?, 'Note to self', 0)
+                 ON CONFLICT(id) DO NOTHING`,
+                [chatId, userId]
+            );
+        } catch (e) {
+            console.error("[DB] ensureSelfChat failed:", e);
+        }
+    }
+
     static async deleteChatByOtherUserId(otherUserId: string): Promise<void> {
+        if (this.currentUserId && String(otherUserId) === String(this.currentUserId)) {
+            console.log("[DB] Guard: Prevented deletion of self-chat.");
+            return;
+        }
         const db = this.getDB();
         // 1. Find the chat ID(s) involving this user in 1-on-1 contexts
         const result = await db.execute(

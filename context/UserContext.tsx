@@ -39,6 +39,7 @@ interface User {
     scramble_name?: number | boolean;
     scramble_value?: string;
     links?: string; // JSON string of { label: string, url: string }[]
+    tags?: string; // JSON string of string[]
     is_official?: number | boolean;
     notifications_enabled?: number;
     hide_notification_message?: number;
@@ -93,47 +94,30 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     };
 
     const safeSync = async () => {
-        // 0. DB Ready Guard (Silent)
         if (!isDbReady) return;
-
-        // 0.1 Network Guard
-        if (!NetworkService.getIsConnected()) {
-            console.log("[UserContext] 📵 Skip Sync: Device is offline");
-            return;
-        }
-
-        // 1. Sync Lock
+        if (!NetworkService.getIsConnected()) return;
         if (isSyncingRef.current) return;
 
-        // 2. Throttle Guard (3s)
         const now = Date.now();
-        if (now - lastSyncTimeRef.current < 3000) {
-            return;
-        }
+        if (now - lastSyncTimeRef.current < 3000) return;
 
-        // 3. User Ready Guard
         if (!userRef.current?.id) return;
 
-        // 4. Token Guard
         const accessToken = await SecureStoreHelper.getAccessToken();
         const refreshToken = await SecureStoreHelper.getRefreshToken();
-        if (!accessToken || !refreshToken) {
-            console.log("[UserContext] ⚠️ Some tokens missing in safeSync, skipping sync cycle (ApiService will handle if needed)");
-            return;
-        }
+        if (!accessToken || !refreshToken) return;
 
         console.log("[UserContext] 🚀 Smart Sync Triggered");
         isSyncingRef.current = true;
+        lastSyncTimeRef.current = now; // Set immediately to block rapid fire
 
         try {
             await SyncService.syncEverything(Number(userRef.current.id));
-            lastSyncTimeRef.current = Date.now();
 
-            // After sync: check if ApiService cleared our tokens (refresh token was rejected by server)
             const postSyncAccessToken = await SecureStoreHelper.getAccessToken();
             const postSyncRefreshToken = await SecureStoreHelper.getRefreshToken();
             if (!postSyncAccessToken || !postSyncRefreshToken) {
-                console.warn("[UserContext] 🛑 Tokens were cleared during sync (refresh token rejected). Forcing logout.");
+                console.warn("[UserContext] 🛑 Tokens were cleared during sync. Forcing logout.");
                 await setUser(null);
             }
         } catch (error) {
@@ -178,25 +162,23 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 const parsedUser = JSON.parse(userData);
                 console.log(`[UserContext] User ID extracted: ${parsedUser.id}`);
 
-                // Check for tokens strictly
                 const accessToken = await SecureStoreHelper.getAccessToken();
                 const refreshToken = await SecureStoreHelper.getRefreshToken();
-                console.log(`[UserContext] Access token exists: ${!!accessToken}`);
-                console.log(`[UserContext] Refresh token exists: ${!!refreshToken}`);
-
+                
                 if (!accessToken || !refreshToken) {
-                    console.warn("[UserContext] ⚠️ Some auth tokens missing during load. Attempting to proceed (ApiService will handle actual expiry)");
-                    // We don't clear storage here anymore to prevent accidental logouts on secure store glitches
+                    console.warn("[UserContext] ⚠️ Some auth tokens missing during load.");
                 }
 
-                setUserState(parsedUser);
-                // Initialize DB on reload
+                // Initialize DB BEFORE setting state to ensure isDbReady can be set together or soon after
                 console.log("[UserContext] Calling LocalDatabaseService.initDB...");
                 await LocalDatabaseService.initDB(String(parsedUser.id));
+                await LocalDatabaseService.ensureSelfChat(String(parsedUser.id));
+                
+                // Batch these updates
+                setUserState(parsedUser);
                 setIsDbReady(true);
 
                 console.log("[UserContext] isDbReady set to true.");
-                // 🗂️ Ensure Android/media/com.skr.vegram folder exists
                 initMediaFolder().catch(() => { });
             }
         } catch (error) {
@@ -238,30 +220,26 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                     await SecureStoreHelper.setRefreshToken(tokens.refresh_token);
                 }
 
-                // Register Device Token
-                // We do this in background to not block UI
                 if (Platform.OS !== 'web') {
                     registerForPushNotificationsAsync().then(token => {
                         if (token) {
-                            console.log('Updating device token:', token);
                             ApiService.post(`${Config.API_URL}/auth/update_token.php`, { user_id: newUser.id, token })
-                                .catch(err => console.error("Token update failed", err));
+                                .catch(() => {});
                         }
-                    }).catch(err => console.error("Token registration failed", err));
+                    }).catch(() => {});
                 }
 
+                await LocalDatabaseService.initDB(newUser.id.toString());
+                await LocalDatabaseService.ensureSelfChat(newUser.id.toString());
+                
+                setUserState(newUser);
+                setIsDbReady(true);
+                initMediaFolder().catch(() => { });
             } else {
                 await AsyncStorage.removeItem('user');
                 await SecureStoreHelper.clearTokens();
                 LocalDatabaseService.resetConnection();
-            }
-            setUserState(newUser);
-            if (newUser) {
-                await LocalDatabaseService.initDB(newUser.id.toString());
-                setIsDbReady(true);
-                // 🗂️ Ensure Android/media/com.skr.vegram folder exists (first login)
-                initMediaFolder().catch(() => { });
-            } else {
+                setUserState(null);
                 setIsDbReady(false);
             }
         } catch (error) {
@@ -312,11 +290,29 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
     }, [user?.id, fetchRequestCount]);
 
+    const contextValue = useMemo(() => ({
+        user,
+        isProfileComplete,
+        setUser,
+        updateUserProfile,
+        reloadUser,
+        isLoading,
+        isDbReady,
+        unreadCount,
+        setUnreadCount,
+        requestCount,
+        fetchRequestCount,
+        activeChatId,
+        setActiveChatId,
+        safeSync
+    }), [
+        user, isProfileComplete, isLoading, isDbReady, 
+        unreadCount, requestCount, activeChatId, 
+        fetchRequestCount, setUser, updateUserProfile, reloadUser, setActiveChatId, safeSync
+    ]);
+
     return (
-        <UserContext.Provider value={{
-            user, isProfileComplete, setUser, updateUserProfile, reloadUser, isLoading, isDbReady,
-            unreadCount, setUnreadCount, requestCount, fetchRequestCount, activeChatId, setActiveChatId, safeSync
-        }}>
+        <UserContext.Provider value={contextValue}>
             {children}
         </UserContext.Provider>
     );

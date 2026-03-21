@@ -15,7 +15,7 @@ $data = json_decode(file_get_contents("php://input"));
 
 if (!empty($data->reporter_id) && !empty($data->reported_id) && !empty($data->reason)) {
     try {
-        $query = "INSERT INTO reports (reporter_id, reported_id, reason) VALUES (:rid, :rtd, :reason)";
+        $query = "INSERT INTO reports (reporter_id, reported_id, reason, is_group) VALUES (:rid, :rtd, :reason, 0)";
         $stmt = $pdo->prepare($query);
         $stmt->bindParam(':rid', $data->reporter_id);
         $stmt->bindParam(':rtd', $data->reported_id);

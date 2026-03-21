@@ -85,10 +85,13 @@
       "expo-video"
     ],
     "extra": {
-      "router": {},
+      "router": {
+        "origin": false
+      },
       "eas": {
-        "projectId": "311d8ff0-7a32-4a33-ad53-77cc0ca53f9a"
+        "projectId": "d221b2d2-27db-4837-97b5-e2403d708ddc"
       }
-    }
+    },
+    "owner": "web_skr"
   }
 }

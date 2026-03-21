@@ -15,19 +15,28 @@ $data = json_decode(file_get_contents("php://input"));
 
 if (!empty($data->message_id) && !empty($data->user_id) && !empty($data->emoji)) {
     try {
-        // Check if reaction already exists
-        $check_query = "SELECT id FROM reactions WHERE message_id = :mid AND user_id = :uid AND emoji = :emoji";
+        // Check if user already has ANY reaction on this message
+        $check_query = "SELECT id, emoji FROM reactions WHERE message_id = :mid AND user_id = :uid LIMIT 1";
         $stmt = $pdo->prepare($check_query);
-        $stmt->execute([':mid' => $data->message_id, ':uid' => $data->user_id, ':emoji' => $data->emoji]);
+        $stmt->execute([':mid' => $data->message_id, ':uid' => $data->user_id]);
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        if ($stmt->rowCount() > 0) {
-            // Remove reaction
-            $delete_query = "DELETE FROM reactions WHERE message_id = :mid AND user_id = :uid AND emoji = :emoji";
-            $stmt = $pdo->prepare($delete_query);
-            $stmt->execute([':mid' => $data->message_id, ':uid' => $data->user_id, ':emoji' => $data->emoji]);
-            echo json_encode(["message" => "Reaction removed.", "status" => "removed"]);
+        if ($existing) {
+            if ($existing['emoji'] === $data->emoji) {
+                // Same emoji tapped again → remove (toggle off)
+                $delete_query = "DELETE FROM reactions WHERE id = :id";
+                $stmt = $pdo->prepare($delete_query);
+                $stmt->execute([':id' => $existing['id']]);
+                echo json_encode(["message" => "Reaction removed.", "status" => "removed"]);
+            } else {
+                // Different emoji → update (overwrite)
+                $update_query = "UPDATE reactions SET emoji = :emoji WHERE id = :id";
+                $stmt = $pdo->prepare($update_query);
+                $stmt->execute([':emoji' => $data->emoji, ':id' => $existing['id']]);
+                echo json_encode(["message" => "Reaction updated.", "status" => "updated"]);
+            }
         } else {
-            // Add reaction
+            // No existing reaction → insert new
             $insert_query = "INSERT INTO reactions (message_id, user_id, emoji) VALUES (:mid, :uid, :emoji)";
             $stmt = $pdo->prepare($insert_query);
             $stmt->execute([':mid' => $data->message_id, ':uid' => $data->user_id, ':emoji' => $data->emoji]);

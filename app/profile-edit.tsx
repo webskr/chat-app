@@ -13,6 +13,8 @@ import { Avatar } from '../components/Avatar';
 import { ThemedText } from '../components/ThemedText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
+import { SearchablePicker } from '../components/SearchablePicker';
+import { AVAILABLE_TAGS, Tag } from '../constants/Tags';
 
 const PLATFORMS = [
     { id: 'instagram', label: 'Instagram', icon: 'logo-instagram', color: '#E4405F', match: 'instagram.com' },
@@ -53,6 +55,19 @@ export default function ProfileEditScreen() {
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
     const [isSecurityVisible, setIsSecurityVisible] = useState(false);
+
+    // Country-State-City states
+    const [allCountries, setAllCountries] = useState<string[]>([]);
+    const [allStates, setAllStates] = useState<string[]>([]);
+    const [allDistricts, setAllDistricts] = useState<string[]>([]);
+    
+    const [isCountryLoading, setIsCountryLoading] = useState(false);
+    const [isStateLoading, setIsStateLoading] = useState(false);
+    const [isDistrictLoading, setIsDistrictLoading] = useState(false);
+
+    const [userTags, setUserTags] = useState<string[]>([]);
+    const [isTagModalVisible, setIsTagModalVisible] = useState(false);
+    const [tagSearchQuery, setTagSearchQuery] = useState('');
     
     useEffect(() => {
         reloadUser();
@@ -71,12 +86,112 @@ export default function ProfileEditScreen() {
             } catch (e) {
                 setLinks([]);
             }
+            try {
+                setUserTags(user.tags ? JSON.parse(user.tags) : []);
+            } catch (e) {
+                setUserTags([]);
+            }
             setAvatarId(user.avatar_id || '1');
             if (user.avatar_url) {
                 setCustomAvatar(`${Config.API_URL}/${user.avatar_url}`);
             }
         }
     }, [user]);
+
+    // Fetch Countries on mount
+    useEffect(() => {
+        const fetchCountries = async () => {
+            setIsCountryLoading(true);
+            try {
+                const response = await fetch('https://countriesnow.space/api/v0.1/countries');
+                const result = await response.json();
+                if (!result.error) {
+                    const countryNames = result.data.map((item: any) => item.country).sort();
+                    setAllCountries(countryNames);
+                }
+            } catch (error) {
+                console.error('Error fetching countries:', error);
+            } finally {
+                setIsCountryLoading(false);
+            }
+        };
+        fetchCountries();
+    }, []);
+
+    // Fetch States when country changes
+    useEffect(() => {
+        const fetchStatesData = async () => {
+            if (!country) {
+                setAllStates([]);
+                return;
+            }
+            setIsStateLoading(true);
+            try {
+                const response = await fetch('https://countriesnow.space/api/v0.1/countries/states', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ country })
+                });
+                const result = await response.json();
+                if (!result.error && result.data.states) {
+                    const stateNames = result.data.states.map((s: any) => s.name).sort();
+                    setAllStates(stateNames);
+                } else {
+                    setAllStates([]);
+                }
+            } catch (error) {
+                console.error('Error fetching states:', error);
+                setAllStates([]);
+            } finally {
+                setIsStateLoading(false);
+            }
+        };
+        fetchStatesData();
+    }, [country]);
+
+    // Fetch Districts/Cities when state changes (ONLY FOR INDIA - IMPROVED DATA)
+    useEffect(() => {
+        const fetchDistrictsData = async () => {
+            if (country !== 'India' || !stateField) {
+                setAllDistricts([]);
+                return;
+            }
+            setIsDistrictLoading(true);
+            try {
+                // Try fetching from a more accurate Indian districts source first
+                const indiaResponse = await fetch('https://raw.githubusercontent.com/sab99r/Indian-States-And-Districts/master/states-and-districts.json');
+                const indiaData = await indiaResponse.json();
+                
+                if (indiaData && indiaData.states) {
+                    const stateObj = indiaData.states.find((s: any) => s.state === stateField);
+                    if (stateObj && stateObj.districts) {
+                        setAllDistricts(stateObj.districts.sort());
+                        return;
+                    }
+                }
+
+                // Fallback to countriesnow.space if GitHub source fails or state not found
+                const response = await fetch('https://countriesnow.space/api/v0.1/countries/state/cities', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ country, state: stateField })
+                });
+                const result = await response.json();
+                if (!result.error && result.data) {
+                    const districtNames = result.data.sort();
+                    setAllDistricts(districtNames);
+                } else {
+                    setAllDistricts([]);
+                }
+            } catch (error) {
+                console.error('Error fetching districts:', error);
+                setAllDistricts([]);
+            } finally {
+                setIsDistrictLoading(false);
+            }
+        };
+        fetchDistrictsData();
+    }, [country, stateField]);
 
     const handlePickAvatar = async () => {
         try {
@@ -173,8 +288,8 @@ export default function ProfileEditScreen() {
             return;
         }
 
-        if (!country.trim() || !stateField.trim() || !district.trim()) {
-            Alert.alert('Error', 'Country, State, and District are mandatory');
+        if (!country.trim() || !stateField.trim() || (country === 'India' && !district.trim())) {
+            Alert.alert('Error', country === 'India' ? 'Country, State, and District are mandatory' : 'Country and State are mandatory');
             return;
         }
 
@@ -202,6 +317,7 @@ export default function ProfileEditScreen() {
                 state: stateField,
                 district: district,
                 links: JSON.stringify(links),
+                tags: JSON.stringify(userTags),
                 avatar_id: avatarId
             };
 
@@ -226,6 +342,7 @@ export default function ProfileEditScreen() {
                     state: stateField,
                     district: district,
                     links: JSON.stringify(links),
+                    tags: JSON.stringify(userTags),
                     avatar_id: avatarId,
                     avatar_url: newAvatarUrl || (avatarId === 'custom' ? user.avatar_url : undefined), // Keep existing if custom and not changed, or new one
                     username_last_updated: data.user?.username_last_updated || user.username_last_updated
@@ -408,43 +525,86 @@ export default function ProfileEditScreen() {
                                 <Text style={styles.charCount}>{bio.length}/120</Text>
                             </View>
 
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>
-                                    Country <Text style={{ color: Colors.error }}>*</Text>
-                                </Text>
-                                <TextInput
-                                    style={styles.textInput}
-                                    placeholder="Enter your country"
-                                    placeholderTextColor={Colors.textSecondary}
-                                    value={country}
-                                    onChangeText={setCountry}
-                                />
-                            </View>
+                            <SearchablePicker
+                                label="Country"
+                                value={country}
+                                data={allCountries}
+                                loading={isCountryLoading}
+                                placeholder="Select your country"
+                                onSelect={(val) => {
+                                    setCountry(val);
+                                    setStateField('');
+                                    setDistrict('');
+                                }}
+                                error={!country ? 'Mandatory' : undefined}
+                            />
 
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>
-                                    State <Text style={{ color: Colors.error }}>*</Text>
-                                </Text>
-                                <TextInput
-                                    style={styles.textInput}
-                                    placeholder="Enter your state"
-                                    placeholderTextColor={Colors.textSecondary}
-                                    value={stateField}
-                                    onChangeText={setStateField}
-                                />
-                            </View>
+                            <SearchablePicker
+                                label="State"
+                                value={stateField}
+                                data={allStates}
+                                loading={isStateLoading}
+                                disabled={!country}
+                                placeholder={!country ? "Select country first" : "Select your state"}
+                                onSelect={(val) => {
+                                    setStateField(val);
+                                    setDistrict('');
+                                }}
+                                error={!stateField ? 'Mandatory' : undefined}
+                            />
 
-                            <View style={[styles.inputGroup, { marginBottom: 0 }]}>
-                                <Text style={styles.inputLabel}>
-                                    District <Text style={{ color: Colors.error }}>*</Text>
-                                </Text>
-                                <TextInput
-                                    style={styles.textInput}
-                                    placeholder="Enter your district"
-                                    placeholderTextColor={Colors.textSecondary}
+                            {country === 'India' && (
+                                <SearchablePicker
+                                    label="District"
                                     value={district}
-                                    onChangeText={setDistrict}
+                                    data={allDistricts}
+                                    loading={isDistrictLoading}
+                                    disabled={!stateField}
+                                    placeholder={!stateField ? "Select state first" : "Select your district"}
+                                    onSelect={(val) => setDistrict(val)}
+                                    error={!district ? 'Mandatory' : undefined}
                                 />
+                            )}
+
+                            {/* Tags Section */}
+                            <View style={{ marginTop: 24 }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                    <Text style={styles.inputLabel}>Tags</Text>
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            if (userTags.length >= 5) {
+                                                Alert.alert('Limit Reached', 'You can only add up to 5 tags.');
+                                                return;
+                                            }
+                                            setIsTagModalVisible(true);
+                                        }}
+                                    >
+                                        <View style={styles.addIconCircle}>
+                                            <Ionicons name="add" size={20} color={Colors.primary} />
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <View style={styles.tagsContainer}>
+                                    {userTags.length > 0 ? (
+                                        userTags.map((tagLabel, index) => {
+                                            const tagInfo = AVAILABLE_TAGS.find(t => t.label === tagLabel) || { label: tagLabel, color: Colors.primary };
+                                            return (
+                                                <View key={index} style={[styles.tagChip, { backgroundColor: `${tagInfo.color}20`, borderColor: tagInfo.color }]}>
+                                                    <Text style={[styles.tagText, { color: tagInfo.color }]}>{tagInfo.label}</Text>
+                                                    <TouchableOpacity onPress={() => {
+                                                        const newTags = userTags.filter(t => t !== tagLabel);
+                                                        setUserTags(newTags);
+                                                    }}>
+                                                        <Ionicons name="close-circle" size={16} color={tagInfo.color} style={{ marginLeft: 6 }} />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            );
+                                        })
+                                    ) : (
+                                        <Text style={{ color: Colors.textSecondary, fontSize: 13, marginLeft: 4 }}>Add up to 5 tags (optional)</Text>
+                                    )}
+                                </View>
                             </View>
                         </View>
 
@@ -688,6 +848,87 @@ export default function ProfileEditScreen() {
                         </BlurView>
                     </View>
                 </KeyboardAvoidingView>
+            </Modal>
+
+            {/* Tags Selection Modal */}
+            <Modal
+                visible={isTagModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setIsTagModalVisible(false)}
+            >
+                <BlurView intensity={90} tint="dark" style={styles.modalOverlay}>
+                    <TouchableOpacity 
+                        style={{ flex: 1 }} 
+                        activeOpacity={1} 
+                        onPress={() => setIsTagModalVisible(false)} 
+                    />
+                    <View style={styles.tagModalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Select Tags ({userTags.length}/5)</Text>
+                            <TouchableOpacity onPress={() => setIsTagModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={Colors.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.tagSearchContainer}>
+                            <Ionicons name="search" size={20} color={Colors.textSecondary} style={{ marginRight: 10 }} />
+                            <TextInput
+                                style={styles.tagSearchInput}
+                                placeholder="Search tags..."
+                                placeholderTextColor={Colors.textSecondary}
+                                value={tagSearchQuery}
+                                onChangeText={setTagSearchQuery}
+                                autoCorrect={false}
+                            />
+                        </View>
+
+                        <ScrollView style={{ maxHeight: 400 }}>
+                            <View style={styles.tagGrid}>
+                                {AVAILABLE_TAGS.filter(t => 
+                                    t.label.toLowerCase().includes(tagSearchQuery.toLowerCase())
+                                ).map((tag) => {
+                                    const isSelected = userTags.includes(tag.label);
+                                    return (
+                                        <TouchableOpacity
+                                            key={tag.label}
+                                            style={[
+                                                styles.tagOption,
+                                                { backgroundColor: isSelected ? tag.color : 'rgba(255, 255, 255, 0.05)' },
+                                                isSelected && { borderColor: tag.color }
+                                            ]}
+                                            onPress={() => {
+                                                if (isSelected) {
+                                                    setUserTags(userTags.filter(t => t !== tag.label));
+                                                } else {
+                                                    if (userTags.length >= 5) {
+                                                        Alert.alert('Limit Reached', 'You can only add up to 5 tags.');
+                                                        return;
+                                                    }
+                                                    setUserTags([...userTags, tag.label]);
+                                                }
+                                            }}
+                                        >
+                                            <Text style={[
+                                                styles.tagOptionText,
+                                                isSelected && { color: '#FFF' }
+                                            ]}>
+                                                {tag.label}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </ScrollView>
+                        
+                        <TouchableOpacity 
+                            style={styles.doneButton}
+                            onPress={() => setIsTagModalVisible(false)}
+                        >
+                            <Text style={styles.doneButtonText}>Done</Text>
+                        </TouchableOpacity>
+                    </View>
+                </BlurView>
             </Modal>
 
             {/* Platform Selection Modal */}
@@ -944,6 +1185,12 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: Colors.textSecondary,
     },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
     // Security Section
     collapsibleCard: {
         backgroundColor: 'rgba(255, 255, 255, 0.04)',
@@ -1095,5 +1342,78 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         borderRadius: 10,
         padding: 2,
+    },
+    // Tags Styles
+    tagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 8,
+    },
+    tagChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 20,
+        borderWidth: 1,
+    },
+    tagText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    tagModalContent: {
+        backgroundColor: Colors.background,
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
+        padding: 24,
+        width: '100%',
+        maxHeight: '80%',
+        borderWidth: 1,
+        borderColor: Colors.glassBorder,
+    },
+    tagSearchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: 15,
+        paddingHorizontal: 15,
+        height: 50,
+        marginBottom: 20,
+    },
+    tagSearchInput: {
+        flex: 1,
+        color: Colors.text,
+        fontSize: 16,
+    },
+    tagGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+        paddingBottom: 20,
+    },
+    tagOption: {
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    tagOptionText: {
+        fontSize: 14,
+        color: Colors.textSecondary,
+    },
+    doneButton: {
+        backgroundColor: Colors.primary,
+        height: 54,
+        borderRadius: 27,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 20,
+    },
+    doneButtonText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });

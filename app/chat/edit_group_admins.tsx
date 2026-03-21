@@ -30,7 +30,7 @@ export default function EditGroupAdminsScreen() {
             const data = await response.json();
             if (response.ok) {
                 if (data.my_role !== 'owner') {
-                    Alert.alert("Permission Denied", "Only the group owner can manage admins.");
+                    Alert.alert("Permission Denied", "Only the group owner can manage managers.");
                     router.back();
                     return;
                 }
@@ -99,14 +99,14 @@ export default function EditGroupAdminsScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Ionicons name="arrow-back" size={24} color={Colors.text} />
                     <View style={{ marginLeft: 12 }}>
-                        <ThemedText type="subtitle" style={{ fontSize: 18 }}>Edit group admins</ThemedText>
+                        <ThemedText type="subtitle" style={{ fontSize: 18 }}>Edit group managers</ThemedText>
                     </View>
                 </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={{ padding: 16 }}>
                 <ThemedText style={styles.infoText}>
-                    Group admins can add or remove members and edit group info. You can have up to 3 admins.
+                    Group managers can add or remove members and edit group info. You can have up to 3 managers.
                 </ThemedText>
 
                 <View style={styles.listContainer}>
@@ -125,9 +125,9 @@ export default function EditGroupAdminsScreen() {
                                 <ThemedText type="defaultSemiBold">{member.username}</ThemedText>
                                 <ThemedText style={{
                                     fontSize: 12,
-                                    color: member.role === 'owner' ? Colors.error : (member.role === 'admin' ? '#FF9500' : Colors.textSecondary)
+                                    color: member.role === 'owner' ? Colors.error : (member.role === 'admin' ? '#2196F3' : Colors.textSecondary)
                                 }}>
-                                    {member.role === 'owner' ? 'Group Owner' : member.role === 'admin' ? 'Admin' : 'Member'}
+                                    {member.role === 'owner' ? 'Group Owner' : member.role === 'admin' ? 'Manager' : 'Member'}
                                 </ThemedText>
                             </View>
 
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     checkContainer: {
         height: 24,
         borderRadius: 12,
-        backgroundColor: '#FF9500', // Orange
+        backgroundColor: '#2196F3', // Blue
         justifyContent: 'center',
         alignItems: 'center',
     }

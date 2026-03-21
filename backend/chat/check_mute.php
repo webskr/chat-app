@@ -13,6 +13,7 @@ include_once '../includes/db_connection.php';
 
 $user_id = isset($_GET['user_id']) ? $_GET['user_id'] : null;
 $target_id = isset($_GET['target_id']) ? $_GET['target_id'] : null;
+$is_group = isset($_GET['is_group']) ? (int)$_GET['is_group'] : 0;
 
 if (!$user_id || !$target_id) {
     http_response_code(400);
@@ -21,8 +22,8 @@ if (!$user_id || !$target_id) {
 }
 
 try {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM muted_chats WHERE user_id = :uid AND target_id = :tid AND mute_until > NOW()");
-    $stmt->execute([':uid' => $user_id, ':tid' => $target_id]);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM muted_chats WHERE user_id = :uid AND target_id = :tid AND is_group = :isg AND mute_until > NOW()");
+    $stmt->execute([':uid' => $user_id, ':tid' => $target_id, ':isg' => $is_group]);
     $is_muted = $stmt->fetchColumn() > 0;
     
     echo json_encode(["is_muted" => $is_muted]);

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton, Animated } from 'react-native';
+import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton, Animated, BackHandler } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 // @ts-ignore
 import { io, Socket } from 'socket.io-client';
@@ -79,6 +79,7 @@ export default function ChatDetailScreen() {
     const [replyingToMessage, setReplyingToMessage] = useState<any>(null);
     const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
     const [selectedMessageIds, setSelectedMessageIds] = useState<number[]>([]);
+    const [activeReactionMessageId, setActiveReactionMessageId] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
@@ -209,28 +210,45 @@ export default function ChatDetailScreen() {
 
         for (const m of msgs) {
             if (!m) continue;
-            const isLocal = m.is_local || !m.id || isNaN(Number(m.id)) || (typeof m.id === 'string' && (m.id.startsWith('temp_') || m.id.startsWith('sock_') && !m.server_id));
+            
+            // ✅ Robust check for local-only messages
+            // A message is local if:
+            // 1. Explicitly marked is_local: true (optimistic)
+            // 2. OR Has no server_id AND no id at all (newly created)
+            // 3. OR Has no server_id AND id starts with 'temp_' or 'sock_'
+            // 4. OR Has temp_id and is NOT from DB (is_local)
+            const isLocal = m.is_local || !m.id || (typeof m.id === 'string' && (m.id.startsWith('temp_') || m.id.startsWith('sock_')));
 
             if (isLocal) {
                 const tempKey = `temp_${m.temp_id ?? m.id}`;
+                // Keep the most recent version of a local message, or keep if it has media_url (upload progress)
                 if (!localOnly.has(tempKey) || m.media_url) {
                     localOnly.set(tempKey, m);
                 }
             } else {
-                const serverKey = String(m.id);
-                const existing = confirmed.get(serverKey);
-                if (!existing || m.status === 'seen' || (m.status === 'delivered' && existing.status !== 'seen')) {
-                    confirmed.set(serverKey, m);
+                // ✅ FIX: Use server_id as the primary key for confirmed messages to avoid collision with local SQLite auto-increment IDs
+                const serverIdStr = m.server_id ? String(m.server_id) : (m.id ? `local_${m.id}` : null);
+                if (!serverIdStr) continue;
+
+                const existing = confirmed.get(serverIdStr);
+                // Prefer 'seen' > 'delivered' > 'sent' > others
+                const statusPriority = { 'seen': 3, 'delivered': 2, 'sent': 1, 'sending': 0, 'failed': -1, 'pending': -1 };
+                const getPrio = (s: string) => (statusPriority[s as keyof typeof statusPriority] ?? 0);
+
+                if (!existing || getPrio(m.status) > getPrio(existing.status)) {
+                    confirmed.set(serverIdStr, m);
                 }
             }
         }
 
+        // ✅ If a confirmed message matches a temp_id, remove the optimistic one
         for (const [, m] of confirmed) {
-            if (m.temp_id) localOnly.delete(`temp_${m.temp_id}`);
+            if (m.temp_id) {
+                localOnly.delete(`temp_${m.temp_id}`);
+            }
         }
 
         const merged = [...confirmed.values(), ...localOnly.values()];
-        // Only sort if we have items
         if (merged.length > 1) {
             merged.sort((a, b) => {
                 const ta = parseToDate(a.created_at || a.timestamp || 0).getTime();
@@ -333,6 +351,19 @@ export default function ChatDetailScreen() {
     }, [isPanelOpen]);
 
     useEffect(() => {
+        const backAction = () => {
+            if (activeReactionMessageId || selectedMessageIds.length > 0) {
+                setActiveReactionMessageId(null);
+                setSelectedMessageIds([]);
+                return true;
+            }
+            return false;
+        };
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+        return () => backHandler.remove();
+    }, [activeReactionMessageId, selectedMessageIds]);
+
+    useEffect(() => {
         if (Platform.OS === 'android') return; // Android handles keyboard resizing natively with adjustResize
 
         const showSubscription = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
@@ -364,34 +395,35 @@ export default function ChatDetailScreen() {
         }
     }
 
-    async function fetchMessages(signal?: AbortSignal) {
-        if (!currentUser) return;
+    /**
+     * ✅ CONSOLIDATED SYNC LOGIC
+     * Handles initial local load, background sync from server, and E2EE decryption.
+     */
+    async function syncChatData(signal?: AbortSignal) {
+        if (!currentUser || !id) return;
         if (isFetchingRef.current) return;
         isFetchingRef.current = true;
 
         const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
 
         try {
-            // 1. Load initial messages from Local DB immediately
+            // 1. Initial Load from Local DB (Fast UI)
+            console.log(`[Sync] Loading local messages for ${chatId}`);
             let localRows: any[] = [];
             if (highlightMessageId) {
                 localRows = await LocalDatabaseService.getMessagesUpToId(chatId, highlightMessageId);
-                // Fallback if not found or empty
-                if (localRows.length === 0) {
-                    localRows = await LocalDatabaseService.getLocalMessages(chatId, 30);
-                }
+                if (localRows.length === 0) localRows = await LocalDatabaseService.getLocalMessages(chatId, 50);
             } else {
-                localRows = await LocalDatabaseService.getLocalMessages(chatId, 30);
+                localRows = await LocalDatabaseService.getLocalMessages(chatId, 50);
             }
 
             const initialMessages = localRows.map(mapDatabaseRowToMessage);
-
-            safeSetMessages(initialMessages);
-            setHasMore(localRows.length >= 30);
+            safeSetMessages(prev => [...initialMessages, ...prev]);
+            
+            setHasMore(localRows.length >= 50);
             setIsLoading(false);
             setIsReady(true);
 
-            // If we have a highlight ID, scroll to it after rendering
             if (highlightMessageId) {
                 setTimeout(() => {
                     const index = localRows.findIndex((r: any) => String(r.id) === String(highlightMessageId) || String(r.server_id) === String(highlightMessageId));
@@ -401,50 +433,120 @@ export default function ChatDetailScreen() {
                 }, 800);
             }
 
-            // 2. Sync from Server (Fetch new messages)
-            let url = `${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}`;
-            if (isGroup) url += `&group_id=${id}`;
-            else url += `&receiver_id=${id}`;
+            // 2. Fetch from Server
+            console.log(`[Sync] Fetching server updates for ${chatId}`);
+            
+            // Parallel Fetch: Messages & Profile
+            const [msgsRes, relRes] = await Promise.all([
+                ApiService.fetch(`${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}&${isGroup ? `group_id=${id}` : `receiver_id=${id}`}`, { signal }),
+                !isGroup ? ApiService.fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal }) : Promise.resolve(null),
+            ]);
 
-            const response = await ApiService.fetch(url, { signal });
             if (signal?.aborted) return;
-            let data = await response.json();
-
             if (currentIdRef.current !== id) return;
 
-            if (response.ok && data && data.length > 0) {
-                for (const msg of data) {
-                    try {
-                        await LocalDatabaseService.insertMessage({
-                            server_id: msg.id?.toString(),
-                            chat_id: chatId,
-                            sender_id: msg.sender_id?.toString(),
-                            receiver_id: msg.receiver_id?.toString(),
-                            type: msg.message_type || 'text',
-                            encrypted_payload: msg.encrypted_payload || msg.message_text,
-                            local_file_path: msg.media_url || undefined,
-                            status: msg.status || 'delivered',
-                            timestamp: msg.created_at || msg.timestamp
-                        });
-                    } catch (e) { }
+            // Handle Profile updates
+            if (relRes && relRes.ok) {
+                const users = await relRes.json();
+                const other = users.find((u: any) => String(u.id) === String(id));
+                if (other) {
+                    setRelationshipStatus(other.relationship_status);
+                    setTargetUserProfile(other);
+                } else if (String(id) === String(currentUser.id)) {
+                    setTargetUserProfile({ ...currentUser, bio: 'Note to self' });
                 }
+            } else if (isGroup) {
+                setTargetUserProfile({ id: id, username: otherUsername || 'Group', avatar_url: avatar_url, is_group: true });
+            }
 
-                // Refresh initial view with synced messages
-                const updatedRows = await LocalDatabaseService.getLocalMessages(chatId, 30);
-                safeSetMessages(updatedRows.map(mapDatabaseRowToMessage));
-                setHasMore(updatedRows.length === 30);
+            // Handle Message updates
+            if (msgsRes.ok) {
+                let data = await msgsRes.json();
+                if (data && data.length > 0) {
+                    // E2EE Decryption Sweep (for 1-on-1)
+                    if (!isGroup) {
+                        try {
+                            const otherId = String(id);
+                            let sharedSecret = sharedSecretCache.current.get(otherId);
+                            if (!sharedSecret) {
+                                const myVersion = await E2EEService.getCurrentKeyVersion(currentUser.id);
+                                const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id, myVersion);
+                                if (myPrivateKey) {
+                                    const keyRes = await ApiService.fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
+                                    if (keyRes.ok) {
+                                        const keys = await keyRes.json();
+                                        if (keys && keys.identity_key) {
+                                            sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
+                                            sharedSecretCache.current.set(otherId, sharedSecret);
+                                        }
+                                    }
+                                }
+                            }
+                            if (sharedSecret) {
+                                data = data.map((msg: any) => {
+                                    if (msg.message_type === 'text' && msg.message_text && msg.message_text.includes(':')) {
+                                        try {
+                                            msg.message_text = E2EEService.decryptMessage(msg.message_text, sharedSecret);
+                                            msg.encrypted_payload = msg.message_text;
+                                        } catch (e) { }
+                                    }
+                                    return msg;
+                                });
+                            }
+                        } catch (decryptErr) { console.error("Decryption sweep failed:", decryptErr); }
+                    }
 
-                if (AppState.currentState === 'active') {
-                    const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
-                    if (shouldMarkRead) updateMessageStatus('seen');
+                    // Persist to Local DB
+                    for (const msg of data) {
+                        try {
+                            await LocalDatabaseService.insertMessage({
+                                server_id: msg.id?.toString(),
+                                chat_id: chatId,
+                                sender_id: msg.sender_id?.toString(),
+                                receiver_id: msg.receiver_id?.toString(),
+                                type: msg.message_type || 'text',
+                                encrypted_payload: msg.encrypted_payload || msg.message_text,
+                                local_file_path: msg.media_url || undefined,
+                                status: msg.status || 'delivered',
+                                timestamp: msg.created_at || msg.timestamp,
+                                reactions: msg.reactions || []
+                            });
+                        } catch (e) { }
+                    }
+
+                    // ✅ Merge final updates into UI
+                    const updatedRows = await LocalDatabaseService.getLocalMessages(chatId, 50);
+                    const updatedMessages = updatedRows.map(mapDatabaseRowToMessage);
+                    safeSetMessages(prev => [...updatedMessages, ...prev]);
+
+                    if (AppState.currentState === 'active') {
+                        const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
+                        if (shouldMarkRead) updateMessageStatus('seen');
+                    }
                 }
             }
+
+            // Sync Presence State
+            const presenceIds = isGroup ? groupMembers.map(m => m.user_id).join(',') : id;
+            if (presenceIds) {
+                const pRes = await ApiService.fetch(`${Config.API_URL}/chat/get_presence.php?ids=${presenceIds}`, { signal });
+                if (pRes.ok) {
+                    const data = await pRes.json();
+                    const newMap: any = {};
+                    data.forEach((p: any) => {
+                        newMap[String(p.id)] = { isOnline: !!p.is_online, lastActive: p.last_active, isTyping: false };
+                    });
+                    setPresenceMap(prev => ({ ...prev, ...newMap }));
+                }
+            }
+
         } catch (error: any) {
-            if (error.name !== 'AbortError') console.error('Error fetching messages:', error);
+            if (error.name !== 'AbortError') console.error('[Sync] Consolidated fetch failed:', error);
         } finally {
             isFetchingRef.current = false;
         }
     }
+
 
     const mapDatabaseRowToMessage = (r: any) => {
         let msgText = r.encrypted_payload;
@@ -465,6 +567,8 @@ export default function ChatDetailScreen() {
 
         return {
             id: r.server_id ? parseInt(r.server_id) : r.id,
+            server_id: r.server_id, // ✅ Keep server_id explicit for deduplication
+            temp_id: r.temp_id,     // ✅ Keep temp_id explicit for deduplication
             is_local: false,
             local_db_id: r.id,
             sender_id: r.sender_id,
@@ -479,7 +583,12 @@ export default function ChatDetailScreen() {
             is_one_time: r.is_one_time === 1,
             created_at: r.timestamp,
             sender_name: r.sender_name,
-            sender_is_official: r.sender_is_official
+            sender_is_official: r.sender_is_official,
+            reactions: r.reactions ? (typeof r.reactions === 'string' ? JSON.parse(r.reactions) : r.reactions).map((re: any) => ({
+                userId: String(re.userId || re.user_id),
+                emoji: re.emoji,
+                username: re.username
+            })) : []
         };
     };
 
@@ -512,6 +621,33 @@ export default function ChatDetailScreen() {
         }
     }
 
+    async function fetchGroupRole(signal?: AbortSignal) {
+        if (!isGroup || !currentUser) return;
+        try {
+            const res = await ApiService.fetch(`${Config.API_URL}/chat/get_group_role.php?group_id=${id}&user_id=${currentUser.id}`, { signal });
+            if (res.ok) {
+                const data = await res.json();
+                setUserRole(data.role || 'member');
+                setPermissions(data.permissions || { allow_member_send_messages: true });
+            }
+        } catch (e: any) {
+            if (e.name !== 'AbortError') console.error('fetchGroupRole error:', e);
+        }
+    }
+
+    async function fetchGroupMembers(signal?: AbortSignal) {
+        if (!isGroup) return;
+        try {
+            const res = await ApiService.fetch(`${Config.API_URL}/chat/get_group_members.php?group_id=${id}`, { signal });
+            if (res.ok) {
+                const data = await res.json();
+                setGroupMembers(data || []);
+            }
+        } catch (e: any) {
+            if (e.name !== 'AbortError') console.error('fetchGroupMembers error:', e);
+        }
+    }
+
     async function updateMessageStatus(status: 'delivered' | 'seen', messageIds: (string | number)[] = []) {
         if (!id || !currentUser) return;
         try {
@@ -539,44 +675,7 @@ export default function ChatDetailScreen() {
         }
     }
 
-    async function fetchRelationshipStatus(signal?: AbortSignal) {
-        if (!currentUser || isGroup) return;
-        try {
-            const response = await ApiService.get(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal });
-            if (signal?.aborted) return;
-            const data = await response.json();
-            if (response.ok) {
-                const otherUser = data.find((u: any) => String(u.id) === String(id));
-                if (otherUser) setRelationshipStatus(otherUser.relationship_status);
-            }
-        } catch (error: any) {
-            if (error.name !== 'AbortError') console.error('Error fetching relationship:', error);
-        }
-    }
 
-    async function fetchGroupDetails(signal?: AbortSignal) {
-        if (!isGroup) return;
-        setTargetUserProfile({ id: id, username: otherUsername || 'Group', avatar_url: avatar_url, is_group: true });
-    }
-
-    async function fetchTargetUserProfile(signal?: AbortSignal) {
-        if (!currentUser || isGroup) return;
-        try {
-            const response = await ApiService.get(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal });
-            if (signal?.aborted) return;
-            const data = await response.json();
-            if (response.ok) {
-                const found = data.find((u: any) => String(u.id) === String(id));
-                if (found) {
-                    setTargetUserProfile(found);
-                } else if (!isGroup && String(id) === String(currentUser.id)) {
-                    setTargetUserProfile({ ...currentUser, bio: 'Note to self' });
-                }
-            }
-        } catch (e: any) {
-            if (e.name !== 'AbortError') console.error("Profile fetch error", e);
-        }
-    }
 
     useFocusEffect(
         React.useCallback(() => {
@@ -619,13 +718,7 @@ export default function ChatDetailScreen() {
                     socket.current?.emit('chat_open', { chatId: id });
                 }
 
-                // [Sync] Trigger offline sync on reconnect using safeSync (lock + throttle)
-                const dbChatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-                SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, dbChatId);
-
-                // 3. Initial Fetch (Local + Sync) - Immediately load local data
-                fetchMessages(signal);
-
+                // Synchronize non-E2EE metadata/messages via Unified Sync
                 safeSync().then(() => {
                     // [Retry] Trigger auto-retry for failed messages
                     SyncService.retryPendingMessages(Number(currentUser.id), resendMessage);
@@ -964,252 +1057,19 @@ export default function ChatDetailScreen() {
                 // --- END REAL-TIME SOCKET SETUP ---
             }
 
-            const fetchData = async () => {
-                const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
 
-                // 1. First, always load from local database (Offline-First)
-                try {
-                    console.log(`[ChatDetail] Loading local messages for chatId: ${chatId}`);
-                    const localRows = await LocalDatabaseService.getLocalMessages(chatId);
-                    console.log(`[ChatDetail] Local database returned ${localRows.length} rows.`);
-
-                    const mappedMessages = localRows.map(r => {
-                        let msgText = r.encrypted_payload;
-                        let mediaUrl = r.local_file_path;
-                        let msgType = r.type;
-                        let e2e_media = null;
-
-                        if (msgText && msgText.startsWith('{') && msgText.includes('"media"')) {
-                            try {
-                                const parsed = JSON.parse(msgText);
-                                if (parsed.media) {
-                                    msgText = parsed.content;
-                                    e2e_media = parsed.media;
-                                    msgType = parsed.media.mimeType && parsed.media.mimeType.includes('video') ? 'video' : 'image';
-                                }
-                            } catch (e) { /* Not JSON or malformed */ }
-                        }
-
-                        return {
-                            id: r.server_id ? parseInt(r.server_id) : r.id,
-                            is_local: false, // ✅ from local DB = already confirmed
-                            local_db_id: r.id,
-                            sender_id: r.sender_id,
-                            receiver_id: r.receiver_id,
-                            message_text: msgText,
-                            media_url: mediaUrl,
-                            e2e_media: e2e_media,
-                            message_type: msgType,
-                            status: r.status,
-                            is_deleted: r.is_deleted === 1,
-                            deleted_for_everyone: r.deleted_for_everyone === 1,
-                            is_one_time: r.is_one_time === 1,
-                            created_at: r.timestamp,
-                        };
-                    });
-                    // ✅ Initial load: safeSetMessages deduplicates automatically
-                    safeSetMessages(mappedMessages);
-                    // setIsLoading(false); // Keep loading until network fetch is done
-                } catch (localError) {
-                    console.error("[ChatDetail] Local load failed:", localError);
-                }
-
-                // 2. Then, try to fetch from server and update DB
-                try {
-                    console.log(`[Chat ${id}] Syncing with server...`);
-
-                    // Parallel Fetch
-                    const [msgsRes, relRes] = await Promise.all([
-                        ApiService.fetch(`${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}&${isGroup ? `group_id=${id}` : `receiver_id=${id}`}`, { signal }),
-                        !isGroup ? ApiService.fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal }) : Promise.resolve(null),
-                    ]);
-
-                    if (signal.aborted) return;
-
-                    // 1. Messages
-                    if (msgsRes.ok) {
-                        let data = await msgsRes.json();
-
-                        // --- E2EE DECRYPTION ---
-                        try {
-                            if (!isGroup) {
-                                const otherId = String(id);
-                                let sharedSecret = sharedSecretCache.current.get(otherId);
-
-                                if (!sharedSecret) {
-                                    const myVersion = await E2EEService.getCurrentKeyVersion(currentUser.id);
-                                    const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id, myVersion);
-                                    if (myPrivateKey) {
-                                        const keyRes = await ApiService.fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
-                                        if (keyRes.ok) {
-                                            const keys = await keyRes.json();
-                                            if (keys && keys.identity_key) {
-                                                sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
-                                                sharedSecretCache.current.set(otherId, sharedSecret);
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (sharedSecret) {
-                                    data = data.map((msg: any) => {
-                                        if (msg.message_type === 'text' && msg.message_text && msg.message_text.includes(':')) {
-                                            try {
-                                                const decryptedText = E2EEService.decryptMessage(msg.message_text, sharedSecret);
-                                                msg.message_text = decryptedText;
-                                                msg.encrypted_payload = decryptedText;
-                                            } catch (e) { /* Fallback */ }
-                                        }
-                                        return msg;
-                                    });
-                                }
-                            }
-                        } catch (decryptErr) {
-                            console.error("Decryption sweep failed:", decryptErr);
-                        }
-                        // --- END E2EE DECRYPTION ---
-
-                        // --- MERGE INTO LOCAL DB ---
-                        if (data && data.length > 0) {
-                            for (const msg of data) {
-                                try {
-                                    await LocalDatabaseService.insertMessage({
-                                        server_id: msg.id.toString(),
-                                        chat_id: chatId,
-                                        sender_id: msg.sender_id.toString(),
-                                        receiver_id: msg.receiver_id?.toString(),
-                                        type: msg.message_type || 'text',
-                                        encrypted_payload: msg.encrypted_payload || msg.message_text,
-                                        local_file_path: msg.media_url || undefined,
-                                        status: msg.status || 'delivered',
-                                        timestamp: msg.created_at || msg.timestamp
-                                    });
-                                } catch (e) { /* Ignore duplicates or errors during insert */ }
-                            }
-                        }
-
-                        // Re-load UI from secure local DB after network sync
-                        console.log(`[ChatDetail] Re-loading messages for chatId: ${chatId} after network sync.`);
-                        const updatedLocalRows = await LocalDatabaseService.getLocalMessages(chatId);
-                        const updatedMappedMessages = updatedLocalRows.map(r => {
-                            let msgText = r.encrypted_payload;
-                            let mediaUrl = r.local_file_path;
-                            let msgType = r.type;
-                            let e2e_media = null;
-
-                            if (msgText && msgText.startsWith('{') && msgText.includes('"media"')) {
-                                try {
-                                    const parsed = JSON.parse(msgText);
-                                    if (parsed.media) {
-                                        msgText = parsed.content;
-                                        e2e_media = parsed.media;
-                                        msgType = parsed.media.mimeType && parsed.media.mimeType.includes('video') ? 'video' : 'image';
-                                    }
-                                } catch (e) { }
-                            }
-
-                            return {
-                                id: r.server_id ? parseInt(r.server_id) : r.id,
-                                is_local: false, // ✅ server-confirmed
-                                local_db_id: r.id,
-                                sender_id: r.sender_id,
-                                receiver_id: r.receiver_id,
-                                message_text: msgText,
-                                media_url: mediaUrl,
-                                e2e_media: e2e_media,
-                                message_type: msgType,
-                                status: r.status,
-                                created_at: r.timestamp
-                            };
-                        });
-
-                        // ✅ MERGE: keep any new optimistic messages sent during the network round-trip
-                        safeSetMessages(prev => {
-                            const localOnly = prev.filter(m => m.is_local === true);
-                            return [...updatedMappedMessages, ...localOnly];
-                        });
-                        // Mark seen if active
-                        if (AppState.currentState === 'active') {
-                            const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
-                            if (shouldMarkRead) updateMessageStatus('seen');
-                        }
-                    }
-
-                    // 2. Relationship / Profile
-                    if (relRes && relRes.ok) {
-                        const data = await relRes.json();
-                        const otherUser = data.find((u: any) => String(u.id) === String(id));
-                        if (otherUser) {
-                            setRelationshipStatus(otherUser.relationship_status);
-                            setTargetUserProfile(otherUser);
-                        } else if (String(id) === String(currentUser.id)) {
-                            setTargetUserProfile({ ...currentUser, bio: 'Note to self' });
-                        }
-                    }
-
-                    // 3. Group Details
-                    if (isGroup) {
-                        // Simplify: use params or existing logic tailored for groups
-                        setTargetUserProfile({
-                            id: id,
-                            username: otherUsername || 'Group',
-                            avatar_url: avatar_url,
-                            is_group: true
-                        });
-                    }
-
-                    // 4. Update Last Seen
-                    try {
-                        await ApiService.post(`${Config.API_URL}/users/update_last_seen.php`, { user_id: currentUser.id });
-                    } catch (e) { }
-
-                    // 5. Scroll Position
-                    loadLastScrollPosition();
-
-                } catch (error: any) {
-                    if (error.name !== 'AbortError') {
-                        console.error(`[Chat ${id}] Fetch error:`, error);
-                    }
-                } finally {
-                    if (!signal.aborted) {
-                        setIsLoading(false);
-                        setIsReady(true);
-                    }
-                }
-            };
-
-            const fetchPresenceState = async () => {
-                const ids = isGroup ? groupMembers.map(m => m.user_id).join(',') : id;
-                if (!ids) return;
-                try {
-                    const res = await ApiService.fetch(`${Config.API_URL}/chat/get_presence.php?ids=${ids}`, { signal });
-                    if (res.ok) {
-                        const data = await res.json();
-                        const newMap: any = {};
-                        data.forEach((p: any) => {
-                            newMap[String(p.id)] = {
-                                isOnline: !!p.is_online,
-                                lastActive: p.last_active,
-                                isTyping: false
-                            };
-                        });
-                        setPresenceMap(prev => ({ ...prev, ...newMap }));
-                    }
-                } catch (e) { }
-            };
-
-            fetchData();
-            fetchPresenceState();
+            // Initial Data Sync
+            syncChatData(signal);
 
             // Fallback Polling (Interval) - Much slower now that we have WebSockets and Unified Sync
             const interval = setInterval(() => {
-                if (AppState.currentState === 'active') {
-                    // Only sync incrementally, don't fetch all messages
+                if (AppState.currentState === 'active' && currentUser) {
                     const dbChatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
                     SyncService.syncChat(Number(currentUser.id), Number(id), isGroup, dbChatId);
-                    updateLastSeen();
+                    updateLastSeen(signal);
                 }
-            }, 30000); // 30s interval is enough for fallback
+            }, 60000);
+
 
             return () => {
                 isMounted.current = false;
@@ -1225,10 +1085,10 @@ export default function ChatDetailScreen() {
                 Notifications.setNotificationHandler({
                     handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true }),
                 });
-                saveLastScrollPosition();
-            };
-        }, [id, currentUser, isDbReady])
-    );
+            saveLastScrollPosition();
+        };
+    }, [id, currentUser, isDbReady])
+);
 
     const handleSend = async (messageText: string = inputText, mediaPath: string | null = null, mediaType: 'text' | 'image' | 'video' | 'audio' | 'voice' | 'document' | 'gif' | 'sticker' = 'text', isRetry = false, isOneTime = false, scheduledAt: Date | null = null, extraMeta: any = {}) => {
         if (!currentUser) return null;
@@ -2184,7 +2044,7 @@ export default function ChatDetailScreen() {
                     });
                     const data = await response.json();
                     if (response.ok) {
-                        fetchRelationshipStatus();
+                        syncChatData();
                     } else {
                         Alert.alert("Error", data.message || "Failed to update block status.");
                     }
@@ -2322,6 +2182,7 @@ export default function ChatDetailScreen() {
 
     const handleLongPressMessage = (message: any) => {
         if (!isSelectionMode) {
+            setActiveReactionMessageId(message.id);
             setSelectedMessageIds([message.id]);
         } else {
             handleSelectMessage(message.id);
@@ -2382,6 +2243,18 @@ export default function ChatDetailScreen() {
         });
 
         setSelectedMessageIds([]);
+    };
+
+    const handleReplySelected = () => {
+        if (selectedMessageIds.length === 1) {
+            const msg = messages.find(m => m.id === selectedMessageIds[0]);
+            if (msg) {
+                setReplyingToMessage(msg);
+                setSelectedMessageIds([]);
+                // Focus input
+                setTimeout(() => inputRef.current?.focus(), 100);
+            }
+        }
     };
 
     const handleMediaSelect = (type: string, content: string) => {
@@ -2561,7 +2434,56 @@ export default function ChatDetailScreen() {
         }
     }, [id, currentUser]); // handleViewOneTimeMessage is stable
 
-    const handleReaction = useCallback((msgId: number, emoji: string) => { }, []);
+    const handleReaction = useCallback(async (msgId: number, emoji: string) => {
+        if (!currentUser) return;
+
+        // Optimistic state update
+        safeSetMessages(prev => prev.map(m => {
+            if (m.id !== msgId) return m;
+            const existing: any[] = m.reactions || [];
+            const myReactionIdx = existing.findIndex((r: any) => String(r.userId) === String(currentUser.id));
+
+            let updated: any[];
+            if (myReactionIdx !== -1 && existing[myReactionIdx].emoji === emoji) {
+                // Same emoji tapped again → remove
+                updated = existing.filter((_: any, i: number) => i !== myReactionIdx);
+            } else if (myReactionIdx !== -1) {
+                // Different emoji → replace
+                updated = existing.map((r: any, i: number) =>
+                    i === myReactionIdx ? { ...r, emoji } : r
+                );
+            } else {
+                // New reaction
+                updated = [...existing, { userId: String(currentUser.id), emoji, username: currentUser.username }];
+            }
+            const result = { ...m, reactions: updated };
+            
+            // Persist to local DB immediately
+            if (m.local_db_id) {
+                LocalDatabaseService.getDB().execute(
+                    `UPDATE messages SET reactions = ? WHERE id = ?`,
+                    [JSON.stringify(updated), m.local_db_id]
+                ).catch((err: any) => console.error('[Reaction] Local DB update failed:', err));
+            }
+            
+            return result;
+        }));
+
+        // Persist to backend
+        try {
+            await ApiService.post(`${Config.API_URL}/chat/toggle_reaction.php`, {
+                message_id: msgId,
+                user_id: currentUser.id,
+                emoji,
+            });
+        } catch (e) {
+            console.error('[Reaction] Failed to save reaction', e);
+        }
+
+        // Close the reaction picker
+        setActiveReactionMessageId(null);
+        setSelectedMessageIds([]);
+    }, [currentUser, safeSetMessages]);
 
     const renderMessage = useCallback(({ item, index }: any) => {
         if (!item) return null;
@@ -2595,12 +2517,15 @@ export default function ChatDetailScreen() {
                 onSelect={handleSelectMessage}
                 selectedCount={selectedMessageIds.length}
                 groupMembers={groupMembers}
+                activeReactionMessageId={activeReactionMessageId}
+                setActiveReactionMessageId={setActiveReactionMessageId}
                 highlighted={highlightMessageId && (String(item.id) === String(highlightMessageId) || String(item.server_id) === String(highlightMessageId))}
             />
         );
     }, [
         isGroup, currentUser?.id, id, otherUsername, targetUserProfile?.id,
         selectedMessageId, isSelectionMode, selectedMessageIds.length, groupMembers.length,
+        activeReactionMessageId,
         handleLongPressMessage, handleDeleteMessage, handleSend, handleImagePress,
         scrollToMessage, handleForwardMessage, handleSelectMessage, handleReaction,
         setReplyingToMessage, highlightMessageId
@@ -2690,12 +2615,17 @@ export default function ChatDetailScreen() {
                 modalVisible={modalVisible}
                 setModalVisible={setModalVisible}
                 menuItems={menuItems}
-                fetchRelationshipStatus={fetchRelationshipStatus}
+                fetchRelationshipStatus={syncChatData}
                 selectionMode={isSelectionMode}
                 selectedCount={selectedMessageIds.length}
-                onCancelSelection={() => setSelectedMessageIds([])}
+                onCancelSelection={() => {
+                    setSelectedMessageIds([]);
+                    setActiveReactionMessageId(null);
+                }}
                 onDeleteSelected={handleDeleteSelected}
                 onCopySelected={handleCopySelected}
+                onForwardSelected={handleForwardSelected}
+                onReplySelected={handleReplySelected}
                 isOfficialParam={isOfficialParam}
             />
 
@@ -2725,14 +2655,20 @@ export default function ChatDetailScreen() {
                         extraData={{
                             selectedMessageIds,
                             isSelectionMode,
-                            highlightMessageId
+                            highlightMessageId,
+                            activeReactionMessageId
                         }}
                         estimatedItemSize={120}
                         contentContainerStyle={{
                             ...styles.listContent,
                             paddingBottom: 20
                         }}
-                        onScroll={(e) => { scrollOffset.current = e.nativeEvent.contentOffset.y; }}
+                        onScroll={(e) => { 
+                            scrollOffset.current = e.nativeEvent.contentOffset.y; 
+                        }}
+                        onScrollBeginDrag={() => {
+                            if (activeReactionMessageId) setActiveReactionMessageId(null);
+                        }}
                         onEndReached={fetchOlderMessages}
                         onEndReachedThreshold={0.1}
                         keyboardShouldPersistTaps="handled"

@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Image as RNImage, Platform, Vibration, Pressable, ActivityIndicator } from 'react-native';
+import React, { useRef, useEffect, useState } from 'react';
+import { View, StyleSheet, TouchableOpacity, Image as RNImage, Platform, Vibration, Pressable, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
 import Animated, {
     useAnimatedStyle,
@@ -29,7 +29,7 @@ import * as Linking from 'expo-linking';
 import { useMediaCache } from '../../../hooks/useMediaCache';
 import { useLocalMedia } from '../../../hooks/useLocalMedia';
 
-const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥', '✨', '👋', '🙏', '🎉', '💩', '🍕', '🌸'];
+const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🙏'];
 
 export const MessageItem = React.memo(({
     item,
@@ -59,9 +59,15 @@ export const MessageItem = React.memo(({
     onSelect,
     selectedCount,
     groupMembers,
-    highlighted
+    highlighted,
+    
+    // Reaction Props
+    activeReactionMessageId,
+    setActiveReactionMessageId
 }: any) => {
     const swipeableRef = useRef<any>(null);
+    const [reactionModalVisible, setReactionModalVisible] = useState(false);
+    const [reactionModalFilter, setReactionModalFilter] = useState<string | null>(null);
 
     const {
         localUri: cachedMediaUri,
@@ -145,16 +151,28 @@ export const MessageItem = React.memo(({
     if (!hasContent) return null;
 
     const handlePress = () => {
+        if (activeReactionMessageId) {
+            setActiveReactionMessageId(null);
+            return;
+        }
+
         if (selectionMode) {
             onSelect(item.id);
         }
     };
 
     const handleLongPress = () => {
-        onSelect(item.id);
+        if (onLongPress) {
+            onLongPress(item);
+        }
     };
 
     const handleImagePress = () => {
+        if (activeReactionMessageId) {
+            setActiveReactionMessageId(null);
+            return;
+        }
+
         if (selectionMode) {
             onSelect(item.id);
         } else if (isDownloaded && cachedMediaUri) {
@@ -169,7 +187,7 @@ export const MessageItem = React.memo(({
             failOffsetY={[-20, 20]}  // Fail if there's significant vertical movement
             enabled={!selectionMode && !item.is_deleted && !item.deleted_for_everyone}
         >
-            <Animated.View style={[styles.swipeWrapper]}>
+            <Animated.View style={[styles.swipeWrapper, (activeReactionMessageId === item.id) && { zIndex: 9999, elevation: 9999 }]}>
                 {/* Swipe Action Icon (Visible when swiping) */}
                 <Animated.View style={[styles.swipeActionContainer, animatedIconStyle]}>
                     <Forward size={24} color={Colors.primary} />
@@ -191,25 +209,28 @@ export const MessageItem = React.memo(({
                             </View>
                         )}
 
-                        <View style={[styles.bubbleWrapper, isMe ? styles.myBubbleWrapper : styles.friendBubbleWrapper]}>
-                            {!!isSelected && selectedCount === 1 && (
-                                <GlassCard style={[
+                        <View style={[styles.bubbleWrapper, isMe ? styles.myBubbleWrapper : styles.friendBubbleWrapper, (activeReactionMessageId === item.id) && { zIndex: 9999, elevation: 9999 }]}>
+                            {activeReactionMessageId === item.id && (
+                                <View style={[
                                     styles.emojiPicker,
                                     isMe ? styles.emojiPickerRight : styles.emojiPickerLeft,
+                                    styles.emojiPickerAbsolute
                                 ]}>
                                     <View style={styles.emojiRow}>
                                         {EMOJIS.map(emoji => (
-                                            <TouchableOpacity key={emoji} onPress={() => onReaction(item.id, emoji)} style={styles.emojiButton}>
+                                            <TouchableOpacity 
+                                                key={emoji} 
+                                                onPress={() => {
+                                                    onReaction(item.id, emoji);
+                                                    setActiveReactionMessageId(null);
+                                                }} 
+                                                style={styles.emojiButton}
+                                            >
                                                 <ThemedText style={styles.emojiText}>{emoji}</ThemedText>
                                             </TouchableOpacity>
                                         ))}
-                                        {isMe && !item.is_deleted && !item.deleted_for_everyone && (
-                                            <TouchableOpacity style={styles.deleteButton} onPress={() => onDelete(item.id)}>
-                                                <Trash2 size={20} color={Colors.error} />
-                                            </TouchableOpacity>
-                                        )}
                                     </View>
-                                </GlassCard>
+                                </View>
                             )}
                             {!isMe && !!isGroupChat && !isSelfChat && !!showSenderName && (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 12, marginBottom: 2 }}>
@@ -217,7 +238,7 @@ export const MessageItem = React.memo(({
                                         color: (() => {
                                             const sender = groupMembers?.find((m: any) => String(m.id) === String(item.sender_id) || String(m.user_id) === String(item.sender_id));
                                             if (sender?.role === 'owner') return '#FF3B30';
-                                            if (sender?.role === 'admin') return '#FF9500';
+                                            if (sender?.role === 'admin') return '#2196F3';
                                             return Colors.text;
                                         })()
                                     }]}>
@@ -406,16 +427,97 @@ export const MessageItem = React.memo(({
                             )}
 
                             {item.reactions?.length > 0 && (
-                                <View style={[styles.reactionTray, isMe ? styles.myReactionTray : styles.friendReactionTray]}>
-                                    {Array.from(new Set(item.reactions.map((r: any) => r.emoji))).map((emoji: any) => (
-                                        <View key={emoji} style={styles.reactionBadge}>
-                                            <ThemedText style={styles.reactionEmoji}>{emoji}</ThemedText>
-                                            <ThemedText style={styles.reactionCount}>
-                                                {item.reactions.filter((r: any) => r.emoji === emoji).length}
-                                            </ThemedText>
-                                        </View>
-                                    ))}
-                                </View>
+                                <>
+                                    <View style={[styles.reactionTray, isMe ? styles.myReactionTray : styles.friendReactionTray]}>
+                                        {Array.from(new Set(item.reactions.map((r: any) => r.emoji))).map((emoji: any) => {
+                                            const count = item.reactions.filter((r: any) => r.emoji === emoji).length;
+                                            const iMineThisEmoji = item.reactions.some(
+                                                (r: any) => String(r.userId) === String(currentUser?.id) && r.emoji === emoji
+                                            );
+                                            return (
+                                                <TouchableOpacity
+                                                    key={emoji}
+                                                    style={[styles.reactionBadge, iMineThisEmoji && styles.reactionBadgeMine]}
+                                                    onPress={() => {
+                                                        // tap to view list (group) or toggle own reaction (1-1)
+                                                        if (isGroupChat) {
+                                                            setReactionModalFilter(emoji);
+                                                            setReactionModalVisible(true);
+                                                        } else {
+                                                            // toggle: if it's mine → remove, else set
+                                                            onReaction(item.id, emoji);
+                                                        }
+                                                    }}
+                                                    onLongPress={() => {
+                                                        setReactionModalFilter(null);
+                                                        setReactionModalVisible(true);
+                                                    }}
+                                                >
+                                                    <ThemedText style={styles.reactionEmoji}>{emoji}</ThemedText>
+                                                    {count > 1 && (
+                                                        <ThemedText style={styles.reactionCount}>{count}</ThemedText>
+                                                    )}
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+
+                                    {/* Reaction Detail Modal (Group chats) */}
+                                    <Modal
+                                        visible={reactionModalVisible}
+                                        transparent
+                                        animationType="fade"
+                                        onRequestClose={() => setReactionModalVisible(false)}
+                                    >
+                                        <TouchableOpacity
+                                            style={styles.reactionModalOverlay}
+                                            activeOpacity={1}
+                                            onPress={() => setReactionModalVisible(false)}
+                                        >
+                                            <View style={styles.reactionModalSheet}>
+                                                <View style={styles.reactionModalHeader}>
+                                                    <ThemedText style={styles.reactionModalTitle}>Reactions</ThemedText>
+                                                    {/* Emoji filter pills */}
+                                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                                                        <TouchableOpacity
+                                                            style={[styles.reactionFilterPill, !reactionModalFilter && styles.reactionFilterPillActive]}
+                                                            onPress={() => setReactionModalFilter(null)}
+                                                        >
+                                                            <ThemedText style={styles.reactionFilterText}>All</ThemedText>
+                                                        </TouchableOpacity>
+                                                        {Array.from(new Set(item.reactions.map((r: any) => r.emoji))).map((em: any) => (
+                                                            <TouchableOpacity
+                                                                key={em}
+                                                                style={[styles.reactionFilterPill, reactionModalFilter === em && styles.reactionFilterPillActive]}
+                                                                onPress={() => setReactionModalFilter(em)}
+                                                            >
+                                                                <ThemedText style={styles.reactionFilterText}>
+                                                                    {em} {item.reactions.filter((r: any) => r.emoji === em).length}
+                                                                </ThemedText>
+                                                            </TouchableOpacity>
+                                                        ))}
+                                                    </ScrollView>
+                                                </View>
+                                                <ScrollView style={{ maxHeight: 240 }}>
+                                                    {(reactionModalFilter
+                                                        ? item.reactions.filter((r: any) => r.emoji === reactionModalFilter)
+                                                        : item.reactions
+                                                    ).map((r: any, i: number) => (
+                                                        <View key={i} style={styles.reactionUserRow}>
+                                                            <View style={styles.reactionUserAvatar}>
+                                                                <ThemedText style={{ fontSize: 14, fontWeight: 'bold', color: Colors.primary }}>
+                                                                    {(r.username || r.userId || '?')[0].toUpperCase()}
+                                                                </ThemedText>
+                                                            </View>
+                                                            <ThemedText style={styles.reactionUsername}>{r.username || r.userId}</ThemedText>
+                                                            <ThemedText style={styles.reactionUserEmoji}>{r.emoji}</ThemedText>
+                                                        </View>
+                                                    ))}
+                                                </ScrollView>
+                                            </View>
+                                        </TouchableOpacity>
+                                    </Modal>
+                                </>
                             )}
 
 
@@ -430,7 +532,7 @@ export const MessageItem = React.memo(({
 const styles = StyleSheet.create({
     messageRow: {
         flexDirection: 'row',
-        maxWidth: '100%',
+        width: '100%',
         alignItems: 'flex-end',
         gap: 8,
         paddingHorizontal: 16,
@@ -438,14 +540,13 @@ const styles = StyleSheet.create({
     },
     selectedRow: {
         backgroundColor: 'rgba(0, 128, 0, 0.2)',
-        alignSelf: 'stretch',
     },
     selectionOverlay: {
         position: 'absolute',
         top: 0, bottom: 0, left: 0, right: 0,
     },
-    myRow: { alignSelf: 'flex-end' },
-    friendRow: { alignSelf: 'flex-start' },
+    myRow: { justifyContent: 'flex-end' },
+    friendRow: { justifyContent: 'flex-start' },
     avatarPlaceholder: { width: 32, height: 32 },
     bubbleWrapper: { maxWidth: '85%', position: 'relative', overflow: 'visible' },
     myBubbleWrapper: { alignItems: 'flex-end' },
@@ -498,19 +599,45 @@ const styles = StyleSheet.create({
     friendMessageTime: { color: Colors.textSecondary },
     editedText: { fontSize: 9, fontStyle: 'italic' },
     statusIcon: { marginLeft: 2 },
-    reactionTray: { flexDirection: 'row', marginTop: -10, marginBottom: 4, backgroundColor: Colors.surface, borderRadius: 12, padding: 2, borderWidth: 1, borderColor: Colors.glassBorder },
+    reactionTray: { flexDirection: 'row', flexWrap: 'wrap', marginTop: -8, marginBottom: 4, backgroundColor: Colors.surface, borderRadius: 14, paddingVertical: 3, paddingHorizontal: 4, borderWidth: 1, borderColor: Colors.glassBorder, gap: 2 },
     myReactionTray: { alignSelf: 'flex-end' },
     friendReactionTray: { alignSelf: 'flex-start' },
-    reactionBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4 },
-    reactionEmoji: { fontSize: 12 },
-    reactionCount: { fontSize: 10, color: Colors.textSecondary },
-    emojiPicker: { padding: 8, borderRadius: 24, marginBottom: 4 },
-    emojiPickerRight: { alignSelf: 'flex-end' },
-    emojiPickerLeft: { alignSelf: 'flex-start' },
+    reactionBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 10 },
+    reactionBadgeMine: { backgroundColor: 'rgba(0,150,255,0.15)', borderWidth: 1, borderColor: 'rgba(0,150,255,0.3)' },
+    reactionEmoji: { fontSize: 14 },
+    reactionCount: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600' },
+    reactionModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    reactionModalSheet: { backgroundColor: Colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 24, paddingHorizontal: 16 },
+    reactionModalHeader: { paddingTop: 16, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: Colors.glassBorder, marginBottom: 8 },
+    reactionModalTitle: { fontSize: 16, fontWeight: '700', color: Colors.text },
+    reactionFilterPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: Colors.background, marginRight: 6 },
+    reactionFilterPillActive: { backgroundColor: Colors.primary },
+    reactionFilterText: { fontSize: 13, color: Colors.text },
+    reactionUserRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.glassBorder },
+    reactionUserAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.glass, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+    reactionUsername: { flex: 1, fontSize: 14, color: Colors.text, fontWeight: '500' },
+    reactionUserEmoji: { fontSize: 20 },
+    emojiPicker: { 
+        paddingVertical: 5,
+        paddingHorizontal: 8,
+        borderRadius: 24, 
+        backgroundColor: '#1E1E1E',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)'
+    },
+    emojiPickerAbsolute: {
+        position: 'absolute',
+        bottom: '100%',
+        marginBottom: 8,
+        zIndex: 10000,
+        elevation: 10000,
+    },
+    emojiPickerRight: { right: 0 },
+    emojiPickerLeft: { left: 0 },
     emojiRow: { flexDirection: 'row', alignItems: 'center' },
-    emojiButton: { padding: 6 },
+    emojiButton: { padding: 4, marginHorizontal: 2 },
     emojiText: { fontSize: 20 },
-    deleteButton: { marginLeft: 8, borderLeftWidth: 1, borderLeftColor: Colors.glassBorder, paddingLeft: 12 },
+    deleteButton: { marginLeft: 6, borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.1)', paddingLeft: 10, paddingVertical: 2 },
     swipeWrapper: {
         position: 'relative',
         justifyContent: 'center',

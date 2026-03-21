@@ -23,7 +23,7 @@ if (!empty($data->email) && !empty($data->password)) {
     $password = $data->password;
 
     try {
-        $query = "SELECT id, username, display_name, email, password, avatar_id, bio, username_last_updated, global_auto_delete_minutes, global_auto_delete_individual, global_auto_delete_group, last_seen, privacy_last_seen, privacy_read_receipts, privacy_profile_visibility, show_in_world, neon_color, is_official FROM users WHERE email = :email OR username = :username LIMIT 0,1";
+        $query = "SELECT id, username, display_name, email, password, avatar_id, bio, username_last_updated, country, state, district, global_auto_delete_minutes, global_auto_delete_individual, global_auto_delete_group, last_seen, privacy_last_seen, privacy_read_receipts, privacy_profile_visibility, show_in_world, neon_color, is_official FROM users WHERE email = :email OR username = :username LIMIT 0,1";
         $stmt = $pdo->prepare($query);
 
         $stmt->bindParam(':email', $email);
@@ -65,6 +65,9 @@ if (!empty($data->email) && !empty($data->password)) {
                         "avatar_id" => $row['avatar_id'],
                         "bio" => $row['bio'],
                         "username_last_updated" => $row['username_last_updated'],
+                        "country" => $row['country'],
+                        "state" => $row['state'],
+                        "district" => $row['district'],
                         "global_auto_delete_minutes" => $row['global_auto_delete_minutes'],
                         "global_auto_delete_individual" => $row['global_auto_delete_individual'] ?? 1,
                         "global_auto_delete_group" => $row['global_auto_delete_group'] ?? 0,

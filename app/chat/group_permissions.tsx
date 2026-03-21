@@ -37,7 +37,7 @@ export default function GroupPermissionsScreen() {
             const data = await response.json();
             if (response.ok) {
                 if (data.my_role !== 'owner' && data.my_role !== 'admin') {
-                    Alert.alert("Error", "Only admins can restrict group settings.");
+                    Alert.alert("Error", "Only managers can restrict group settings.");
                     router.back();
                     return;
                 }
@@ -158,13 +158,13 @@ export default function GroupPermissionsScreen() {
                     )}
                 </GlassCard>
 
-                <ThemedText style={[styles.sectionTitle, { marginTop: 24 }]}>Admins can:</ThemedText>
+                <ThemedText style={[styles.sectionTitle, { marginTop: 24 }]}>Managers can:</ThemedText>
 
                 <GlassCard>
                     {renderSwitchRow(
                         <Edit2 size={20} color={Colors.text} />,
                         "Edit group settings",
-                        "Only admins can change this group's name, icon, description, disappearing message timer, and advanced chat privacy.",
+                        "Only managers can change this group's name, icon, description, disappearing message timer, and advanced chat privacy.",
                         !permissions.allow_member_edit_info, // Inverted: If true (Only Admins), then allow_member_edit_info should be false
                         (val) => updatePermission('allow_member_edit_info', !val) // If val is true (restrict), set allow to false
                     )}
@@ -174,18 +174,18 @@ export default function GroupPermissionsScreen() {
                     {renderSwitchRow(
                         <Shield size={20} color={Colors.text} />,
                         "Approve new members",
-                        "When turned on, admins must approve anyone who wants to join the group.",
+                        "When turned on, managers must approve anyone who wants to join the group.",
                         permissions.admin_approve_new_members,
                         (val) => updatePermission('admin_approve_new_members', val)
                     )}
                 </GlassCard>
 
-                <ThemedText style={[styles.sectionTitle, { marginTop: 24 }]}>Group admins</ThemedText>
+                <ThemedText style={[styles.sectionTitle, { marginTop: 24 }]}>Group managers</ThemedText>
                 <GlassCard>
                     <TouchableOpacity style={styles.row} onPress={() => router.push({ pathname: '/chat/edit_group_admins', params: { groupId } })}>
                         <View style={styles.iconContainer}><Users size={20} color={Colors.text} /></View>
                         <View style={{ flex: 1 }}>
-                            <ThemedText type="defaultSemiBold" style={{ fontSize: 16 }}>Edit group admins</ThemedText>
+                            <ThemedText type="defaultSemiBold" style={{ fontSize: 16 }}>Edit group managers</ThemedText>
                             <ThemedText style={{ fontSize: 12, color: Colors.textSecondary }}>You</ThemedText>
                         </View>
                     </TouchableOpacity>
