@@ -42,7 +42,9 @@ export function useMediaCache(
     isMe: boolean,
     messageType?: string,
     userId?: number | string,
-    e2eMedia?: any
+    e2eMedia?: any,
+    tempId?: string | number,
+    localId?: string | number
 ): UseMediaCacheResult {
     const [localUri, setLocalUri] = useState<string | null>(null);
     const [isDownloaded, setIsDownloaded] = useState(false);
@@ -77,8 +79,8 @@ export function useMediaCache(
         (async () => {
             let uri: string | null = null;
 
-            // Sender/Receiver: Use native file check
-            uri = await MediaStorageService.getLocalUri(messageId, remoteUrl, messageType);
+            // Sender/Receiver: Use native file check with multiple possible IDs
+            uri = await MediaStorageService.getLocalUri([messageId, tempId, localId], remoteUrl, messageType);
 
             // Auto-download voice messages (or if you want to auto-download e2eMedia)
             // For now, E2E voice should also auto-download!
@@ -125,7 +127,7 @@ export function useMediaCache(
                 setIsLoading(false);
             }
         })();
-    }, [messageId, remoteUrl, isMe, messageType, userId, e2eMedia]);
+    }, [messageId, remoteUrl, isMe, messageType, userId, e2eMedia, tempId, localId]);
 
     // ── Manual download trigger (receiver taps Download button) ──────────────
     const downloadMedia = useCallback(async () => {

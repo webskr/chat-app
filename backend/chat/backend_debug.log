@@ -8702,3 +8702,24 @@
 2026-03-14 22:00:26 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/11403202611000058892.png
 2026-03-19 00:12:26 - AUDIO UPLOAD REQUEST RECEIVED
 2026-03-19 00:12:26 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/voice/voice_69baf2125489d_1773859346.m4a
+2026-03-22 15:24:48 - REQUEST RECEIVED
+2026-03-22 15:24:48 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-22 15:24:48 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12203202611000059155.png
+2026-03-22 15:45:33 - REQUEST RECEIVED
+2026-03-22 15:45:33 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-22 15:45:33 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12203202651000059157.png
+2026-03-22 16:21:53 - REQUEST RECEIVED
+2026-03-22 16:21:53 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-22 16:21:53 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12203202651000059157.png
+2026-03-22 16:21:59 - REQUEST RECEIVED
+2026-03-22 16:21:59 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-22 16:21:59 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12203202651000059156.png
+2026-03-22 16:22:05 - REQUEST RECEIVED
+2026-03-22 16:22:05 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-22 16:22:05 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12203202651000059166.png
+2026-03-22 16:22:26 - REQUEST RECEIVED
+2026-03-22 16:22:26 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-22 16:22:26 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12203202651000059157.png
+2026-03-22 16:22:32 - REQUEST RECEIVED
+2026-03-22 16:22:32 - Thumbnail generation failed (non-fatal): Call to undefined function imagecreatefrompng()
+2026-03-22 16:22:32 - Upload Success: C:\xampp\htdocs\chat-app\backend\chat/../uploads/12203202651000059166.png

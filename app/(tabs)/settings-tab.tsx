@@ -122,7 +122,7 @@ export default function SettingsScreen() {
                     >
                         <Avatar
                             key={`${user?.avatar_url}-${avatarKey}`}
-                            source={user?.avatar_url ? `${Config.API_URL}/${user.avatar_url}?t=${avatarKey}` : getAvatarById(user?.avatar_id || '1')}
+                            source={user?.avatar_url ? `${Config.API_URL}/${user.avatar_url}?t=${avatarKey}` : getAvatarById(user?.avatar_id ?? '1')}
                             size={60}
                             online={true}
                         />

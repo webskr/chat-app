@@ -136,6 +136,11 @@ if (!empty($data->id) && (!empty($data->username) || !empty($data->avatar_id) ||
             $params[':hide_notification_name'] = (int)$data->hide_notification_name;
         }
 
+        if (isset($data->privacy_profile_visibility)) {
+            $update_fields[] = "privacy_profile_visibility = :privacy_profile_visibility";
+            $params[':privacy_profile_visibility'] = $data->privacy_profile_visibility;
+        }
+
         if (empty($update_fields)) {
             http_response_code(200);
             echo json_encode(array("message" => "No changes made."));
@@ -147,7 +152,7 @@ if (!empty($data->id) && (!empty($data->username) || !empty($data->avatar_id) ||
 
         if ($stmt->execute($params)) {
              // Fetch updated user data to return
-            $fetchStmt = $pdo->prepare("SELECT id, username, display_name, bio, country, state, district, links, tags, avatar_id, avatar_url, username_last_updated, notifications_enabled, global_auto_delete_minutes, hide_notification_message, hide_notification_name FROM users WHERE id = :id");
+            $fetchStmt = $pdo->prepare("SELECT id, username, display_name, bio, country, state, district, links, tags, avatar_id, avatar_url, username_last_updated, notifications_enabled, global_auto_delete_minutes, hide_notification_message, hide_notification_name, privacy_profile_visibility FROM users WHERE id = :id");
             $fetchStmt->execute([':id' => $data->id]);
             $updatedUser = $fetchStmt->fetch(PDO::FETCH_ASSOC);
 

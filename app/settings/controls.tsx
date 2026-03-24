@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, LayoutAnimation, UIManager, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { ThemedText } from '../../components/ThemedText';
 import { useUser } from '../../context/UserContext';
@@ -27,6 +27,17 @@ export default function ControlsScreen() {
     const { user, setUser } = useUser();
     const [isUpdating, setIsUpdating] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const { scrollTo } = useLocalSearchParams<{ scrollTo?: string }>();
+    const scrollRef = useRef<ScrollView>(null);
+    const sectionsRef = useRef<Record<string, number>>({});
+
+    useEffect(() => {
+        if (scrollTo && sectionsRef.current[scrollTo] !== undefined) {
+            setTimeout(() => {
+                scrollRef.current?.scrollTo({ y: sectionsRef.current[scrollTo], animated: true });
+            }, 500);
+        }
+    }, [scrollTo]);
 
     const toggleDropdown = () => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -167,7 +178,11 @@ export default function ControlsScreen() {
                 <ThemedText type="title" style={styles.headerTitle}>Controls</ThemedText>
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView 
+                ref={scrollRef}
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+            >
 
                 {/* Privacy Controls Section */}
                 <View style={styles.section}>
@@ -259,7 +274,12 @@ export default function ControlsScreen() {
                 </View>
 
                 {/* Auto Delete Section */}
-                <View style={styles.section}>
+                <View 
+                    style={styles.section}
+                    onLayout={(e) => {
+                        sectionsRef.current['chat-management'] = e.nativeEvent.layout.y;
+                    }}
+                >
                     <ThemedText style={styles.sectionTitle}>Chat Management</ThemedText>
                     <ThemedText style={styles.description}>
                         Control how long messages stay in your account. Messages older than the selected time will be automatically hidden for you. This does not affect the recipient's view.

@@ -167,11 +167,13 @@ export class LocalDatabaseService {
                         last_message_time   DATETIME,
                         last_message_sender TEXT,
                         unread_count        INTEGER DEFAULT 0,
-                        auto_delete_minutes INTEGER DEFAULT 0
+                        auto_delete_minutes INTEGER DEFAULT 0,
+                        is_favourite        INTEGER DEFAULT 0
                     );
                 `);
 
                 try { await this.db.execute(`ALTER TABLE chats ADD COLUMN auto_delete_minutes INTEGER DEFAULT 0;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE chats ADD COLUMN is_favourite INTEGER DEFAULT 0;`); } catch (e) { }
 
                 await this.db.execute(`
                     CREATE TABLE IF NOT EXISTS status_retry_queue (
@@ -427,6 +429,22 @@ export class LocalDatabaseService {
         return (result.rows || []) as any[];
     }
 
+    static async getChatMedia(chat_id: string, limit: number = 30): Promise<any[]> {
+        const db = this.getDB();
+        const result = await db.execute(
+            `SELECT * FROM messages 
+             WHERE chat_id = ? 
+               AND (
+                   type IN ('image', 'video', 'document', 'link') 
+                   OR (type = 'text' AND (encrypted_payload LIKE '%http%' OR encrypted_payload LIKE '%www.%' OR encrypted_payload LIKE '%.com%' OR encrypted_payload LIKE '%.net%'))
+               )
+               AND is_deleted = 0
+             ORDER BY timestamp DESC LIMIT ?`,
+            [chat_id, limit]
+        );
+        return (result.rows || []) as any[];
+    }
+
     static async updateMessageStatus(id: number, status: string): Promise<void> {
         const db = this.getDB();
         if (status === 'seen') {
@@ -615,14 +633,15 @@ export class LocalDatabaseService {
         group_icon?: string;
         unread_count?: number;
         auto_delete_minutes?: number;
+        is_favourite?: number;
     }): Promise<void> {
         const db = this.getDB();
         await db.execute(
             `INSERT INTO chats (
                 id, is_group, other_user_id, other_username, other_avatar_url, 
                 other_avatar_id, other_is_official, group_name, group_icon, unread_count,
-                auto_delete_minutes
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                auto_delete_minutes, is_favourite
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                 is_group          = excluded.is_group,
                 other_user_id     = COALESCE(excluded.other_user_id, chats.other_user_id),
@@ -637,7 +656,8 @@ export class LocalDatabaseService {
                 group_name        = COALESCE(excluded.group_name, chats.group_name),
                 group_icon        = COALESCE(excluded.group_icon, chats.group_icon),
                 unread_count      = COALESCE(excluded.unread_count, chats.unread_count),
-                auto_delete_minutes = COALESCE(excluded.auto_delete_minutes, chats.auto_delete_minutes)`,
+                auto_delete_minutes = COALESCE(excluded.auto_delete_minutes, chats.auto_delete_minutes),
+                is_favourite      = COALESCE(excluded.is_favourite, chats.is_favourite)`,
             [
                 chatData.id,
                 chatData.is_group ? 1 : 0,
@@ -649,8 +669,17 @@ export class LocalDatabaseService {
                 chatData.group_name ?? null,
                 chatData.group_icon ?? null,
                 chatData.unread_count ?? null,
-                chatData.auto_delete_minutes ?? null
+                chatData.auto_delete_minutes ?? null,
+                chatData.is_favourite ?? 0
             ]
+        );
+    }
+
+    static async toggleFavourite(chatId: string, isFavourite: boolean): Promise<void> {
+        const db = this.getDB();
+        await db.execute(
+            `UPDATE chats SET is_favourite = ? WHERE id = ?`,
+            [isFavourite ? 1 : 0, chatId]
         );
     }
 

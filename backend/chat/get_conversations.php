@@ -81,7 +81,11 @@ if (!empty($user_id)) {
                   JOIN users u ON (c.user1_id = u.id OR c.user2_id = u.id)
                   WHERE (c.user1_id = :uid1 OR c.user2_id = :uid2) 
                   AND ( (c.user1_id != c.user2_id AND u.id != :uid3) OR (c.user1_id = c.user2_id AND u.id = :uid4) )
-                  AND u.id NOT IN (SELECT target_id FROM relationships WHERE user_id = :uid5 AND status = 'blocked')
+                  AND (
+                      (c.user1_id = c.user2_id) -- Self-chat
+                      OR
+                      (u.id IN (SELECT target_id FROM relationships WHERE user_id = :uid5 AND status = 'friend')) -- Friends only
+                  )
                   AND (c.is_group = 0 OR c.is_group IS NULL)";
 
         // 2. Fetch Group Conversations
@@ -182,3 +186,4 @@ if (!empty($user_id)) {
     http_response_code(400);
     echo json_encode(array("message" => "User ID required."));
 }
+?>

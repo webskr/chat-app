@@ -82,6 +82,32 @@ function notifyBackendStatus(userId, isOnline) {
     req.end();
 }
 
+function resetAllUsers() {
+    const options = {
+        hostname: 'localhost',
+        port: 80,
+        path: '/chat-app/backend/users/reset_online_status.php',
+        method: 'GET'
+    };
+
+    const req = http.request(options, (res) => {
+        let response = '';
+        res.on('data', (d) => { response += d; });
+        res.on('end', () => {
+            console.log(`[Presence] All users reset to offline on startup: ${response}`);
+        });
+    });
+
+    req.on('error', (error) => {
+        console.error(`[Presence] Error resetting users on startup:`, error);
+    });
+
+    req.end();
+}
+
+// Reset on startup
+resetAllUsers();
+
 app.post("/internal-emit", (req, res) => {
     try {
         const { event, data } = req.body;

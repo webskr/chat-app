@@ -15,16 +15,12 @@ import { ThemedText } from '../../components/ThemedText';
 import { Avatar } from '../../components/Avatar';
 import { GlassCard } from '../../components/GlassCard';
 import { getAvatarById } from '../../constants/Avatars';
-import { UserProfileViewer } from '../../components/UserProfileViewer';
+import { useFocusEffect, router } from 'expo-router';
 import { useUser } from '../../context/UserContext';
-
-import { useFocusEffect } from 'expo-router';
 import { Config } from '../../constants/Config';
 
 export default function RequestsScreen() {
     const { user, fetchRequestCount } = useUser();
-    const [modalVisible, setModalVisible] = useState(false);
-    const [selectedUser, setSelectedUser] = useState<any>(null);
     const [activeTab, setActiveTab] = useState<'received' | 'sent'>('received');
     const [requests, setRequests] = useState<{ received: any[], sent: any[] }>({ received: [], sent: [] });
     const [isLoading, setIsLoading] = useState(true);
@@ -87,13 +83,7 @@ export default function RequestsScreen() {
     };
 
     const openProfile = (item: any) => {
-        setSelectedUser({
-            ...item,
-            avatar_id: item.avatar_id,
-            avatar_url: item.avatar_url,
-            created_at: item.created_at
-        });
-        setModalVisible(true);
+        router.push(`/user/${item.id}`);
     };
 
     const renderItem = ({ item }: { item: any }) => (
@@ -214,15 +204,6 @@ export default function RequestsScreen() {
                     }
                 />
             )}
-
-            <UserProfileViewer
-                visible={modalVisible}
-                onClose={() => setModalVisible(false)}
-                user={selectedUser}
-                currentUser={user}
-                relationship={activeTab === 'received' ? "request_received" : "pending"}
-                onActionComplete={fetchRequests}
-            />
         </SafeAreaView>
     );
 }

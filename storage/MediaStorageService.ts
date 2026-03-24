@@ -97,21 +97,26 @@ export class MediaStorageService {
         }
     }
 
-    static async getLocalUri(messageId: number | string, url: string, type?: string): Promise<string | null> {
+    static async getLocalUri(messageIdOrIds: number | string | (number | string | undefined)[], url: string, type?: string): Promise<string | null> {
         const mediaType = this.resolveMediaType(url, type);
         const ext = this.extractExtension(url);
-        const expectedFilename = `msg_${messageId}.${ext}`;
-        
-        // 1. Try public path first if available
-        const publicPath = this.getMediaPath(mediaType, expectedFilename);
-        if (await this.fileExists(publicPath)) {
-            return publicPath;
-        }
+        const ids = Array.isArray(messageIdOrIds) ? messageIdOrIds : [messageIdOrIds];
 
-        // 2. Try internal fallback path
-        const internalPath = `${INTERNAL_BASE_DIR}${FOLDERS[mediaType]}${expectedFilename}`;
-        if (await this.fileExists(internalPath)) {
-            return internalPath;
+        for (const id of ids) {
+            if (!id) continue;
+            const expectedFilename = `msg_${id}.${ext}`;
+            
+            // 1. Try public path first if available
+            const publicPath = this.getMediaPath(mediaType, expectedFilename);
+            if (await this.fileExists(publicPath)) {
+                return publicPath;
+            }
+
+            // 2. Try internal fallback path
+            const internalPath = `${INTERNAL_BASE_DIR}${FOLDERS[mediaType]}${expectedFilename}`;
+            if (await this.fileExists(internalPath)) {
+                return internalPath;
+            }
         }
 
         return null;

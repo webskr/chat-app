@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, TextInput, TouchableOpacity, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton, Animated, BackHandler } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { View, TextInput, TouchableOpacity, Platform, Alert, Modal, Keyboard, AppState, ActivityIndicator, AlertButton, BackHandler } from 'react-native';
+import { KeyboardAvoidingView, KeyboardStickyView, useKeyboardHandler } from 'react-native-keyboard-controller';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 // @ts-ignore
 import { io, Socket } from 'socket.io-client';
@@ -102,7 +103,6 @@ export default function ChatDetailScreen() {
 
     // 3. UI & Modal State Hooks
     const [menuVisible, setMenuVisible] = useState(false);
-    const [modalVisible, setModalVisible] = useState(false);
     const [messageOptionsVisible, setMessageOptionsVisible] = useState(false);
     const [selectedMessageForOptions, setSelectedMessageForOptions] = useState<any>(null);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -131,6 +131,22 @@ export default function ChatDetailScreen() {
     const [presenceMap, setPresenceMap] = useState<Record<string, { isOnline: boolean, lastActive?: string, isTyping: boolean }>>({});
     const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
     const insets = useSafeAreaInsets();
+    const keyboardHeight = useSharedValue(0);
+
+    useKeyboardHandler({
+        onMove: (e) => {
+            'worklet';
+            keyboardHeight.value = e.height;
+        },
+        onEnd: (e) => {
+            'worklet';
+            keyboardHeight.value = e.height;
+        },
+    }, []);
+
+    const animatedSpacerStyle = useAnimatedStyle(() => ({
+        height: Platform.OS === 'android' ? keyboardHeight.value : 0,
+    }));
     const [actionModalConfig, setActionModalConfig] = useState<{
         visible: boolean;
         title: string;
@@ -212,57 +228,37 @@ export default function ChatDetailScreen() {
     // 7. Helper Functions (Non-Hooks)
     const deduplicateMessages = useCallback((msgs: any[]): any[] => {
         if (!msgs || msgs.length === 0) return [];
-        const confirmed = new Map<string, any>();
-        const localOnly = new Map<string, any>();
+        const map = new Map<string, any>();
 
         for (const m of msgs) {
             if (!m) continue;
             
-            // ✅ Robust check for local-only messages
-            // A message is local if:
-            // 1. Explicitly marked is_local: true (optimistic)
-            // 2. OR Has no server_id AND no id at all (newly created)
-            // 3. OR Has no server_id AND id starts with 'temp_' or 'sock_'
-            // 4. OR Has temp_id and is NOT from DB (is_local)
-            const isLocal = m.is_local || !m.id || (typeof m.id === 'string' && (m.id.startsWith('temp_') || m.id.startsWith('sock_')));
-
-            if (isLocal) {
-                const tempKey = `temp_${m.temp_id ?? m.id}`;
-                // Keep the most recent version of a local message, or keep if it has media_url (upload progress)
-                if (!localOnly.has(tempKey) || m.media_url) {
-                    localOnly.set(tempKey, m);
-                }
+            // Priority-based unique key: server_id > temp_id > id
+            let key = '';
+            if (m.server_id) {
+                key = String(m.server_id);
+            } else if (m.temp_id) {
+                // Ensure temp_ id is always handled consistently
+                key = String(m.temp_id).startsWith('temp_') ? String(m.temp_id) : `temp_${m.temp_id}`;
             } else {
-                // ✅ FIX: Use server_id as the primary key for confirmed messages to avoid collision with local SQLite auto-increment IDs
-                const serverIdStr = m.server_id ? String(m.server_id) : (m.id ? `local_${m.id}` : null);
-                if (!serverIdStr) continue;
+                key = `id_${m.id}`;
+            }
+            
+            const existing = map.get(key);
+            const statusPriority = { 'seen': 3, 'delivered': 2, 'sent': 1, 'sending': 0, 'failed': -1, 'pending': -1 };
+            const getPrio = (s: string) => (statusPriority[s as keyof typeof statusPriority] ?? 0);
 
-                const existing = confirmed.get(serverIdStr);
-                // Prefer 'seen' > 'delivered' > 'sent' > others
-                const statusPriority = { 'seen': 3, 'delivered': 2, 'sent': 1, 'sending': 0, 'failed': -1, 'pending': -1 };
-                const getPrio = (s: string) => (statusPriority[s as keyof typeof statusPriority] ?? 0);
-
-                if (!existing || getPrio(m.status) > getPrio(existing.status)) {
-                    confirmed.set(serverIdStr, m);
-                }
+            if (!existing || getPrio(m.status) > getPrio(existing.status) || (!existing.server_id && m.server_id)) {
+                map.set(key, m);
             }
         }
 
-        // ✅ If a confirmed message matches a temp_id, remove the optimistic one
-        for (const [, m] of confirmed) {
-            if (m.temp_id) {
-                localOnly.delete(`temp_${m.temp_id}`);
-            }
-        }
-
-        const merged = [...confirmed.values(), ...localOnly.values()];
-        if (merged.length > 1) {
-            merged.sort((a, b) => {
-                const ta = parseToDate(a.created_at || a.timestamp || 0).getTime();
-                const tb = parseToDate(b.created_at || b.timestamp || 0).getTime();
-                return tb - ta;
-            });
-        }
+        const merged = Array.from(map.values());
+        merged.sort((a, b) => {
+            const ta = parseToDate(a.created_at || a.timestamp || 0).getTime();
+            const tb = parseToDate(b.created_at || b.timestamp || 0).getTime();
+            return tb - ta;
+        });
         return merged;
     }, []);
 
@@ -271,9 +267,9 @@ export default function ChatDetailScreen() {
             if (!isMounted.current) return;
             setMessages(prev => {
                 const next = typeof updater === 'function' ? updater(prev) : updater;
-                // Optimization: If it's a small update (like a single message), we could potentially be smarter
-                // but for now, just ensure deduplicateMessages is memoized and stable.
-                return deduplicateMessages(next);
+                const result = deduplicateMessages(next);
+                console.log(`[Chat-Debug] Messages updated. Count: ${result.length}, Newest ID: ${result[0]?.id}, Status: ${result[0]?.status}`);
+                return result;
             });
         },
         [deduplicateMessages]
@@ -1112,10 +1108,10 @@ export default function ChatDetailScreen() {
         if (!mediaPath) setInputText('');
         setIsSending(true);
 
-        const tempId = Date.now();
+        const tempIdStr = `temp_${Date.now()}`;
         const newMessage = {
-            id: tempId,          // temp key — will be replaced by server ID after response
-            temp_id: tempId,     // kept so we can find & replace this message in state
+            id: tempIdStr,
+            temp_id: tempIdStr,
             sender_id: currentUser.id,
             receiver_id: isGroup ? null : id,
             group_id: isGroup ? id : null,
@@ -1274,11 +1270,11 @@ export default function ChatDetailScreen() {
                     if (data.message_id) {
                         safeSetMessages(prev =>
                             prev.map(m =>
-                                m.id === tempId || m.temp_id === tempId
+                                String(m.id) === String(tempIdStr) || String(m.temp_id) === String(tempIdStr)
                                     ? {
                                         ...m,
                                         id: data.message_id,
-                                        temp_id: tempId,
+                                        temp_id: tempIdStr,
                                         is_local: false,
                                         status: 'sent',
                                         retry_count: 0,
@@ -1296,7 +1292,7 @@ export default function ChatDetailScreen() {
                             room: targetRoom,
                             sender_id: currentUser.id,
                             message_id: data.message_id,
-                            temp_id: tempId,
+                            temp_id: tempIdStr,
                             encrypted_payload: messageText,
                             timestamp: newMessage.created_at,
                             message_type: newMessage.message_type,
@@ -1311,20 +1307,20 @@ export default function ChatDetailScreen() {
                 return data.message_id;
             } else {
                 if (!scheduledAt) {
-                    handleSendFailure(newMessage, tempId);
+                    handleSendFailure(newMessage, tempIdStr);
                 }
             }
         } catch (error) {
             console.error('Error sending message:', error);
             if (!scheduledAt) {
-                handleSendFailure(newMessage, tempId);
+                handleSendFailure(newMessage, tempIdStr);
             }
         } finally {
             setIsSending(false);
         }
     };
 
-    const handleSendFailure = async (newMessage: any, tempId: number) => {
+    const handleSendFailure = async (newMessage: any, tempId: string) => {
         const isOnline = NetworkService.getIsConnected();
         const status = isOnline ? 'failed' : 'pending';
         const newRetryCount = (newMessage.retry_count || 0) + 1;
@@ -1333,7 +1329,7 @@ export default function ChatDetailScreen() {
             await LocalDatabaseService.updateMessageStatusAndRetry((newMessage as any).local_db_id, status, status === 'failed' ? newRetryCount : (newMessage.retry_count || 0));
         }
 
-        safeSetMessages(prev => prev.map(m => (m.id === tempId || m.temp_id === tempId) ? { ...m, status: status, retry_count: newRetryCount } : m));
+        safeSetMessages(prev => prev.map(m => (String(m.id) === String(tempId) || String(m.temp_id) === String(tempId)) ? { ...m, status: status, retry_count: newRetryCount } : m));
 
         if (status === 'failed') {
             setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed', retry_count: newRetryCount }]);
@@ -2292,7 +2288,7 @@ export default function ChatDetailScreen() {
                         params: { id: id }
                     });
                 } else {
-                    setModalVisible(true);
+                    router.push(`/user/${id}`);
                 }
             }
         },
@@ -2522,7 +2518,8 @@ export default function ChatDetailScreen() {
             if (!hasContent) return item;
 
             // Find neighbors in visibleMsgs list for cluster detection (O(1) in most cases due to adjacency)
-            const vIndex = visibleMsgs.findIndex(m => m.id === item.id);
+            const itemIdStr = String(item.id);
+            const vIndex = visibleMsgs.findIndex(m => String(m.id) === itemIdStr);
             const prevVisibleMsg = vIndex < visibleMsgs.length - 1 ? visibleMsgs[vIndex + 1] : null; // Physically ABOVE (Older)
             const nextVisibleMsg = vIndex > 0 ? visibleMsgs[vIndex - 1] : null; // Physically BELOW (Newer)
 
@@ -2579,8 +2576,6 @@ export default function ChatDetailScreen() {
                 relationshipStatus={relationshipStatus}
                 menuVisible={menuVisible}
                 setMenuVisible={setMenuVisible}
-                modalVisible={modalVisible}
-                setModalVisible={setModalVisible}
                 menuItems={menuItems}
                 fetchRelationshipStatus={syncChatData}
                 selectionMode={isSelectionMode}
@@ -2599,7 +2594,7 @@ export default function ChatDetailScreen() {
             <View style={{ flex: 1, backgroundColor: Colors.background }}>
                 <KeyboardAvoidingView
                     style={{ flex: 1 }}
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                     keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
                 >
                     {mergedMessages.length === 0 && isReady && !isLoading && (
@@ -2655,6 +2650,7 @@ export default function ChatDetailScreen() {
                         }
                         showsVerticalScrollIndicator={false}
                     />
+                    <Animated.View style={animatedSpacerStyle} />
 
                     {relationshipStatus === 'blocked' ? (
                         <View style={styles.blockedFooter}>
@@ -2668,44 +2664,51 @@ export default function ChatDetailScreen() {
                             <ThemedText style={{ color: Colors.textSecondary, fontSize: 13, fontWeight: '600' }}>Only Vegram can send messages</ThemedText>
                         </View>
                     ) : (
-                        <View
-                            style={styles.inputContainer}
-                            onLayout={(e: any) => setInputHeight(e.nativeEvent.layout.height)}
-                        >
-                            <ReplyPreview replyingToMessage={replyingToMessage} currentUser={currentUser} onCancel={() => setReplyingToMessage(null)} />
-                            <ChatInputBar
-                                inputText={inputText}
-                                editingMessage={editingMessage}
-                                handleTyping={handleTyping}
-                                handleAttachmentSelect={handleAttachmentSelect}
-                                handlePickImage={handlePickImage}
-                                handleSaveEdit={handleSaveEdit}
-                                handleSend={handleSend}
-                                handleCancelEdit={handleCancelEdit}
-                                startRecording={startRecording}
-                                stopRecording={stopRecording}
-                                cancelRecording={cancelRecording}
-                                recordingStatus={recordingStatus}
-                                recordingDuration={recordingDuration}
-                                isPanelOpen={isPanelOpen}
-                                setIsPanelOpen={setIsPanelOpen}
-                                panelActiveTab={panelActiveTab}
-                                setPanelActiveTab={setPanelActiveTab}
-                                isAttachmentPanelOpen={isAttachmentPanelOpen}
-                                setIsAttachmentPanelOpen={setIsAttachmentPanelOpen}
-                                isUploading={isUploading}
-                                isSending={isSending}
-                                inputRef={inputRef}
-                                inputHeight={inputHeight}
-                                setInputHeight={setInputHeight}
-                                onRequestSchedule={handleRequestSchedule}
-                                isGroup={isGroup}
-                                userRole={userRole}
-                                permissions={permissions}
-                                groupMembers={groupMembers}
-                                isOfficialChat={targetUserProfile?.is_official == 1 && currentUser?.is_official != 1}
-                            />
-                        </View>
+                        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
+                            <View
+                                style={[
+                                    styles.inputContainer,
+                                    { paddingBottom: isKeyboardVisible ? 4 : Math.max(8, insets.bottom) }
+                                ]}
+                                onLayout={(e: any) => setInputHeight(e.nativeEvent.layout.height)}
+                            >
+                                <ReplyPreview replyingToMessage={replyingToMessage} currentUser={currentUser} onCancel={() => setReplyingToMessage(null)} />
+                                <ChatInputBar
+                                    inputText={inputText}
+                                    editingMessage={editingMessage}
+                                    handleTyping={handleTyping}
+                                    handleAttachmentSelect={handleAttachmentSelect}
+                                    handlePickImage={handlePickImage}
+                                    handleSaveEdit={handleSaveEdit}
+                                    handleSend={handleSend}
+                                    handleCancelEdit={handleCancelEdit}
+                                    startRecording={startRecording}
+                                    stopRecording={stopRecording}
+                                    cancelRecording={cancelRecording}
+                                    recordingStatus={recordingStatus}
+                                    recordingDuration={recordingDuration}
+                                    isPanelOpen={isPanelOpen}
+                                    setIsPanelOpen={setIsPanelOpen}
+                                    panelActiveTab={panelActiveTab}
+                                    setPanelActiveTab={setPanelActiveTab}
+                                    isAttachmentPanelOpen={isAttachmentPanelOpen}
+                                    setIsAttachmentPanelOpen={setIsAttachmentPanelOpen}
+                                    isUploading={isUploading}
+                                    isSending={isSending}
+                                    inputRef={inputRef}
+                                    inputHeight={inputHeight}
+                                    setInputHeight={setInputHeight}
+                                    onRequestSchedule={handleRequestSchedule}
+                                    isGroup={isGroup}
+                                    userRole={userRole}
+                                    permissions={permissions}
+                                    groupMembers={groupMembers}
+                                    isOfficialChat={targetUserProfile?.is_official == 1 && currentUser?.is_official != 1}
+                                    bottomInset={insets.bottom}
+                                    isKeyboardVisible={isKeyboardVisible}
+                                />
+                            </View>
+                        </KeyboardStickyView>
                     )}
                 </KeyboardAvoidingView>
             </View>

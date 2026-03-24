@@ -75,7 +75,16 @@ export const MessageItem = React.memo(({
         isLoading: mediaLoading,
         downloadMedia,
         isDownloading
-    } = useMediaCache(item.id, item.media_url, isMe, item.message_type, currentUser?.id, item.e2e_media);
+    } = useMediaCache(
+        item.server_id || item.id, 
+        item.media_url, 
+        isMe, 
+        item.message_type, 
+        currentUser?.id, 
+        item.e2e_media,
+        item.temp_id,
+        item.id
+    );
 
     const resolvedDisplayUri = useLocalMedia(item.id, item.media_url, item.thumbnail_url);
 
@@ -204,7 +213,7 @@ export const MessageItem = React.memo(({
                         {!isMe && !isSelfChat && (
                             <View style={styles.avatarPlaceholder}>
                                 {!!isLastInGroup && (
-                                    <Avatar source={getAvatarById(item.sender_avatar_id || '1')} size={32} />
+                                    <Avatar source={getAvatarById(item.sender_avatar_id ?? '1')} size={32} />
                                 )}
                             </View>
                         )}

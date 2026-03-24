@@ -19,12 +19,16 @@ import { SyncService } from '../../utils/SyncService';
 import { MessageSquare, Megaphone } from 'lucide-react-native';
 import { GroupDefaultIcon } from '../../components/icons/GroupDefaultIcon';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
+import { ChatCategories, ChatCategory } from '../../components/chat/ChatCategories';
+import { ApiService } from '../../utils/ApiService';
+import { Star } from 'lucide-react-native';
 
 export default function ChatScreen() {
     const { user, setUnreadCount, safeSync } = useUser();
     const [chats, setChats] = React.useState<any[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [searchQuery, setSearchQuery] = React.useState('');
+    const [activeCategory, setActiveCategory] = React.useState<ChatCategory>('All');
     // const hasNavigatedRef = React.useRef(false); // REMOVED
 
     const fetchConversations = React.useCallback(async (syncWithServer = false) => {
@@ -79,11 +83,44 @@ export default function ChatScreen() {
 
     const filteredChats = React.useMemo(() => {
         return chats.filter(chat => {
-            const nameMatch = chat.other_username && chat.other_username.toLowerCase().includes(searchQuery.toLowerCase());
-            const msgMatch = chat.last_message && chat.last_message.toLowerCase().includes(searchQuery.toLowerCase());
-            return nameMatch || msgMatch;
+            const isGroup = Number(chat.is_group) === 1;
+            const displayName = (isGroup ? chat.group_name : (String(chat.other_user_id) === String(user?.id) ? 'Note to self' : chat.other_username)) || 'Unknown';
+
+            // Filter out Unknown chats (typically orphaned or non-friend records)
+            if (displayName === 'Unknown' && !isGroup) return false;
+
+            // Category Filter
+            if (activeCategory === 'Unread' && !(Number(chat.unread_count) > 0)) return false;
+            if (activeCategory === 'Groups' && !isGroup) return false;
+            if (activeCategory === 'Favourites' && !(Number(chat.is_favourite) === 1)) return false;
+
+            // Search Filter
+            const lowerQuery = searchQuery.toLowerCase();
+            const nameMatch = displayName.toLowerCase().includes(lowerQuery);
+            const msgMatch = chat.last_message && typeof chat.last_message === 'string' && chat.last_message.toLowerCase().includes(lowerQuery);
+            
+            return (nameMatch || msgMatch) || !searchQuery;
         });
-    }, [chats, searchQuery]);
+    }, [chats, searchQuery, activeCategory, user?.id]);
+
+    const toggleFavourite = async (item: any) => {
+        const newStatus = !Number(item.is_favourite);
+        try {
+            // 1. Update Local DB for instant feedback
+            await LocalDatabaseService.toggleFavourite(item.id.toString(), newStatus);
+            
+            // 2. Update State
+            setChats(prev => prev.map(c => c.id === item.id ? { ...c, is_favourite: newStatus ? 1 : 0 } : c));
+
+            // 3. Update Sync/Backend
+            await ApiService.post(`${Config.API_URL}/chat/toggle_favourite.php`, {
+                chat_id: item.id.toString(),
+                is_favourite: newStatus
+            });
+        } catch (error) {
+            console.error('[ChatScreen] Failed to toggle favourite:', error);
+        }
+    };
 
 
     const renderItem = ({ item }: { item: any }) => {
@@ -111,6 +148,7 @@ export default function ChatScreen() {
                         is_group: isGroup ? '1' : '0'
                     }
                 })}
+                onLongPress={() => toggleFavourite(item)}
             >
                 <View style={styles.chatRow}>
                     <Avatar
@@ -133,6 +171,9 @@ export default function ChatScreen() {
                                     item.other_username === 'VegramOfficial'
                                 ) && (
                                     <BadgeCheck size={16} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
+                                )}
+                                {Number(item.is_favourite) === 1 && (
+                                    <Star size={14} color="#e9edef" fill="#e9edef" style={{ marginLeft: 2 }} />
                                 )}
                             </View>
                             <ThemedText style={[styles.time, (item.unread_count > 0 || (item.unread_count_raw > 0)) && styles.timeActive]}>
@@ -238,8 +279,14 @@ export default function ChatScreen() {
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                     placeholder="Search..."
+                    style={{ marginBottom: 4 }}
                 />
             </View>
+
+            <ChatCategories 
+                activeCategory={activeCategory}
+                onCategoryChange={setActiveCategory}
+            />
             <FlatList
                 data={filteredChats}
                 keyExtractor={(item) => item.id.toString()}
@@ -271,7 +318,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingTop: 10,
-        paddingBottom: 10,
+        paddingBottom: 6,
     },
     headerTitle: {
         fontSize: 24, // WhatsApp uses ~20-23sp for Title
@@ -281,7 +328,7 @@ const styles = StyleSheet.create({
     },
     searchContainer: {
         paddingHorizontal: 16,
-        paddingBottom: 8,
+        paddingBottom: 2,
     },
     listContent: {
         paddingBottom: 100,

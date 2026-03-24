@@ -34,11 +34,13 @@ export class SyncService {
                 // Duplicate prevention is handled by the "ON CONFLICT(server_id) DO UPDATE" in LocalDatabaseService.insertMessage
                 await LocalDatabaseService.insertMessage({
                     server_id: msg.id?.toString(),
+                    temp_id: msg.temp_id?.toString(),
                     chat_id: chatId,
                     sender_id: msg.sender_id?.toString(),
                     receiver_id: msg.receiver_id?.toString(),
                     type: msg.message_type || 'text',
                     encrypted_payload: msg.encrypted_payload || msg.message_text,
+                    local_file_path: msg.media_url || undefined,
                     status: msg.status || 'delivered',
                     timestamp: msg.created_at,
                     sender_name: msg.sender_name,
@@ -115,20 +117,23 @@ export class SyncService {
                 return;
             }
 
-            const { messages = [], conversations = [], presence = [], blocked_user_ids = [], sync_time } = data;
+            const { messages = [], conversations = [], presence = [], blocked_user_ids = [], favourite_chat_ids = [], sync_time } = data;
 
-            console.log(`[Sync] 📦 Received ${messages.length} messages, ${conversations.length} conversations, ${presence.length} presence updates, ${blocked_user_ids.length} blocked user IDs.`);
+            console.log(`[Sync] 📦 Received ${messages.length} messages, ${conversations.length} conversations, ${presence.length} presence updates, ${blocked_user_ids.length} blocked user IDs, ${favourite_chat_ids.length} favorites.`);
 
             // 1. Update Messages
+            // ... (same as before)
             for (const msg of messages) {
                 try {
                     await LocalDatabaseService.insertMessage({
                         server_id: msg.id?.toString(),
+                        temp_id: msg.temp_id?.toString(),
                         chat_id: msg.chat_id,
                         sender_id: msg.sender_id?.toString(),
                         receiver_id: msg.receiver_id?.toString(),
                         type: msg.message_type || 'text',
                         encrypted_payload: msg.message_text,
+                        local_file_path: msg.media_url || undefined,
                         status: msg.status || 'delivered',
                         timestamp: msg.created_at,
                         sender_name: msg.sender_name,
@@ -146,6 +151,8 @@ export class SyncService {
                         ? String(conv.group_id)
                         : "chat_" + Math.min(Number(userId), Number(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id))) + "_" + Math.max(Number(userId), Number(conv.other_user_id || (conv.user1_id == userId ? conv.user2_id : conv.user1_id)));
 
+                    const isFavourite = favourite_chat_ids.includes(chatId);
+
                     await LocalDatabaseService.updateChatMetadata({
                         id: chatId,
                         is_group: !!conv.is_group,
@@ -157,7 +164,8 @@ export class SyncService {
                         other_avatar_id: conv.other_avatar_id != null ? Number(conv.other_avatar_id) : undefined,
                         other_is_official: conv.other_is_official != null ? Number(conv.other_is_official) : undefined,
                         unread_count: conv.unread_count != null ? Number(conv.unread_count) : undefined,
-                        auto_delete_minutes: conv.auto_delete_minutes != null ? Number(conv.auto_delete_minutes) : undefined
+                        auto_delete_minutes: conv.auto_delete_minutes != null ? Number(conv.auto_delete_minutes) : undefined,
+                        is_favourite: isFavourite ? 1 : 0
                     });
                 } catch (convErr) {
                     console.error(`[Sync] ❌ Failed to update conversation metadata:`, convErr);

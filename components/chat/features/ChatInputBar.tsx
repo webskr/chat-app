@@ -42,7 +42,9 @@ export const ChatInputBar = React.memo(({
     userRole,
     permissions,
     groupMembers = [], // New prop: List of group members
-    isOfficialChat = false
+    isOfficialChat = false,
+    bottomInset = 0,
+    isKeyboardVisible = false
 }: any) => {
     // Schedule Logic State
     const [showSlashSuggestions, setShowSlashSuggestions] = useState(false);
@@ -304,7 +306,7 @@ export const ChatInputBar = React.memo(({
     const canSendMessage = !isGroup || (userRole === 'owner' || userRole === 'admin' || permissions.allow_member_send_messages);
 
     return (
-        <View style={styles.inputArea}>
+        <View style={[styles.inputArea, { paddingBottom: isKeyboardVisible ? 4 : Math.max(8, bottomInset) }]}>
             {!canSendMessage ? (
                 <GlassCard style={{ padding: 12, alignItems: 'center' }}>
                     <ThemedText style={{ color: Colors.textSecondary, textAlign: 'center' }}>

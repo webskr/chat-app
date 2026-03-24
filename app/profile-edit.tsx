@@ -15,19 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '../context/UserContext';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { AVAILABLE_TAGS, Tag } from '../constants/Tags';
+import { PLATFORMS } from '../constants/Platforms';
 
-const PLATFORMS = [
-    { id: 'instagram', label: 'Instagram', icon: 'logo-instagram', color: '#E4405F', match: 'instagram.com' },
-    { id: 'whatsapp', label: 'WhatsApp', icon: 'logo-whatsapp', color: '#25D366', match: 'whatsapp' },
-    { id: 'telegram', label: 'Telegram', icon: 'paper-plane-outline', color: '#0088cc', match: 't.me' },
-    { id: 'github', label: 'GitHub', icon: 'logo-github', color: '#FFFFFF', match: 'github.com' },
-    { id: 'twitter', label: 'X (Twitter)', icon: 'logo-twitter', color: '#1DA1F2', match: 'x.com' },
-    { id: 'facebook', label: 'Facebook', icon: 'logo-facebook', color: '#1877F2', match: 'facebook.com' },
-    { id: 'linkedin', label: 'LinkedIn', icon: 'logo-linkedin', color: '#0077B5', match: 'linkedin.com' },
-    { id: 'youtube', label: 'YouTube', icon: 'logo-youtube', color: '#FF0000', match: 'youtube.com' },
-    { id: 'discord', label: 'Discord', icon: 'logo-discord', color: '#5865F2', match: 'discord' },
-    { id: 'other', label: 'Other', icon: 'globe-outline', color: '#6366f1', match: '' },
-];
 
 export default function ProfileEditScreen() {
     const { user, updateUserProfile, reloadUser } = useUser();
@@ -42,7 +31,7 @@ export default function ProfileEditScreen() {
     const [isPlatformModalVisible, setIsPlatformModalVisible] = useState(false);
     const [currentLink, setCurrentLink] = useState({ platform: 'other', label: '', url: '' });
 
-    const [avatarId, setAvatarId] = useState(user?.avatar_id || '1');
+    const [avatarId, setAvatarId] = useState(user?.avatar_id ?? '1');
     const [customAvatar, setCustomAvatar] = useState<string | null>(user?.avatar_url ? `${Config.API_URL}/${user.avatar_url}` : null);
     const [pendingAvatarUri, setPendingAvatarUri] = useState<string | null>(null);
 
@@ -91,7 +80,7 @@ export default function ProfileEditScreen() {
             } catch (e) {
                 setUserTags([]);
             }
-            setAvatarId(user.avatar_id || '1');
+            setAvatarId(user.avatar_id ?? '1');
             if (user.avatar_url) {
                 setCustomAvatar(`${Config.API_URL}/${user.avatar_url}`);
             }
@@ -361,7 +350,6 @@ export default function ProfileEditScreen() {
     };
 
     const handleChangePassword = async () => {
-        // ... (Keep existing password logic)
         if (!user) return;
         if (!currentPassword || !newPassword || !confirmPassword) {
             Alert.alert('Error', 'Please fill in all password fields');
@@ -399,10 +387,242 @@ export default function ProfileEditScreen() {
         }
     };
 
+    const renderLinkModalContent = () => (
+        <View>
+            <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Link</Text>
+                <TouchableOpacity onPress={() => setIsLinkModalVisible(false)}>
+                    <Ionicons name="close" size={24} color={Colors.text} />
+                </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Platform</Text>
+                <TouchableOpacity 
+                    style={styles.platformSelector}
+                    onPress={() => setIsPlatformModalVisible(true)}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        {PLATFORMS.find(p => p.id === currentLink.platform)?.icon && (
+                            <Ionicons 
+                                name={PLATFORMS.find(p => p.id === currentLink.platform)?.icon as any} 
+                                size={20} 
+                                color={PLATFORMS.find(p => p.id === currentLink.platform)?.color} 
+                            />
+                        )}
+                        <Text style={{ color: Colors.text, fontSize: 16 }}>
+                            {PLATFORMS.find(p => p.id === currentLink.platform)?.label || 'Select Platform'}
+                        </Text>
+                    </View>
+                    <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} />
+                </TouchableOpacity>
+            </View>
+
+            {currentLink.platform === 'other' && (
+                <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Label</Text>
+                    <TextInput
+                        style={styles.textInput}
+                        placeholder="e.g. Portfolio"
+                        placeholderTextColor={Colors.textSecondary}
+                        value={currentLink.label}
+                        onChangeText={(text) => setCurrentLink({ ...currentLink, label: text })}
+                    />
+                </View>
+            )}
+
+            <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>URL</Text>
+                <TextInput
+                    style={styles.textInput}
+                    placeholder="https://example.com"
+                    placeholderTextColor={Colors.textSecondary}
+                    value={currentLink.url}
+                    onChangeText={(text) => setCurrentLink({ ...currentLink, url: text })}
+                    autoCapitalize="none"
+                    keyboardType="url"
+                />
+            </View>
+
+            <View style={styles.modalActions}>
+                <TouchableOpacity
+                    style={[styles.modalBtn, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}
+                    onPress={() => setIsLinkModalVisible(false)}
+                >
+                    <Text style={{ color: Colors.text }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.modalBtn, { backgroundColor: Colors.primary }]}
+                    onPress={() => {
+                        if (!currentLink.url) {
+                            Alert.alert('Error', 'Please enter a URL');
+                            return;
+                        }
+
+                        const selectedPlatform = PLATFORMS.find(p => p.id === currentLink.platform);
+                        
+                        // 1. Uniqueness check (except other)
+                        if (currentLink.platform !== 'other' && links.some(l => l.platform === currentLink.platform)) {
+                            Alert.alert('Error', `You have already added an ${selectedPlatform?.label} link.`);
+                            return;
+                        }
+
+                        // 2. URL Validation
+                        if (selectedPlatform && selectedPlatform.match && !currentLink.url.toLowerCase().includes(selectedPlatform.match)) {
+                            Alert.alert('Invalid URL', `The URL does not look like a valid ${selectedPlatform.label} link.`);
+                            return;
+                        }
+
+                        if (currentLink.platform === 'other' && !currentLink.label) {
+                            Alert.alert('Error', 'Please enter a label');
+                            return;
+                        }
+                        
+                        // 3. Platform-specific Limit Check
+                        if (currentLink.platform === 'other') {
+                            const otherLinksCount = links.filter(l => l.platform === 'other').length;
+                            if (otherLinksCount >= 5) {
+                                Alert.alert('Limit Reached', 'You can only add up to 5 "Other" links.');
+                                return;
+                            }
+                        }
+
+                        // Auto-set label if not "other"
+                        const finalLabel = currentLink.platform === 'other' 
+                            ? currentLink.label 
+                            : (selectedPlatform?.label || 'Link');
+
+                        setLinks([...links, { ...currentLink, label: finalLabel }]);
+                        setIsLinkModalVisible(false);
+                    }}
+                >
+                    <Text style={styles.saveButtonText}>Add</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+
+    const renderTagModalContent = () => (
+        <View style={{ width: '100%' }}>
+            <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Tags ({userTags.length}/5)</Text>
+                <TouchableOpacity onPress={() => setIsTagModalVisible(false)}>
+                    <Ionicons name="close" size={24} color={Colors.text} />
+                </TouchableOpacity>
+            </View>
+
+            <View style={styles.tagSearchContainer}>
+                <Ionicons name="search" size={20} color={Colors.textSecondary} style={{ marginRight: 10 }} />
+                <TextInput
+                    style={styles.tagSearchInput}
+                    placeholder="Search tags..."
+                    placeholderTextColor={Colors.textSecondary}
+                    value={tagSearchQuery}
+                    onChangeText={setTagSearchQuery}
+                    autoCorrect={false}
+                />
+            </View>
+
+            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.tagGrid}>
+                    {AVAILABLE_TAGS.filter(t => 
+                        t.label.toLowerCase().includes(tagSearchQuery.toLowerCase())
+                    ).map((tag) => {
+                        const isSelected = userTags.includes(tag.label);
+                        return (
+                            <TouchableOpacity
+                                key={tag.label}
+                                style={[
+                                    styles.tagOption,
+                                    { backgroundColor: isSelected ? tag.color : 'rgba(255, 255, 255, 0.05)' },
+                                    isSelected && { borderColor: tag.color }
+                                ]}
+                                onPress={() => {
+                                    if (isSelected) {
+                                        setUserTags(userTags.filter(t => t !== tag.label));
+                                    } else {
+                                        if (userTags.length >= 5) {
+                                            Alert.alert('Limit Reached', 'You can only add up to 5 tags.');
+                                            return;
+                                        }
+                                        setUserTags([...userTags, tag.label]);
+                                    }
+                                }}
+                            >
+                                <Text style={[
+                                    styles.tagOptionText,
+                                    isSelected && { color: '#FFF' }
+                                ]}>
+                                    {tag.label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </ScrollView>
+            
+            <TouchableOpacity 
+                style={styles.doneButton}
+                onPress={() => setIsTagModalVisible(false)}
+            >
+                <Text style={styles.doneButtonText}>Done</Text>
+            </TouchableOpacity>
+        </View>
+    );
+
+    const renderPlatformModalContent = () => (
+        <View style={{ width: '100%' }}>
+            <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Choose Platform</Text>
+                <TouchableOpacity onPress={() => setIsPlatformModalVisible(false)}>
+                    <Ionicons name="close" size={24} color={Colors.text} />
+                </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.platformGrid}>
+                    {PLATFORMS.map((p) => {
+                        const isUsed = p.id === 'other' 
+                            ? links.filter(l => l.platform === 'other').length >= 5
+                            : links.some(l => l.platform === p.id);
+                        return (
+                            <TouchableOpacity
+                                key={p.id}
+                                style={[
+                                    styles.platformItem,
+                                    currentLink.platform === p.id && styles.platformItemSelected,
+                                    isUsed && { opacity: 0.4 }
+                                ]}
+                                disabled={isUsed}
+                                onPress={() => {
+                                    setCurrentLink({ 
+                                        ...currentLink, 
+                                        platform: p.id, 
+                                        label: p.id === 'other' ? '' : p.label 
+                                    });
+                                    setIsPlatformModalVisible(false);
+                                }}
+                            >
+                                <View style={[styles.platformIconOuter, { backgroundColor: `${p.color}20` }]}>
+                                    <Ionicons name={p.icon as any} size={24} color={p.color} />
+                                </View>
+                                <Text style={styles.platformLabel}>{p.label}</Text>
+                                {isUsed && (
+                                    <View style={styles.usedBadge}>
+                                        <Ionicons name="checkmark-circle" size={12} color={Colors.primary} />
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </ScrollView>
+        </View>
+    );
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.container}>
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
                     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                         {/* Custom Header Row */}
                         <View style={styles.headerRow}>
@@ -614,10 +834,6 @@ export default function ProfileEditScreen() {
                                 <Text style={styles.collapsibleTitle}>Links</Text>
                                 <TouchableOpacity 
                                     onPress={() => {
-                                        if (links.length >= 5) {
-                                            Alert.alert('Limit Reached', 'You can only add up to 5 links.');
-                                            return;
-                                        }
                                         setCurrentLink({ platform: 'instagram', label: 'Instagram', url: '' });
                                         setIsLinkModalVisible(true);
                                     }}
@@ -738,114 +954,24 @@ export default function ProfileEditScreen() {
             {/* Link Editor Modal */}
             <Modal
                 visible={isLinkModalVisible}
-                transparent
+                transparent={true}
                 animationType="slide"
                 onRequestClose={() => setIsLinkModalVisible(false)}
             >
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+                    style={{ flex: 1 }}
+                >
                     <View style={styles.modalOverlay}>
-                        <BlurView intensity={90} tint="dark" style={styles.modalContent}>
-                             <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Platform</Text>
-                                <TouchableOpacity 
-                                    style={styles.platformSelector}
-                                    onPress={() => setIsPlatformModalVisible(true)}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                        {PLATFORMS.find(p => p.id === currentLink.platform)?.icon && (
-                                            <Ionicons 
-                                                name={PLATFORMS.find(p => p.id === currentLink.platform)?.icon as any} 
-                                                size={20} 
-                                                color={PLATFORMS.find(p => p.id === currentLink.platform)?.color} 
-                                            />
-                                        )}
-                                        <Text style={{ color: Colors.text, fontSize: 16 }}>
-                                            {PLATFORMS.find(p => p.id === currentLink.platform)?.label || 'Select Platform'}
-                                        </Text>
-                                    </View>
-                                    <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} />
-                                </TouchableOpacity>
+                        {Platform.OS === 'ios' ? (
+                            <BlurView intensity={90} tint="dark" style={styles.modalContent}>
+                                {renderLinkModalContent()}
+                            </BlurView>
+                        ) : (
+                            <View style={[styles.modalContent, { backgroundColor: '#1a1a1a', borderColor: 'rgba(255,255,255,0.1)' }]}>
+                                {renderLinkModalContent()}
                             </View>
-
-                            {currentLink.platform === 'other' && (
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.inputLabel}>Label</Text>
-                                    <TextInput
-                                        style={styles.textInput}
-                                        placeholder="e.g. Portfolio"
-                                        placeholderTextColor={Colors.textSecondary}
-                                        value={currentLink.label}
-                                        onChangeText={(text) => setCurrentLink({ ...currentLink, label: text })}
-                                    />
-                                </View>
-                            )}
-
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>URL</Text>
-                                <TextInput
-                                    style={styles.textInput}
-                                    placeholder="https://example.com"
-                                    placeholderTextColor={Colors.textSecondary}
-                                    value={currentLink.url}
-                                    onChangeText={(text) => setCurrentLink({ ...currentLink, url: text })}
-                                    autoCapitalize="none"
-                                    keyboardType="url"
-                                />
-                            </View>
-
-                            <View style={styles.modalActions}>
-                                <TouchableOpacity
-                                    style={[styles.modalBtn, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}
-                                    onPress={() => setIsLinkModalVisible(false)}
-                                >
-                                    <Text style={{ color: Colors.text }}>Cancel</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.modalBtn, { backgroundColor: Colors.primary }]}
-                                    onPress={() => {
-                                        if (!currentLink.url) {
-                                            Alert.alert('Error', 'Please enter a URL');
-                                            return;
-                                        }
-
-                                        const selectedPlatform = PLATFORMS.find(p => p.id === currentLink.platform);
-                                        
-                                        // 1. Uniqueness check (except other)
-                                        if (currentLink.platform !== 'other' && links.some(l => l.platform === currentLink.platform)) {
-                                            Alert.alert('Error', `You have already added an ${selectedPlatform?.label} link.`);
-                                            return;
-                                        }
-
-                                        // 2. URL Validation
-                                        if (selectedPlatform && selectedPlatform.match && !currentLink.url.toLowerCase().includes(selectedPlatform.match)) {
-                                            Alert.alert('Invalid URL', `The URL does not look like a valid ${selectedPlatform.label} link.`);
-                                            return;
-                                        }
-
-                                        if (currentLink.platform === 'other' && !currentLink.label) {
-                                            Alert.alert('Error', 'Please enter a label');
-                                            return;
-                                        }
-                                        
-                                        // 3. Absolute Limit Check
-                                        if (links.length >= 5) {
-                                            Alert.alert('Limit Reached', 'You can only add up to 5 links total.');
-                                            return;
-                                        }
-
-                                        // Auto-set label if not "other"
-                                        const finalLabel = currentLink.platform === 'other' 
-                                            ? currentLink.label 
-                                            : (selectedPlatform?.label || 'Link');
-
-                                        setLinks([...links, { ...currentLink, label: finalLabel }]);
-                                        setIsLinkModalVisible(false);
-                                    }}
-                                >
-                                    <Text style={styles.saveButtonText}>Add</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </BlurView>
+                        )}
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
@@ -857,84 +983,35 @@ export default function ProfileEditScreen() {
                 transparent={true}
                 onRequestClose={() => setIsTagModalVisible(false)}
             >
-                <BlurView intensity={90} tint="dark" style={styles.modalOverlay}>
-                    <TouchableOpacity 
-                        style={{ flex: 1 }} 
-                        activeOpacity={1} 
-                        onPress={() => setIsTagModalVisible(false)} 
-                    />
-                    <View style={styles.tagModalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Select Tags ({userTags.length}/5)</Text>
-                            <TouchableOpacity onPress={() => setIsTagModalVisible(false)}>
-                                <Ionicons name="close" size={24} color={Colors.text} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.tagSearchContainer}>
-                            <Ionicons name="search" size={20} color={Colors.textSecondary} style={{ marginRight: 10 }} />
-                            <TextInput
-                                style={styles.tagSearchInput}
-                                placeholder="Search tags..."
-                                placeholderTextColor={Colors.textSecondary}
-                                value={tagSearchQuery}
-                                onChangeText={setTagSearchQuery}
-                                autoCorrect={false}
-                            />
-                        </View>
-
-                        <ScrollView style={{ maxHeight: 400 }}>
-                            <View style={styles.tagGrid}>
-                                {AVAILABLE_TAGS.filter(t => 
-                                    t.label.toLowerCase().includes(tagSearchQuery.toLowerCase())
-                                ).map((tag) => {
-                                    const isSelected = userTags.includes(tag.label);
-                                    return (
-                                        <TouchableOpacity
-                                            key={tag.label}
-                                            style={[
-                                                styles.tagOption,
-                                                { backgroundColor: isSelected ? tag.color : 'rgba(255, 255, 255, 0.05)' },
-                                                isSelected && { borderColor: tag.color }
-                                            ]}
-                                            onPress={() => {
-                                                if (isSelected) {
-                                                    setUserTags(userTags.filter(t => t !== tag.label));
-                                                } else {
-                                                    if (userTags.length >= 5) {
-                                                        Alert.alert('Limit Reached', 'You can only add up to 5 tags.');
-                                                        return;
-                                                    }
-                                                    setUserTags([...userTags, tag.label]);
-                                                }
-                                            }}
-                                        >
-                                            <Text style={[
-                                                styles.tagOptionText,
-                                                isSelected && { color: '#FFF' }
-                                            ]}>
-                                                {tag.label}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-                        </ScrollView>
-                        
+                {Platform.OS === 'ios' ? (
+                    <BlurView intensity={90} tint="dark" style={styles.modalOverlay}>
                         <TouchableOpacity 
-                            style={styles.doneButton}
-                            onPress={() => setIsTagModalVisible(false)}
-                        >
-                            <Text style={styles.doneButtonText}>Done</Text>
-                        </TouchableOpacity>
+                            style={{ flex: 1 }} 
+                            activeOpacity={1} 
+                            onPress={() => setIsTagModalVisible(false)} 
+                        />
+                        <View style={styles.tagModalContent}>
+                            {renderTagModalContent()}
+                        </View>
+                    </BlurView>
+                ) : (
+                    <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.85)' }]}>
+                        <TouchableOpacity 
+                            style={{ flex: 1 }} 
+                            activeOpacity={1} 
+                            onPress={() => setIsTagModalVisible(false)} 
+                        />
+                        <View style={[styles.tagModalContent, { backgroundColor: '#1a1a1a' }]}>
+                            {renderTagModalContent()}
+                        </View>
                     </View>
-                </BlurView>
+                )}
             </Modal>
 
             {/* Platform Selection Modal */}
             <Modal
                 visible={isPlatformModalVisible}
-                transparent
+                transparent={true}
                 animationType="fade"
                 onRequestClose={() => setIsPlatformModalVisible(false)}
             >
@@ -943,45 +1020,15 @@ export default function ProfileEditScreen() {
                     activeOpacity={1} 
                     onPress={() => setIsPlatformModalVisible(false)}
                 >
-                    <BlurView intensity={95} tint="dark" style={[styles.modalContent, { maxHeight: '70%' }]}>
-                        <Text style={styles.modalTitle}>Choose Platform</Text>
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                            <View style={styles.platformGrid}>
-                                {PLATFORMS.map((p) => {
-                                    const isUsed = p.id !== 'other' && links.some(l => l.platform === p.id);
-                                    return (
-                                        <TouchableOpacity
-                                            key={p.id}
-                                            style={[
-                                                styles.platformItem,
-                                                currentLink.platform === p.id && styles.platformItemSelected,
-                                                isUsed && { opacity: 0.4 }
-                                            ]}
-                                            disabled={isUsed}
-                                            onPress={() => {
-                                                setCurrentLink({ 
-                                                    ...currentLink, 
-                                                    platform: p.id, 
-                                                    label: p.id === 'other' ? '' : p.label 
-                                                });
-                                                setIsPlatformModalVisible(false);
-                                            }}
-                                        >
-                                            <View style={[styles.platformIconOuter, { backgroundColor: `${p.color}20` }]}>
-                                                <Ionicons name={p.icon as any} size={24} color={p.color} />
-                                            </View>
-                                            <Text style={styles.platformLabel}>{p.label}</Text>
-                                            {isUsed && (
-                                                <View style={styles.usedBadge}>
-                                                    <Ionicons name="checkmark-circle" size={12} color={Colors.primary} />
-                                                </View>
-                                            )}
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-                        </ScrollView>
-                    </BlurView>
+                    {Platform.OS === 'ios' ? (
+                        <BlurView intensity={95} tint="dark" style={[styles.modalContent, { maxHeight: '70%' }]}>
+                            {renderPlatformModalContent()}
+                        </BlurView>
+                    ) : (
+                        <View style={[styles.modalContent, { backgroundColor: '#1a1a1a', maxHeight: '70%', borderColor: 'rgba(255,255,255,0.1)' }]}>
+                            {renderPlatformModalContent()}
+                        </View>
+                    )}
                 </TouchableOpacity>
             </Modal>
         </SafeAreaView>

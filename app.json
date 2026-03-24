@@ -2,7 +2,7 @@
   "expo": {
     "name": "vegram",
     "slug": "vegram",
-    "scheme": "vegram",
+    "scheme": "myapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "newArchEnabled": false,
@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.skr.vegram"
+      "bundleIdentifier": "com.skr.vegram",
+      "associatedDomains": ["applinks:myapp.com"]
     },
     "android": {
       "package": "com.skr.vegram",
@@ -24,6 +25,20 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1B5E20"
       },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "myapp.com",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.READ_MEDIA_AUDIO",

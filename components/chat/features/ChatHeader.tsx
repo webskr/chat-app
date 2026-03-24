@@ -8,7 +8,6 @@ import { Avatar } from '../../../components/Avatar';
 import { getAvatarById } from '../../../constants/Avatars';
 import { formatChatTime } from '../../../utils/time';
 import { OverflowMenu } from '../../../components/OverflowMenu';
-import { UserProfileViewer } from '../../../components/UserProfileViewer'; // Updated import
 import { GroupDefaultIcon } from '../../../components/icons/GroupDefaultIcon';
 
 import { Config } from '../../../constants/Config';
@@ -25,8 +24,6 @@ export const ChatHeader = ({
     relationshipStatus,
     menuVisible,
     setMenuVisible,
-    modalVisible,
-    setModalVisible,
     menuItems,
     fetchRelationshipStatus,
 
@@ -88,7 +85,7 @@ export const ChatHeader = ({
                         if (isGroup) {
                             router.push({ pathname: '/chat/group_info', params: { id: id } });
                         } else {
-                            setModalVisible(true);
+                            router.push(`/user/${id}`);
                         }
                     }}
                     activeOpacity={0.7}
@@ -99,9 +96,9 @@ export const ChatHeader = ({
                                 (isGroup) ? (avatar_url ? `${Config.API_URL}/${avatar_url}` : undefined) :
                                     (targetUserProfile?.avatar_url) ? `${Config.API_URL}/${targetUserProfile.avatar_url}` :
                                         (avatar_url) ? `${Config.API_URL}/${avatar_url}` :
-                                            getAvatarById(targetUserProfile?.avatar_id || avatar_id || id)
+                                            getAvatarById(targetUserProfile?.avatar_id ?? avatar_id ?? id)
                         }
-                        online={!isGroup && (isOnline || (lastActive && (new Date().getTime() - new Date(lastActive).getTime() < 60000)))}
+                        online={!isGroup && (isOnline)}
                         size={40}
                         fallbackComponent={isGroup ? <GroupDefaultIcon size={40} /> : undefined}
                     />
@@ -123,7 +120,7 @@ export const ChatHeader = ({
                             )}
                         </View>
 
-                        <ThemedText type="caption" style={{ color: String(id) === String(currentUser?.id) ? Colors.secondary : (isTyping ? Colors.primary : (isOnline || (lastActive && (new Date().getTime() - new Date(lastActive).getTime() < 60000)) ? Colors.online : Colors.textSecondary)) }}>
+                        <ThemedText type="caption" style={{ color: String(id) === String(currentUser?.id) ? Colors.secondary : (isTyping ? Colors.primary : (isOnline ? Colors.online : Colors.textSecondary)) }}>
                             {String(id) === String(currentUser?.id)
                                 ? 'Personal Space'
                                 : isTyping
@@ -135,7 +132,7 @@ export const ChatHeader = ({
                                         : 'Typing...')
                                     : isGroup
                                         ? 'Tap for group info'
-                                        : (isOnline || (lastActive && (new Date().getTime() - new Date(lastActive).getTime() < 60000))
+                                        : (isOnline
                                             ? 'Online'
                                             : lastActive
                                                 ? `Last seen ${formatChatTime(lastActive)}`
@@ -153,17 +150,6 @@ export const ChatHeader = ({
                     items={menuItems}
                 />
             </View>
-
-            <UserProfileViewer
-                visible={modalVisible}
-                onClose={() => setModalVisible(false)}
-                user={targetUserProfile || { id, username: otherUsername, avatar_id: avatar_id || '1' }}
-                currentUser={currentUser}
-                relationship={String(id) === String(currentUser?.id) ? 'self' : (relationshipStatus as any) || 'none'}
-                onActionComplete={() => {
-                    fetchRelationshipStatus();
-                }}
-            />
         </>
     );
 };

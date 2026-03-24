@@ -12,7 +12,6 @@ import { Config } from '../../constants/Config';
 import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
-
 export default function GlobalFriendsScreen() {
     const { user: currentUser } = useUser();
     const [users, setUsers] = React.useState<any[]>([]);
@@ -84,6 +83,15 @@ export default function GlobalFriendsScreen() {
         }
     };
 
+    const handleProfilePress = (item: any) => {
+        if (item.relationship_status !== 'self' && item.privacy_profile_visibility === 'private' && item.relationship_status !== 'accepted') {
+            Alert.alert('Note', 'This profile is private.');
+            return;
+        }
+
+        router.push(`/user/${item.id}`);
+    };
+
     const renderItem = ({ item }: { item: any }) => {
         const isReceived = item.relationship_status === 'request_received';
         const isSent = item.relationship_status === 'pending';
@@ -103,24 +111,30 @@ export default function GlobalFriendsScreen() {
                     }
                 ]}>
                     <View style={styles.row}>
-                        <Avatar
-                            source={item.avatar_url ? `${Config.API_URL}/${item.avatar_url}` : getAvatarById(item.avatar_id)}
-                            online={item.is_online}
-                            size={48}
-                        />
-                        <View style={styles.info}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <ThemedText type="defaultSemiBold" style={styles.username}>
-                                    {item.username}
-                                    {item.relationship_status === 'self' && item.username !== item.real_username && (
-                                        <ThemedText style={styles.youIndicator}> (You)</ThemedText>
+                        <TouchableOpacity 
+                            style={styles.profileTouch} 
+                            onPress={() => handleProfilePress(item)}
+                            activeOpacity={0.7}
+                        >
+                            <Avatar
+                                source={item.avatar_url ? `${Config.API_URL}/${item.avatar_url}` : getAvatarById(item.avatar_id)}
+                                online={item.is_online}
+                                size={48}
+                            />
+                            <View style={styles.info}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <ThemedText type="defaultSemiBold" style={styles.username}>
+                                        {item.username}
+                                        {item.relationship_status === 'self' && item.username !== item.real_username && (
+                                            <ThemedText style={styles.youIndicator}> (You)</ThemedText>
+                                        )}
+                                    </ThemedText>
+                                    {item.is_official == 1 && (
+                                        <BadgeCheck size={16} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
                                     )}
-                                </ThemedText>
-                                {item.is_official == 1 && (
-                                    <BadgeCheck size={16} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
-                                )}
+                                </View>
                             </View>
-                        </View>
+                        </TouchableOpacity>
 
                         {isFriend ? (
                             <TouchableOpacity
@@ -270,6 +284,12 @@ const styles = StyleSheet.create({
         elevation: 4,
     },
     row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    profileTouch: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
