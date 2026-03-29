@@ -39,7 +39,7 @@ if (!empty($data->email) && !empty($data->password)) {
                 $access_token = JWTHelper::generateAccessToken($row['id']);
                 $refresh_token = JWTHelper::generateRefreshToken();
                 $refresh_token_hash = password_hash($refresh_token, PASSWORD_DEFAULT);
-                $expiry = date('Y-m-d H:i:s', time() + 7 * 24 * 60 * 60); // 7 days
+                $expiry = date('Y-m-d H:i:s', time() + 30 * 24 * 60 * 60); // 30 days
 
                 // Store Refresh Token
                 $refresh_stmt = $pdo->prepare("INSERT INTO refresh_tokens (user_id, token_hash, expires_at, device_info) VALUES (:user_id, :token_hash, :expires_at, :device_info)");
@@ -49,13 +49,16 @@ if (!empty($data->email) && !empty($data->password)) {
                     ':expires_at' => $expiry,
                     ':device_info' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown'
                 ]);
+                
+                $refresh_id = $pdo->lastInsertId();
+                $final_refresh_token = $refresh_id . '|' . $refresh_token;
 
                 http_response_code(200);
                 ob_clean();
                 echo json_encode(array(
                     "message" => "Login successful.",
                     "access_token" => $access_token,
-                    "refresh_token" => $refresh_token,
+                    "refresh_token" => $final_refresh_token,
                     "expires_in" => JWTHelper::getAccessTokenExpiry(),
                     "user" => array(
                         "id" => $row['id'],

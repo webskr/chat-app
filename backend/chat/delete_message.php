@@ -31,6 +31,13 @@ if (!empty($data->message_id) && !empty($data->user_id)) {
             exit();
         }
 
+        // --- Note to Self Restriction ---
+        if ($msg['sender_id'] == $msg['receiver_id']) {
+            http_response_code(403);
+            echo json_encode(array("message" => "Note to Self messages cannot be deleted."));
+            exit();
+        }
+
         if ($delete_type === 'everyone') {
             if ($msg['sender_id'] == $user_id) {
                 // Update to include deleted_at and ensure clear text for previews

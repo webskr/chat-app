@@ -2,7 +2,7 @@
 # This script starts the local services (Expo and Socket) using the local IP address
 # without Cloudflare tunnels.
 
-$IP = "10.130.145.5"
+$IP = "10.218.66.5"
 
 Write-Host "===============================================" -ForegroundColor Cyan
 Write-Host "STSRTING CHAT APP SERVICES (IP WORK ONLY)" -ForegroundColor Cyan

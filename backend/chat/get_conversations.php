@@ -76,7 +76,11 @@ if (!empty($user_id)) {
                          ) as unread_count_raw,
                          u.id as other_user_id, u.username as other_username, u.avatar_id as other_avatar_id, u.avatar_url as other_avatar_url,
                          u.last_seen, u.privacy_last_seen, u.privacy_profile_visibility, u.is_official as other_is_official,
-                         NULL as group_name, NULL as group_icon
+                         NULL as group_name, NULL as group_icon,
+                         (SELECT COUNT(*) FROM favourite_chats WHERE user_id = :me_fav AND chat_id = c.id) as is_favourite,
+                         (SELECT COUNT(*) FROM pinned_chats WHERE user_id = :me_pin AND chat_id = c.id) as is_pinned,
+                         (SELECT COUNT(*) FROM locked_chats WHERE user_id = :me_lock AND chat_id = c.id) as is_locked,
+                         (SELECT COUNT(*) FROM muted_chats WHERE user_id = :me_mute AND target_id = u.id AND is_group = 0 AND mute_until > NOW()) as is_muted
                   FROM conversations c
                   JOIN users u ON (c.user1_id = u.id OR c.user2_id = u.id)
                   WHERE (c.user1_id = :uid1 OR c.user2_id = :uid2) 
@@ -103,7 +107,11 @@ if (!empty($user_id)) {
                         ) as unread_count_raw,
                         0 as other_user_id, g.name as other_username, 0 as other_avatar_id, g.icon_path as other_avatar_url,
                         NULL as last_seen, 0 as privacy_last_seen, 'nobody' as privacy_profile_visibility, 0 as other_is_official,
-                        g.name as group_name, g.icon_path as group_icon
+                        g.name as group_name, g.icon_path as group_icon,
+                        (SELECT COUNT(*) FROM favourite_chats WHERE user_id = :me_fav_g AND chat_id = c.id) as is_favourite,
+                        (SELECT COUNT(*) FROM pinned_chats WHERE user_id = :me_pin_g AND chat_id = c.id) as is_pinned,
+                        (SELECT COUNT(*) FROM locked_chats WHERE user_id = :me_lock_g AND chat_id = c.id) as is_locked,
+                        (SELECT COUNT(*) FROM muted_chats WHERE user_id = :me_mute_g AND target_id = c.group_id AND is_group = 1 AND mute_until > NOW()) as is_muted
                  FROM conversations c
                  JOIN group_members gm ON c.group_id = gm.group_id
                  JOIN groups g ON c.group_id = g.id
@@ -123,10 +131,12 @@ if (!empty($user_id)) {
             ':uid1' => $user_id, ':uid2' => $user_id, 
             ':uid3' => $user_id, ':uid4' => $user_id, 
             ':uid5' => $user_id,
+            ':me_fav' => $user_id, ':me_pin' => $user_id, ':me_lock' => $user_id, ':me_mute' => $user_id,
             ':me_group_unread' => $user_id,
             ':me_group_read_check' => $user_id,
             ':me_group_member_check' => $user_id,
-            ':uid_group' => $user_id
+            ':uid_group' => $user_id,
+            ':me_fav_g' => $user_id, ':me_pin_g' => $user_id, ':me_lock_g' => $user_id, ':me_mute_g' => $user_id
         ]);
         
         $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);

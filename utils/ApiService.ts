@@ -79,7 +79,7 @@ export class ApiService {
                             const data = await refreshResponse.json();
                             await SecureStoreHelper.setAccessToken(data.access_token);
                             await SecureStoreHelper.setRefreshToken(data.refresh_token);
-                            console.log('[ApiService] ✅ Token refreshed successfully');
+                            console.log(`[ApiService] ✅ Session extended. Next expiry: ${new Date(Date.now() + data.expires_in * 1000).toLocaleString()}`);
                             this.isRefreshing = false;
                             this.onTokenRefreshed(data.access_token);
 
@@ -95,7 +95,7 @@ export class ApiService {
                             
                             if (status === 401 || status === 403) {
                                 // Explicitly invalid session/token
-                                console.error('[ApiService] 🛑 Session invalid. Clearing tokens.');
+                                console.error('[ApiService] 🛑 Session expired or invalid. Manual login required.');
                                 await SecureStoreHelper.clearTokens();
                                 const error = new Error('Refresh token invalid');
                                 this.onTokenRefreshFailed(error);

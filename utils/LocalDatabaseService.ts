@@ -168,12 +168,18 @@ export class LocalDatabaseService {
                         last_message_sender TEXT,
                         unread_count        INTEGER DEFAULT 0,
                         auto_delete_minutes INTEGER DEFAULT 0,
-                        is_favourite        INTEGER DEFAULT 0
+                        is_favourite        INTEGER DEFAULT 0,
+                        is_pinned           INTEGER DEFAULT 0,
+                        is_muted            INTEGER DEFAULT 0,
+                        is_locked           INTEGER DEFAULT 0
                     );
                 `);
 
                 try { await this.db.execute(`ALTER TABLE chats ADD COLUMN auto_delete_minutes INTEGER DEFAULT 0;`); } catch (e) { }
                 try { await this.db.execute(`ALTER TABLE chats ADD COLUMN is_favourite INTEGER DEFAULT 0;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE chats ADD COLUMN is_pinned INTEGER DEFAULT 0;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE chats ADD COLUMN is_muted INTEGER DEFAULT 0;`); } catch (e) { }
+                try { await this.db.execute(`ALTER TABLE chats ADD COLUMN is_locked INTEGER DEFAULT 0;`); } catch (e) { }
 
                 await this.db.execute(`
                     CREATE TABLE IF NOT EXISTS status_retry_queue (
@@ -412,7 +418,7 @@ export class LocalDatabaseService {
         }
     }
 
-    static async getLocalMessages(chat_id: string, limit: number = 30, beforeTimestamp?: string): Promise<any[]> {
+    static async getLocalMessages(chat_id: string, limit: number = 30, beforeTimestamp?: string, cutoffTimestamp?: string): Promise<any[]> {
         const db = this.getDB();
         let query = `SELECT * FROM messages 
                      WHERE chat_id = ? 
@@ -423,25 +429,33 @@ export class LocalDatabaseService {
             query += ` AND timestamp < ?`;
             params.push(beforeTimestamp);
         }
+        if (cutoffTimestamp) {
+            query += ` AND timestamp >= ?`;
+            params.push(cutoffTimestamp);
+        }
         query += ` ORDER BY timestamp DESC LIMIT ?`;
         params.push(limit);
         const result = await db.execute(query, params);
         return (result.rows || []) as any[];
     }
 
-    static async getChatMedia(chat_id: string, limit: number = 30): Promise<any[]> {
+    static async getChatMedia(chat_id: string, limit: number = 30, cutoffTimestamp?: string): Promise<any[]> {
         const db = this.getDB();
-        const result = await db.execute(
-            `SELECT * FROM messages 
+        let query = `SELECT * FROM messages 
              WHERE chat_id = ? 
                AND (
                    type IN ('image', 'video', 'document', 'link') 
                    OR (type = 'text' AND (encrypted_payload LIKE '%http%' OR encrypted_payload LIKE '%www.%' OR encrypted_payload LIKE '%.com%' OR encrypted_payload LIKE '%.net%'))
                )
-               AND is_deleted = 0
-             ORDER BY timestamp DESC LIMIT ?`,
-            [chat_id, limit]
-        );
+               AND is_deleted = 0`;
+        const params: any[] = [chat_id];
+        if (cutoffTimestamp) {
+            query += ` AND timestamp >= ?`;
+            params.push(cutoffTimestamp);
+        }
+        query += ` ORDER BY timestamp DESC LIMIT ?`;
+        params.push(limit);
+        const result = await db.execute(query, params);
         return (result.rows || []) as any[];
     }
 
@@ -572,6 +586,52 @@ export class LocalDatabaseService {
         );
     }
 
+    static async purgeOldMessages(chat_id: string, minutes: number): Promise<void> {
+        if (!this.db || !this.isInitialized || minutes <= 0) return;
+        const db = this.getDB();
+        
+        try {
+            // 1. Get media paths for files to be deleted
+            const mediaRes = await db.execute(
+                `SELECT local_file_path FROM messages 
+                 WHERE chat_id = ? 
+                 AND timestamp < DATETIME('now', '-' || ? || ' minutes')
+                 AND local_file_path IS NOT NULL`,
+                [chat_id, minutes]
+            );
+
+            if (mediaRes.rows && mediaRes.rows.length > 0) {
+                for (const row of mediaRes.rows) {
+                    if (row.local_file_path) {
+                        try {
+                            // Only delete if it's within the app's document directory
+                            if (row.local_file_path.includes(FileSystem.documentDirectory || '')) {
+                                const info = await FileSystem.getInfoAsync(row.local_file_path);
+                                if (info.exists) {
+                                    await FileSystem.deleteAsync(row.local_file_path, { idempotent: true });
+                                }
+                            }
+                        } catch (e) {
+                            console.warn(`[DB] Failed to delete media file ${row.local_file_path}:`, e);
+                        }
+                    }
+                }
+            }
+
+            // 2. Hard delete the messages
+            await db.execute(
+                `DELETE FROM messages 
+                 WHERE chat_id = ? 
+                 AND timestamp < DATETIME('now', '-' || ? || ' minutes')`,
+                [chat_id, minutes]
+            );
+
+            console.log(`[DB] Purged messages older than ${minutes} minutes for chat ${chat_id}.`);
+        } catch (error) {
+            console.error('[DB] purgeOldMessages failed:', error);
+        }
+    }
+
     static async queueStatusUpdate(server_id: string, chat_id: string, status: string): Promise<void> {
         const db = this.getDB();
         await db.execute(
@@ -616,7 +676,7 @@ export class LocalDatabaseService {
                 ORDER BY timestamp DESC 
                 LIMIT 1
             )
-            ORDER BY COALESCE(m.timestamp, c.last_message_time) DESC
+            ORDER BY c.is_pinned DESC, COALESCE(m.timestamp, c.last_message_time) DESC
         `);
         return (result.rows || []) as any[];
     }
@@ -634,14 +694,17 @@ export class LocalDatabaseService {
         unread_count?: number;
         auto_delete_minutes?: number;
         is_favourite?: number;
+        is_pinned?: number;
+        is_muted?: number;
+        is_locked?: number;
     }): Promise<void> {
         const db = this.getDB();
         await db.execute(
             `INSERT INTO chats (
                 id, is_group, other_user_id, other_username, other_avatar_url, 
                 other_avatar_id, other_is_official, group_name, group_icon, unread_count,
-                auto_delete_minutes, is_favourite
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                auto_delete_minutes, is_favourite, is_pinned, is_muted, is_locked
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                 is_group          = excluded.is_group,
                 other_user_id     = COALESCE(excluded.other_user_id, chats.other_user_id),
@@ -657,7 +720,10 @@ export class LocalDatabaseService {
                 group_icon        = COALESCE(excluded.group_icon, chats.group_icon),
                 unread_count      = COALESCE(excluded.unread_count, chats.unread_count),
                 auto_delete_minutes = COALESCE(excluded.auto_delete_minutes, chats.auto_delete_minutes),
-                is_favourite      = COALESCE(excluded.is_favourite, chats.is_favourite)`,
+                is_favourite      = COALESCE(excluded.is_favourite, chats.is_favourite),
+                is_pinned         = COALESCE(excluded.is_pinned, chats.is_pinned),
+                is_muted          = COALESCE(excluded.is_muted, chats.is_muted),
+                is_locked         = COALESCE(excluded.is_locked, chats.is_locked)`,
             [
                 chatData.id,
                 chatData.is_group ? 1 : 0,
@@ -670,7 +736,10 @@ export class LocalDatabaseService {
                 chatData.group_icon ?? null,
                 chatData.unread_count ?? null,
                 chatData.auto_delete_minutes ?? null,
-                chatData.is_favourite ?? 0
+                chatData.is_favourite ?? 0,
+                chatData.is_pinned ?? 0,
+                chatData.is_muted ?? 0,
+                chatData.is_locked ?? 0
             ]
         );
     }
@@ -680,6 +749,45 @@ export class LocalDatabaseService {
         await db.execute(
             `UPDATE chats SET is_favourite = ? WHERE id = ?`,
             [isFavourite ? 1 : 0, chatId]
+        );
+    }
+
+    static async batchUpdateChats(chatIds: string[], updates: { [key: string]: any }): Promise<void> {
+        if (chatIds.length === 0) return;
+        const db = this.getDB();
+        const assignments = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+        const placeholders = chatIds.map(() => '?').join(', ');
+        const values = [...Object.values(updates), ...chatIds];
+        
+        await db.execute(
+            `UPDATE chats SET ${assignments} WHERE id IN (${placeholders})`,
+            values
+        );
+    }
+
+    static async batchDeleteChats(chatIds: string[]): Promise<void> {
+        if (chatIds.length === 0) return;
+        const db = this.getDB();
+        const placeholders = chatIds.map(() => '?').join(', ');
+        
+        // 1. Delete messages
+        await db.execute(`DELETE FROM messages WHERE chat_id IN (${placeholders})`, chatIds);
+        // 2. Delete chats
+        await db.execute(`DELETE FROM chats WHERE id IN (${placeholders})`, chatIds);
+    }
+
+    static async batchClearChats(chatIds: string[]): Promise<void> {
+        if (chatIds.length === 0) return;
+        const db = this.getDB();
+        const placeholders = chatIds.map(() => '?').join(', ');
+        
+        // 1. Delete messages
+        await db.execute(`DELETE FROM messages WHERE chat_id IN (${placeholders})`, chatIds);
+        // 2. Clear last message metadata in chats
+        await db.execute(
+            `UPDATE chats SET last_message = NULL, last_message_time = NULL, unread_count = 0 
+             WHERE id IN (${placeholders})`,
+            chatIds
         );
     }
 

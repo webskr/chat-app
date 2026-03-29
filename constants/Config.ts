@@ -13,7 +13,7 @@ export const Config = {
     BACKEND_URL: process.env.EXPO_PUBLIC_BACKEND_URL,
 
     // Your local Machine IP (Fallback if no env var)
-    IP_ADDRESS: '10.130.145.5',
+    IP_ADDRESS: '10.218.66.5',
 
     get API_URL() {
         if (this.BACKEND_URL) {

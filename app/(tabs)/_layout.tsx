@@ -150,10 +150,10 @@ const styles = StyleSheet.create({
         position: 'absolute',
         borderTopWidth: 0,
         elevation: 0,
-        height: 90, // Taller for labels
-        backgroundColor: Colors.background, // Solid background preferred for bottom bar visibility
-        paddingBottom: 10,
-        paddingTop: 10,
+        height: 65, // Slimmer height
+        backgroundColor: Colors.background,
+        paddingBottom: 8,
+        paddingTop: 8,
     },
     tabLabel: {
         fontSize: 12,

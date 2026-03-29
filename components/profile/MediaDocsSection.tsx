@@ -39,16 +39,35 @@ export const MediaDocsSection: React.FC<MediaDocsSectionProps> = ({ user, curren
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
 
     const isGroup = !!(user?.is_group || user?.group_id || user?.role); // Duck typing for group profile
+    const isOfficial = !!(user?.is_official);
     const chatId = isGroup 
         ? String(user?.id)
         : `chat_${Math.min(Number(currentUser?.id), Number(user?.id))}_${Math.max(Number(currentUser?.id), Number(user?.id))}`;
+
+    // --- Auto-Delete Calculation ---
+    const autoDeleteMinutes = React.useMemo(() => {
+        if (!currentUser || !currentUser.global_auto_delete_minutes || currentUser.global_auto_delete_minutes <= 0) return 0;
+        const isSelfChat = String(user?.id) === String(currentUser.id);
+        if (isSelfChat || isOfficial) return 0;
+
+        if (isGroup) {
+            return currentUser.global_auto_delete_group !== 0 ? currentUser.global_auto_delete_minutes : 0;
+        } else {
+            return currentUser.global_auto_delete_individual !== 0 ? currentUser.global_auto_delete_minutes : 0;
+        }
+    }, [currentUser, user?.id, isGroup, isOfficial]);
+
+    const cutoffTimestamp = React.useMemo(() => {
+        if (autoDeleteMinutes <= 0) return undefined;
+        return new Date(Date.now() - autoDeleteMinutes * 60 * 1000).toISOString();
+    }, [autoDeleteMinutes]);
 
     useEffect(() => {
         const loadMedia = async () => {
             if (!user?.id || !currentUser?.id) return;
             try {
-                // Fetch more items to get an accurate storage total
-                const results = await LocalDatabaseService.getChatMedia(chatId, 500);
+                // Fetch more items to get an accurate storage total, respecting auto-delete cutoff
+                const results = await LocalDatabaseService.getChatMedia(chatId, 500, cutoffTimestamp);
                 setCount(results.length);
                 setMediaItems(results.slice(0, 4));
 

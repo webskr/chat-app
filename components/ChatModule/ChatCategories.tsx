@@ -59,22 +59,21 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     categoryChip: {
-        paddingHorizontal: 16,
-        paddingVertical: 5,
-        borderRadius: 20,
+        paddingHorizontal: 16, // Increased padding
+        paddingVertical: 2,    // Slightly more vertical padding for better tap target
+        borderRadius: 8,       // More rounded for premium feel
         backgroundColor: 'transparent',
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.05)',
     },
     activeChip: {
         backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        borderColor: Colors.primary, // Subtle green border instead of full fill
+        borderColor: Colors.primary,
     },
     categoryText: {
-        fontSize: 12, // Slimmer text
+        fontSize: 13, // Slightly larger for better legibility
         color: Colors.textSecondary,
         fontWeight: '500',
-        letterSpacing: 0.3,
     },
     activeText: {
         color: Colors.white,

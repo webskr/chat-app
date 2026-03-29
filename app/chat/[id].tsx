@@ -27,34 +27,34 @@ import { OverflowMenu } from '../../components/OverflowMenu';
 import { ChatLockService } from '../../utils/ChatLockService';
 
 // Extracted Features
-import { MessageItem } from '../../components/chat/features/MessageItem';
-import { ChatHeader } from '../../components/chat/features/ChatHeader';
-import { ChatInputBar } from '../../components/chat/features/ChatInputBar';
-import { ReplyPreview } from '../../components/chat/features/ReplyPreview';
-import { ChatAttachmentPanel } from '../../components/chat/features/ChatAttachmentPanel';
-import { ChatLockScreen, LockSetupModal, UnlockPromptModal } from '../../components/chat/features/ChatLockUI';
-import { MediaPreviewModal } from '../../components/chat/features/MediaPreviewModal';
-import { OneTimeViewerModal } from '../../components/chat/features/OneTimeViewerModal';
-import { DeleteConfirmationModal } from '../../components/chat/features/DeleteConfirmationModal';
-import { ActionConfirmationModal } from '../../components/chat/features/ActionConfirmationModal';
-import { useVoiceRecording } from '../../components/chat/features/hooks/useVoiceRecording';
-import { useChatLock } from '../../components/chat/features/hooks/useChatLock';
-import { usePermissions } from '../../components/chat/features/hooks/usePermissions';
-import { styles } from '../../components/chat/features/styles';
+import { MessageItem } from '../../components/ChatModule/features/MessageItem';
+import { ChatHeader } from '../../components/ChatModule/features/ChatHeader';
+import { ChatInputBar } from '../../components/ChatModule/features/ChatInputBar';
+import { ReplyPreview } from '../../components/ChatModule/features/ReplyPreview';
+import { ChatAttachmentPanel } from '../../components/ChatModule/features/ChatAttachmentPanel';
+import { ChatLockScreen, LockSetupModal, UnlockPromptModal } from '../../components/ChatModule/features/ChatLockUI';
+import { MediaPreviewModal } from '../../components/ChatModule/features/MediaPreviewModal';
+import { OneTimeViewerModal } from '../../components/ChatModule/features/OneTimeViewerModal';
+import { DeleteConfirmationModal } from '../../components/ChatModule/features/DeleteConfirmationModal';
+import { ActionConfirmationModal } from '../../components/ChatModule/features/ActionConfirmationModal';
+import { useVoiceRecording } from '../../components/ChatModule/features/hooks/useVoiceRecording';
+import { useChatLock } from '../../components/ChatModule/features/hooks/useChatLock';
+import { usePermissions } from '../../components/ChatModule/features/hooks/usePermissions';
+import { styles } from '../../components/ChatModule/features/styles';
 import { SecureStoreHelper } from '../../utils/SecureStoreHelper';
 
 // Add local styles override/extension if needed or rely on importing them.
-// Since 'styles' is imported from components/chat/features/styles, we should probably update THAT file, 
+// Since 'styles' is imported from components/ChatModule/features/styles, we should probably update THAT file, 
 // OR simpler: define these extra styles relative to the usage if they don't exist.
-// Let's check 'components/chat/features/styles.ts' content first?
+// Let's check 'components/ChatModule/features/styles.ts' content first?
 // Or just inline them for now if I can't easily edit the styles file without seeing it.
 // The user prompt implied designing the popup.
-// I will edit the 'styles' object in `components/chat/features/styles.ts` to be clean.
+// I will edit the 'styles' object in `components/ChatModule/features/styles.ts` to be clean.
 
 import { saveMedia } from '../../utils/mediaSaver';
 import { MediaStorageService } from '../../storage/MediaStorageService';
 import { SyncService } from '../../utils/SyncService';
-import { ScheduleConfirmationModal } from '../../components/chat/features/ScheduleConfirmationModal';
+import { ScheduleConfirmationModal } from '../../components/ChatModule/features/ScheduleConfirmationModal';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { E2EEService } from '../../utils/E2EEService';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
@@ -121,7 +121,7 @@ export default function ChatDetailScreen() {
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     const [isAttachmentPanelOpen, setIsAttachmentPanelOpen] = useState(false);
     const [isMediaSearching, setIsMediaSearching] = useState(false);
-    const [panelActiveTab, setPanelActiveTab] = useState<'emoji' | 'gif' | 'sticker'>('emoji');
+    const [panelActiveTab, setPanelActiveTab] = useState<'emoji' | 'gif' | 'sticker' | 'textmoji'>('emoji');
     const [panelHeight, setPanelHeight] = useState(380);
     const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
     const [pendingScheduleTime, setPendingScheduleTime] = useState<Date | null>(null);
@@ -224,6 +224,33 @@ export default function ChatDetailScreen() {
     // 6. Basic Parsing (After hooks to ensure they are top-level)
     const isGroup = isGroupParam === '1' || isGroupParam === 'true';
     const isSelectionMode = selectedMessageIds.length > 0;
+
+    // --- Auto-Delete Calculation ---
+    const autoDeleteMinutes = useMemo(() => {
+        if (!currentUser || !currentUser.global_auto_delete_minutes || currentUser.global_auto_delete_minutes <= 0) return 0;
+        
+        // 1. Check if it's a self-chat (Note to Self)
+        const isSelfChat = String(id) === String(currentUser.id);
+        if (isSelfChat) return 0;
+
+        // 2. Check if it's official
+        const isOfficial = isOfficialParam === '1' || isOfficialParam === 'true' || targetUserProfile?.is_official;
+        if (isOfficial) return 0;
+
+        // 3. Check group/individual enabled
+        if (isGroup) {
+            return currentUser.global_auto_delete_group !== 0 ? currentUser.global_auto_delete_minutes : 0;
+        } else {
+            return currentUser.global_auto_delete_individual !== 0 ? currentUser.global_auto_delete_minutes : 0;
+        }
+    }, [currentUser, id, isGroup, isOfficialParam, targetUserProfile?.is_official]);
+
+    const cutoffTimestamp = useMemo(() => {
+        if (autoDeleteMinutes <= 0) return undefined;
+        // Use a 5-second buffer to avoid immediate race conditions with recently synced messages 
+        // that might have slightly skewed timestamps from server vs local time.
+        return new Date(Date.now() - (autoDeleteMinutes * 60 * 1000)).toISOString();
+    }, [autoDeleteMinutes]);
 
     // 7. Helper Functions (Non-Hooks)
     const deduplicateMessages = useCallback((msgs: any[]): any[] => {
@@ -386,6 +413,18 @@ export default function ChatDetailScreen() {
         };
     }, []);
 
+    useEffect(() => {
+        // Trigger background purge of old messages when entering a chat if timer is active
+        if (isDbReady && id && autoDeleteMinutes > 0 && currentUser) {
+            const dbChatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
+            LocalDatabaseService.purgeOldMessages(dbChatId, autoDeleteMinutes)
+                .then(() => {
+                    // Pre-emptively filter local state if needed (though getLocalMessages handles it)
+                })
+                .catch(e => console.error("[AutoDelete] Purge failed:", e));
+        }
+    }, [isDbReady, id, autoDeleteMinutes, isGroup, currentUser?.id]);
+
     // 9. Focus Effect Hooks
 
     // Handlers & Logic - Defined BEFORE useFocusEffect to be used inside
@@ -415,9 +454,10 @@ export default function ChatDetailScreen() {
             let localRows: any[] = [];
             if (highlightMessageId) {
                 localRows = await LocalDatabaseService.getMessagesUpToId(chatId, highlightMessageId);
-                if (localRows.length === 0) localRows = await LocalDatabaseService.getLocalMessages(chatId, 50);
+                // Note: highlightMessageId might be older than cutoff, but we allow viewing it if explicitly targeted
+                if (localRows.length === 0) localRows = await LocalDatabaseService.getLocalMessages(chatId, 50, undefined, cutoffTimestamp);
             } else {
-                localRows = await LocalDatabaseService.getLocalMessages(chatId, 50);
+                localRows = await LocalDatabaseService.getLocalMessages(chatId, 50, undefined, cutoffTimestamp);
             }
 
             const initialMessages = localRows.map(mapDatabaseRowToMessage);
@@ -502,6 +542,9 @@ export default function ChatDetailScreen() {
                     // Persist to Local DB
                     for (const msg of data) {
                         try {
+                            const msgTime = msg.created_at || msg.timestamp;
+                            if (cutoffTimestamp && msgTime < cutoffTimestamp) continue;
+
                             await LocalDatabaseService.insertMessage({
                                 server_id: msg.id?.toString(),
                                 chat_id: chatId,
@@ -518,7 +561,7 @@ export default function ChatDetailScreen() {
                     }
 
                     // ✅ Merge final updates into UI
-                    const updatedRows = await LocalDatabaseService.getLocalMessages(chatId, 50);
+                    const updatedRows = await LocalDatabaseService.getLocalMessages(chatId, 50, undefined, cutoffTimestamp);
                     const updatedMessages = updatedRows.map(mapDatabaseRowToMessage);
                     safeSetMessages(prev => [...updatedMessages, ...prev]);
 
@@ -609,7 +652,7 @@ export default function ChatDetailScreen() {
         }
 
         try {
-            const olderRows = await LocalDatabaseService.getLocalMessages(chatId, 30, oldestMessage.created_at);
+            const olderRows = await LocalDatabaseService.getLocalMessages(chatId, 30, oldestMessage.created_at, cutoffTimestamp);
             if (olderRows.length > 0) {
                 const olderMessages = olderRows.map(mapDatabaseRowToMessage);
                 safeSetMessages(prev => [...prev, ...olderMessages]);
@@ -2018,6 +2061,10 @@ export default function ChatDetailScreen() {
 
     // --- Selection Mode Handlers ---
     const handleDeleteMessage = (messageId?: number, type: 'for_me' | 'everyone' = 'for_me') => {
+        if (String(id) === String(currentUser?.id)) {
+            Alert.alert('Note to Self', 'Messages in Note to Self cannot be deleted.');
+            return;
+        }
         // If called with specific type (from options menu), execute immediately
         if (messageId && type) {
             // We need to confirm this action or let the options menu handle it?
@@ -2062,7 +2109,7 @@ export default function ChatDetailScreen() {
     };
 
     const deleteMessageLogic = async (messageId: number | number[], type: 'for_me' | 'everyone') => {
-        if (!currentUser) return;
+        if (!currentUser || String(id) === String(currentUser?.id)) return;
         const ids = Array.isArray(messageId) ? messageId : [messageId];
 
         try {
@@ -2157,6 +2204,10 @@ export default function ChatDetailScreen() {
     };
 
     const handleDeleteSelected = () => {
+        if (String(id) === String(currentUser?.id)) {
+            Alert.alert('Note to Self', 'Messages in Note to Self cannot be deleted.');
+            return;
+        }
         const canDeleteForEveryone = selectedMessageIds.every(id => {
             const msg = messages.find(m => m.id === id);
             return msg && String(msg.sender_id) === String(currentUser?.id);
@@ -2220,9 +2271,13 @@ export default function ChatDetailScreen() {
         }
     };
 
-    const handleMediaSelect = (type: string, content: string) => {
-        if (type === 'emoji') {
-            content === 'BACKSPACE' ? setInputText(prev => prev.slice(0, -1)) : setInputText(prev => prev + content);
+    const handleMediaSelect = useCallback((type: string, content: string) => {
+        if (type === 'emoji' || type === 'textmoji') {
+            if (content === 'BACKSPACE') {
+                setInputText(prev => prev.slice(0, -1));
+            } else {
+                setInputText(prev => prev + content);
+            }
         } else if (type === 'gif') {
             handleGifSelect(content);
             setIsPanelOpen(false);
@@ -2230,7 +2285,7 @@ export default function ChatDetailScreen() {
             handleStickerSend(content);
             setIsPanelOpen(false);
         }
-    };
+    }, [handleGifSelect, handleStickerSend]);
 
     const handleAttachmentTypeSelect = (type: string) => {
         setIsAttachmentPanelOpen(false);
@@ -2296,7 +2351,9 @@ export default function ChatDetailScreen() {
             { label: isMuted ? 'Unmute Notifications' : 'Mute Notifications', icon: BellOff, onPress: handleMuteToggle }
         ] : []),
         { label: isLocked ? 'Unlock Chat' : 'Lock Chat', icon: isLocked ? Unlock : Lock, onPress: () => isLocked ? setShowUnlockPrompt(true) : setShowLockSetup(true) },
-        { label: 'Clear Messages', icon: Trash2, onPress: handleClearChat },
+        ...(String(id) !== String(currentUser?.id) ? [
+            { label: 'Clear Messages', icon: Trash2, onPress: handleClearChat }
+        ] : []),
         ...(!isGroup && String(id) !== String(currentUser?.id) && (targetUserProfile?.is_official != 1 && isOfficialParam !== '1') ? [
             { label: relationshipStatus === 'blocked' ? 'Unblock' : 'Block', icon: ShieldAlert, onPress: handleBlockUser, destructive: true },
             { label: 'Unfriend', icon: UserMinus, onPress: () => { setMenuVisible(false); handleUnfriend(); }, destructive: true },
@@ -2792,10 +2849,12 @@ export default function ChatDetailScreen() {
                                 </ThemedText>
                             </TouchableOpacity>
                         )}
-                        <TouchableOpacity style={styles.modalOption} onPress={() => { setMessageOptionsVisible(false); handleDeleteMessage(selectedMessageForOptions?.id, 'for_me'); }}>
-                            <Trash size={20} color="#EF4444" /><ThemedText style={[styles.modalOptionText, { color: '#EF4444' }]}>Delete for me</ThemedText>
-                        </TouchableOpacity>
-                        {String(selectedMessageForOptions?.sender_id) === String(currentUser?.id) && (
+                        {String(id) !== String(currentUser?.id) && (
+                            <TouchableOpacity style={styles.modalOption} onPress={() => { setMessageOptionsVisible(false); handleDeleteMessage(selectedMessageForOptions?.id, 'for_me'); }}>
+                                <Trash size={20} color="#EF4444" /><ThemedText style={[styles.modalOptionText, { color: '#EF4444' }]}>Delete for me</ThemedText>
+                            </TouchableOpacity>
+                        )}
+                        {String(selectedMessageForOptions?.sender_id) === String(currentUser?.id) && String(id) !== String(currentUser?.id) && (
                             <TouchableOpacity style={styles.modalOption} onPress={() => { setMessageOptionsVisible(false); handleDeleteMessage(selectedMessageForOptions?.id, 'everyone'); }}>
                                 <Trash2 size={20} color="#EF4444" /><ThemedText style={[styles.modalOptionText, { color: '#EF4444' }]}>Delete for everyone</ThemedText>
                             </TouchableOpacity>

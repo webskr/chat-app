@@ -25,6 +25,13 @@ if (
 $user_id   = isset($data['user_id']) ? (int)$data['user_id'] : (int)$data['sender_id'];
 $target_id = isset($data['target_id']) ? (int)$data['target_id'] : (int)$data['receiver_id'];
 
+// --- Note to Self Restriction ---
+if (empty($data['group_id']) && $user_id === $target_id) {
+    http_response_code(403);
+    echo json_encode(["message" => "Note to Self chat cannot be cleared."]);
+    exit;
+}
+
 try {
     $pdo->beginTransaction();
 

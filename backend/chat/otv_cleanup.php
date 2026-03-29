@@ -9,6 +9,7 @@ if (!isset($pdo)) {
 }
 
 try {
+    global $pdo;
     // Logic:
     // 1. Find messages that are:
     //    - is_one_time = 1

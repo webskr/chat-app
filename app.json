@@ -7,11 +7,11 @@
     "orientation": "portrait",
     "newArchEnabled": false,
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0b1014"
     },
     "ios": {
       "supportsTablet": true,
@@ -20,6 +20,7 @@
     },
     "android": {
       "package": "com.skr.vegram",
+      "backgroundColor": "#0b1014",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -40,6 +41,10 @@
         }
       ],
       "softwareKeyboardLayoutMode": "resize",
+      "navigationBar": {
+        "backgroundColor": "#0b1014",
+        "barStyle": "light-content"
+      },
       "permissions": [
         "android.permission.READ_MEDIA_AUDIO",
         "android.permission.READ_MEDIA_IMAGES",

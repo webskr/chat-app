@@ -19,9 +19,9 @@ To test the application on physical devices or emulators on the same network, we
 
 2.  **Update Frontend Configuration**:
     - Open the `.env` file in the root directory.
-    - Set `EXPO_PUBLIC_BACKEND_URL` to your local IP address (e.g., `10.130.145.5`):
+    - Set `EXPO_PUBLIC_BACKEND_URL` to your local IP address (e.g., `10.218.66.5`):
       ```env
-      EXPO_PUBLIC_BACKEND_URL=http://10.130.145.5/chat-app/backend
+      EXPO_PUBLIC_BACKEND_URL=http://10.218.66.5/chat-app/backend
       ```
     - Check `constants/Config.ts` to ensure `IP_ADDRESS` matches if fallback is needed.
 

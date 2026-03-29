@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MediaStorageService } from '../../../storage/MediaStorageService';
+import { useUser } from '../../../context/UserContext';
 import {
     View,
     StyleSheet,
@@ -31,11 +32,31 @@ const ITEM_SIZE = width / COLUMN_COUNT;
 
 export default function FullMediaView() {
     const { chatId } = useLocalSearchParams();
+    const { user: currentUser } = useUser();
     const router = useRouter();
     const [mediaItems, setMediaItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'media' | 'links' | 'docs'>('media');
+
+    const isGroup = chatId && !String(chatId).startsWith('chat_');
+    const isSelfChat = String(chatId) === `chat_${currentUser?.id}_${currentUser?.id}`;
+
+    const autoDeleteMinutes = React.useMemo(() => {
+        if (!currentUser || !currentUser.global_auto_delete_minutes || currentUser.global_auto_delete_minutes <= 0) return 0;
+        if (isSelfChat) return 0;
+        
+        if (isGroup) {
+            return currentUser.global_auto_delete_group !== 0 ? currentUser.global_auto_delete_minutes : 0;
+        } else {
+            return currentUser.global_auto_delete_individual !== 0 ? currentUser.global_auto_delete_minutes : 0;
+        }
+    }, [currentUser, chatId, isGroup, isSelfChat]);
+
+    const cutoffTimestamp = React.useMemo(() => {
+        if (autoDeleteMinutes <= 0) return undefined;
+        return new Date(Date.now() - autoDeleteMinutes * 60 * 1000).toISOString();
+    }, [autoDeleteMinutes]);
 
     useEffect(() => {
         loadAllMedia();
@@ -45,8 +66,8 @@ export default function FullMediaView() {
         if (!chatId) return;
         setLoading(true);
         try {
-            // Fetch a large number of items to show the "full" view
-            const results = await LocalDatabaseService.getChatMedia(String(chatId), 500);
+            // Fetch a large number of items respect the auto-delete cutoff
+            const results = await LocalDatabaseService.getChatMedia(String(chatId), 500, cutoffTimestamp);
             setMediaItems(results);
         } catch (error) {
             console.error('[FullMediaView] Error loading media:', error);

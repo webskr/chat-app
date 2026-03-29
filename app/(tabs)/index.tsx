@@ -16,12 +16,11 @@ import { useFocusEffect } from 'expo-router';
 import { formatChatTime } from '../../utils/time';
 import { EmptyState } from '../../components/EmptyState';
 import { SyncService } from '../../utils/SyncService';
-import { MessageSquare, Megaphone } from 'lucide-react-native';
+import { MessageSquare, Megaphone, Star, X, Trash2, Pin, PinOff, BellOff, CheckSquare, Lock, Eraser, Check } from 'lucide-react-native';
 import { GroupDefaultIcon } from '../../components/icons/GroupDefaultIcon';
 import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
-import { ChatCategories, ChatCategory } from '../../components/chat/ChatCategories';
+import { ChatCategories, ChatCategory } from '../../components/ChatModule/ChatCategories';
 import { ApiService } from '../../utils/ApiService';
-import { Star } from 'lucide-react-native';
 
 export default function ChatScreen() {
     const { user, setUnreadCount, safeSync } = useUser();
@@ -29,7 +28,8 @@ export default function ChatScreen() {
     const [isLoading, setIsLoading] = React.useState(true);
     const [searchQuery, setSearchQuery] = React.useState('');
     const [activeCategory, setActiveCategory] = React.useState<ChatCategory>('All');
-    // const hasNavigatedRef = React.useRef(false); // REMOVED
+    const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+    const isSelectionMode = selectedIds.size > 0;
 
     const fetchConversations = React.useCallback(async (syncWithServer = false) => {
         if (!user) return;
@@ -137,43 +137,63 @@ export default function ChatScreen() {
             <TouchableOpacity
                 style={styles.chatItem}
                 activeOpacity={0.7}
-                onPress={() => router.push({
-                    pathname: '/chat/[id]',
-                    params: {
-                        id: isGroup ? item.id?.toString() : item.other_user_id?.toString(),
-                        user: displayName,
-                        avatar_id: item.other_avatar_id?.toString(),
-                        avatar_url: displayAvatar,
-                        is_official: item.other_is_official?.toString(),
-                        is_group: isGroup ? '1' : '0'
+                onPress={() => {
+                    if (isSelectionMode) {
+                        toggleSelection(item.id.toString());
+                    } else {
+                        router.push({
+                            pathname: '/chat/[id]',
+                            params: {
+                                id: isGroup ? item.id?.toString() : item.other_user_id?.toString(),
+                                user: displayName,
+                                avatar_id: item.other_avatar_id?.toString(),
+                                avatar_url: displayAvatar,
+                                is_official: item.other_is_official?.toString(),
+                                is_group: isGroup ? '1' : '0'
+                            }
+                        });
                     }
-                })}
-                onLongPress={() => toggleFavourite(item)}
+                }}
+                onLongPress={() => {
+                    if (!isSelectionMode) {
+                        toggleSelection(item.id.toString());
+                    }
+                }}
             >
-                <View style={styles.chatRow}>
-                    <Avatar
-                        source={displayAvatar ? `${Config.API_URL}/${displayAvatar}` : (isGroup ? undefined : getAvatarById(item.other_avatar_id))}
-                        online={!isGroup && item.is_online}
-                        size={50}
-                        fallbackComponent={isGroup ? <GroupDefaultIcon size={50} /> : undefined}
-                    />
+                <View style={[styles.chatRow, selectedIds.has(item.id.toString()) && styles.selectedRow]}>
+                    <View style={styles.avatarContainer}>
+                        <Avatar
+                            source={displayAvatar ? `${Config.API_URL}/${displayAvatar}` : (isGroup ? undefined : getAvatarById(item.other_avatar_id))}
+                            online={!isGroup && item.is_online}
+                            size={50}
+                            fallbackComponent={isGroup ? <GroupDefaultIcon size={50} /> : undefined}
+                        />
+                        {selectedIds.has(item.id.toString()) && (
+                            <View style={styles.selectionOverlay}>
+                                <Check size={20} color="#fff" />
+                            </View>
+                        )}
+                    </View>
                     <View style={styles.chatDetails}>
                         <View style={styles.rowTop}>
                             <View style={styles.nameBadgeContainer}>
                                 <ThemedText type="defaultSemiBold" style={styles.username} numberOfLines={1}>
                                     {displayName}
                                 </ThemedText>
-                                {!isGroup && (
-                                    item.other_is_official == 1 || 
-                                    item.other_is_official === '1' || 
-                                    displayName === 'Vegram Official' || 
-                                    displayName === 'VegramOfficial' || 
-                                    item.other_username === 'VegramOfficial'
-                                ) && (
+                                {Number(item.other_is_official) == 1 && (
                                     <BadgeCheck size={16} color={Colors.officialBadgeBorder} fill={Colors.officialBadge} />
                                 )}
                                 {Number(item.is_favourite) === 1 && (
                                     <Star size={14} color="#e9edef" fill="#e9edef" style={{ marginLeft: 2 }} />
+                                )}
+                                {Number(item.is_pinned) === 1 && (
+                                    <Pin size={14} color={Colors.primary} style={{ marginLeft: 2, transform: [{ rotate: '45deg' }] }} />
+                                )}
+                                {Number(item.is_muted) === 1 && (
+                                    <BellOff size={14} color={Colors.textSecondary} style={{ marginLeft: 2 }} />
+                                )}
+                                {Number(item.is_locked) === 1 && (
+                                    <Lock size={14} color={Colors.textSecondary} style={{ marginLeft: 2 }} />
                                 )}
                             </View>
                             <ThemedText style={[styles.time, (item.unread_count > 0 || (item.unread_count_raw > 0)) && styles.timeActive]}>
@@ -236,24 +256,106 @@ export default function ChatScreen() {
         router.push('/(tabs)/settings-tab'); // Match renamed route to avoid conflict
     };
 
+    const toggleSelection = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const clearSelection = () => setSelectedIds(new Set());
+
+    const selectAll = () => {
+        setSelectedIds(new Set(filteredChats.map(c => c.id.toString())));
+    };
+
+    const handleBatchAction = async (action: string) => {
+        if (selectedIds.size === 0) return;
+        const ids = Array.from(selectedIds);
+        
+        try {
+            // 1. Update Local DB
+            switch (action) {
+                case 'pin': await LocalDatabaseService.batchUpdateChats(ids, { is_pinned: 1 }); break;
+                case 'unpin': await LocalDatabaseService.batchUpdateChats(ids, { is_pinned: 0 }); break;
+                case 'favourite': await LocalDatabaseService.batchUpdateChats(ids, { is_favourite: 1 }); break;
+                case 'unfavourite': await LocalDatabaseService.batchUpdateChats(ids, { is_favourite: 0 }); break;
+                case 'lock': await LocalDatabaseService.batchUpdateChats(ids, { is_locked: 1 }); break;
+                case 'unlock': await LocalDatabaseService.batchUpdateChats(ids, { is_locked: 0 }); break;
+                case 'mute': await LocalDatabaseService.batchUpdateChats(ids, { is_muted: 1 }); break;
+                case 'unmute': await LocalDatabaseService.batchUpdateChats(ids, { is_muted: 0 }); break;
+                case 'delete': await LocalDatabaseService.batchDeleteChats(ids); break;
+                case 'clear': await LocalDatabaseService.batchClearChats(ids); break;
+            }
+
+            // 2. Refresh UI
+            fetchConversations(false);
+            clearSelection();
+
+            // 3. API Sync
+            await ApiService.post(`${Config.API_URL}/chat/batch_actions.php`, {
+                chat_ids: ids,
+                action: action
+            });
+        } catch (error) {
+            console.error('[ChatScreen] Batch action failed:', action, error);
+        }
+    };
+
+    const SelectionHeader = () => (
+        <View style={styles.selectionHeader}>
+            <View style={styles.selectionHeaderLeft}>
+                <TouchableOpacity onPress={clearSelection}>
+                    <X size={24} color={Colors.text} />
+                </TouchableOpacity>
+                <ThemedText style={styles.selectionCount}>{selectedIds.size}</ThemedText>
+            </View>
+            <View style={styles.selectionHeaderRight}>
+                <TouchableOpacity onPress={() => handleBatchAction(selectedIds.has(Array.from(selectedIds)[0]) && filteredChats.find(c => c.id.toString() === Array.from(selectedIds)[0])?.is_pinned ? 'unpin' : 'pin')}>
+                    <Pin size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleBatchAction('delete')}>
+                    <Trash2 size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleBatchAction('mute')}>
+                    <BellOff size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={selectAll}>
+                    <CheckSquare size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleBatchAction('lock')}>
+                    <Lock size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleBatchAction('favourite')}>
+                    <Star size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleBatchAction('clear')}>
+                    <Eraser size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
-            <View style={styles.header}>
-                <ThemedText type="title" style={styles.headerTitle}>Vegram</ThemedText>
+            {isSelectionMode ? <SelectionHeader /> : (
+                <View style={styles.header}>
+                    <ThemedText type="title" style={styles.headerTitle}>Vegram</ThemedText>
 
-                <View style={{ flexDirection: 'row', gap: 16 }}>
-                    {/* Independent Create Group button REMOVED */}
-
-                    {user?.is_official == 1 && (
-                        <TouchableOpacity onPress={() => router.push('/broadcast/compose')}>
-                            <Megaphone size={22} color={Colors.primary} />
+                    <View style={{ flexDirection: 'row', gap: 16 }}>
+                        {user?.is_official == 1 && (
+                            <TouchableOpacity onPress={() => router.push('/broadcast/compose')}>
+                                <Megaphone size={22} color={Colors.primary} />
+                            </TouchableOpacity>
+                        )}
+                        <TouchableOpacity onPress={() => setMenuVisible(true)}>
+                            <MoreVertical size={22} color={Colors.textSecondary} />
                         </TouchableOpacity>
-                    )}
-                    <TouchableOpacity onPress={() => setMenuVisible(true)}>
-                        <MoreVertical size={22} color={Colors.textSecondary} />
-                    </TouchableOpacity>
+                    </View>
                 </View>
-            </View>
+            )}
 
             {/* Menu Modal */}
             <Modal
@@ -431,5 +533,50 @@ const styles = StyleSheet.create({
     menuItem: {
         paddingVertical: 12,
         paddingHorizontal: 16,
-    }
+    },
+    selectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 10,
+        paddingBottom: 10,
+        backgroundColor: Colors.background,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.glassBorder,
+    },
+    selectionHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 20,
+    },
+    selectionCount: {
+        fontSize: 20,
+        color: Colors.text,
+        fontWeight: '600',
+    },
+    selectionHeaderRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 20,
+    },
+    selectedRow: {
+        backgroundColor: Colors.primary + '15', // Subtle primary tint
+    },
+    avatarContainer: {
+        position: 'relative',
+    },
+    selectionOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: Colors.primary,
+        borderRadius: 12,
+        width: 24,
+        height: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: Colors.background,
+    },
 });

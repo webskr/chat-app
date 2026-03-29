@@ -43,7 +43,7 @@ Ensure all items are verified before the final production release.
 
 ⚙️ CONFIGURATION & INFRASTRUCTURE
 -------------------------------
-[ ] PRODUCTION IP: Update `Config.ts` to point to the production domain instead of the local machine IP (`10.130.145.5`).
+[ ] PRODUCTION IP: Update `Config.ts` to point to the production domain instead of the local machine IP (`10.218.66.5`).
 [ ] ASSET BUNDLING: Ensure all splash screens and icons are correctly set in `app.json`.
 [ ] EAS CONFIG: Verify `eas.json` profiles (production vs. development) are correctly configured for the final build.
 [ ] SERVER LOGS: Ensure PHP error logging is enabled but not visible to the end user (use `error_log` instead of `echo`).
