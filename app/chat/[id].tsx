@@ -40,6 +40,11 @@ import { ActionConfirmationModal } from '../../components/ChatModule/features/Ac
 import { useVoiceRecording } from '../../components/ChatModule/features/hooks/useVoiceRecording';
 import { useChatLock } from '../../components/ChatModule/features/hooks/useChatLock';
 import { usePermissions } from '../../components/ChatModule/features/hooks/usePermissions';
+import { useChatMediaPicker } from '../../components/ChatModule/features/hooks/useChatMediaPicker';
+import { useChatSelection } from '../../components/ChatModule/features/hooks/useChatSelection';
+import { useChatPresence } from '../../components/ChatModule/features/hooks/useChatPresence';
+import { useChatMessageSender } from '../../components/ChatModule/features/hooks/useChatMessageSender';
+import { useChatSync, mapDatabaseRowToMessage } from '../../components/ChatModule/features/hooks/useChatSync';
 import { styles } from '../../components/ChatModule/features/styles';
 import { SecureStoreHelper } from '../../utils/SecureStoreHelper';
 
@@ -74,18 +79,15 @@ export default function ChatDetailScreen() {
         highlightMessageId?: string
     }>();
     const { user: currentUser, isDbReady, safeSync, setActiveChatId } = useUser();
+    const isGroup = isGroupParam === '1' || isGroupParam === 'true';
 
     // 2. Core State Hooks
     const [messages, setMessages] = useState<any[]>([]);
     const [inputText, setInputText] = useState('');
     const [replyingToMessage, setReplyingToMessage] = useState<any>(null);
     const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
-    const [selectedMessageIds, setSelectedMessageIds] = useState<number[]>([]);
-    const [activeReactionMessageId, setActiveReactionMessageId] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [isSending, setIsSending] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const [failedMessages, setFailedMessages] = useState<any[]>([]);
     const [isReady, setIsReady] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [isMuted, setIsMuted] = useState(false);
@@ -98,22 +100,15 @@ export default function ChatDetailScreen() {
         allow_member_edit_info: false,
         allow_member_add_members: false
     });
-    const [hasMore, setHasMore] = useState(true);
-    const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
     // 3. UI & Modal State Hooks
     const [menuVisible, setMenuVisible] = useState(false);
     const [messageOptionsVisible, setMessageOptionsVisible] = useState(false);
     const [selectedMessageForOptions, setSelectedMessageForOptions] = useState<any>(null);
-    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-    const [canDeleteForEachOther, setCanDeleteForEachOther] = useState(false);
     const [editingMessage, setEditingMessage] = useState<any>(null);
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
     const [isFullScreenVisible, setIsFullScreenVisible] = useState(false);
-    const [isEditorVisible, setIsEditorVisible] = useState(false);
-    const [editorImageUri, setEditorImageUri] = useState<string | null>(null);
-    const [isPreviewVisible, setIsPreviewVisible] = useState(false);
-    const [previewMedia, setPreviewMedia] = useState<{ type: 'image' | 'video' | 'document'; uri: string; name?: string; mimeType?: string; size?: number; duration?: number }[] | null>(null);
+    // Removed old states
     const [otvUrl, setOtvUrl] = useState<string | null>(null);
     const [otvText, setOtvText] = useState<string | null>(null);
     const [otvType, setOtvType] = useState<'image' | 'video' | 'text'>('image');
@@ -128,7 +123,6 @@ export default function ChatDetailScreen() {
     const [pendingScheduleText, setPendingScheduleText] = useState('');
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [datePickerMode, setDatePickerMode] = useState<'date' | 'time'>('date');
-    const [presenceMap, setPresenceMap] = useState<Record<string, { isOnline: boolean, lastActive?: string, isTyping: boolean }>>({});
     const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
     const insets = useSafeAreaInsets();
     const keyboardHeight = useSharedValue(0);
@@ -163,21 +157,15 @@ export default function ChatDetailScreen() {
     });
 
     // 4. Ref Hooks
-    const lastSentRef = useRef<{ text: string, media: string | null, type: string, time: number } | null>(null);
     const flatListRef = useRef<FlashList<any>>(null);
     const inputRef = useRef<TextInput>(null);
     const isAtBottomRef = useRef(true);
     const scrollOffset = useRef(0);
     const appState = useRef(AppState.currentState);
     const socket = useRef<Socket | null>(null);
-    const typingTimeout = useRef<NodeJS.Timeout | null>(null);
-    const lastTypingEmit = useRef<number>(0);
-    const typingStopTimer = useRef<NodeJS.Timeout | null>(null);
-    const autoHideTypingTimers = useRef<Record<string, NodeJS.Timeout>>({});
     const recentMessages = useRef<number[]>([]);
     const isMounted = useRef(true);
     const currentIdRef = useRef(id);
-    const isFetchingRef = useRef(false);
     const isMediaSearchingRef = useRef(false);
     const sharedSecretCache = useRef<Map<string, Buffer>>(new Map());
     // Removed translateY ref as we'll rely on KeyboardAvoidingView
@@ -214,16 +202,49 @@ export default function ChatDetailScreen() {
     } = useChatLock(id);
 
     const {
+        selectedMessageIds, setSelectedMessageIds, activeReactionMessageId, setActiveReactionMessageId,
+        isSelectionMode, deleteModalVisible, setDeleteModalVisible, canDeleteForEachOther,
+        handleSelectMessage, handleLongPressMessage, handleCancelSelection,
+        handleDeleteSelected, handleCopySelected, handleForwardSelected, handleReplySelected
+    } = useChatSelection({
+        currentUser,
+        chatId: isGroup ? String(id) : `chat_${Math.min(Number(currentUser?.id || 0), Number(id))}_${Math.max(Number(currentUser?.id || 0), Number(id))}`,
+        messages,
+        otherUsername,
+        setReplyingToMessage,
+        inputRef
+    });
+
+    const {
+        isEditorVisible, setIsEditorVisible, editorImageUri, setEditorImageUri,
+        isPreviewVisible, setIsPreviewVisible, previewMedia, setPreviewMedia,
+        handlePickImage, handlePickVideo, handlePickDocument, handleLaunchCamera,
+        handleEditorSend, handleMediaPreviewSend, uploadVoiceMessage
+    } = useChatMediaPicker({
+        currentUser,
+        chatId: isGroup ? String(id) : `chat_${Math.min(Number(currentUser?.id || 0), Number(id))}_${Math.max(Number(currentUser?.id || 0), Number(id))}`,
+        setIsUploading,
+        handleSend: (...args) => handleSend(...args)
+    });
+
+    const {
         recordingStatus, recordingDuration, startRecording, stopRecording, cancelRecording
     } = useVoiceRecording(async (uri, duration) => {
         await uploadVoiceMessage(uri, duration);
     });
 
+    const {
+        presenceMap, setPresenceMap, handleTyping, setupPresenceListeners
+    } = useChatPresence({
+        currentUser,
+        chatId: isGroup ? String(id) : `chat_${Math.min(Number(currentUser?.id || 0), Number(id))}_${Math.max(Number(currentUser?.id || 0), Number(id))}`,
+        isGroup,
+        groupMembers
+    });
+
     usePermissions();
 
     // 6. Basic Parsing (After hooks to ensure they are top-level)
-    const isGroup = isGroupParam === '1' || isGroupParam === 'true';
-    const isSelectionMode = selectedMessageIds.length > 0;
 
     // --- Auto-Delete Calculation ---
     const autoDeleteMinutes = useMemo(() => {
@@ -301,6 +322,33 @@ export default function ChatDetailScreen() {
         },
         [deduplicateMessages]
     );
+
+    const {
+        isSending, setIsSending, failedMessages, setFailedMessages, handleSend, resendMessage
+    } = useChatMessageSender({
+        currentUser,
+        chatId: isGroup ? String(id) : `chat_${Math.min(Number(currentUser?.id || 0), Number(id))}_${Math.max(Number(currentUser?.id || 0), Number(id))}`,
+        isGroup,
+        socket: socket.current,
+        replyingToMessage,
+        setReplyingToMessage,
+        setInputText,
+        safeSetMessages,
+        isAtBottomRef
+    });
+
+    const {
+        updateMessageStatus,
+        syncChatData,
+        fetchOlderMessages,
+        fetchGroupData,
+        hasMore,
+        isLoadingOlder
+    } = useChatSync({
+        id: String(id), currentUser, isGroup, otherUsername, avatar_url, highlightMessageId, 
+        cutoffTimestamp, currentIdRef, sharedSecretCache, groupMembers, flatListRef,
+        safeSetMessages, setTargetUserProfile, setRelationshipStatus, setPresenceMap
+    });
 
     // 8. Effect Hooks
     useEffect(() => {
@@ -437,283 +485,6 @@ export default function ChatDetailScreen() {
         }
     }
 
-    /**
-     * ✅ CONSOLIDATED SYNC LOGIC
-     * Handles initial local load, background sync from server, and E2EE decryption.
-     */
-    async function syncChatData(signal?: AbortSignal) {
-        if (!currentUser || !id) return;
-        if (isFetchingRef.current) return;
-        isFetchingRef.current = true;
-
-        const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-
-        try {
-            // 1. Initial Load from Local DB (Fast UI)
-            console.log(`[Sync] Loading local messages for ${chatId}`);
-            let localRows: any[] = [];
-            if (highlightMessageId) {
-                localRows = await LocalDatabaseService.getMessagesUpToId(chatId, highlightMessageId);
-                // Note: highlightMessageId might be older than cutoff, but we allow viewing it if explicitly targeted
-                if (localRows.length === 0) localRows = await LocalDatabaseService.getLocalMessages(chatId, 50, undefined, cutoffTimestamp);
-            } else {
-                localRows = await LocalDatabaseService.getLocalMessages(chatId, 50, undefined, cutoffTimestamp);
-            }
-
-            const initialMessages = localRows.map(mapDatabaseRowToMessage);
-            safeSetMessages(prev => [...initialMessages, ...prev]);
-            
-            setHasMore(localRows.length >= 50);
-            setIsLoading(false);
-            setIsReady(true);
-
-            if (highlightMessageId) {
-                setTimeout(() => {
-                    const index = localRows.findIndex((r: any) => String(r.id) === String(highlightMessageId) || String(r.server_id) === String(highlightMessageId));
-                    if (index !== -1 && flatListRef.current) {
-                        flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
-                    }
-                }, 800);
-            }
-
-            // 2. Fetch from Server
-            console.log(`[Sync] Fetching server updates for ${chatId}`);
-            
-            // Parallel Fetch: Messages & Profile
-            const [msgsRes, relRes] = await Promise.all([
-                ApiService.fetch(`${Config.API_URL}/chat/get_messages.php?sender_id=${currentUser.id}&${isGroup ? `group_id=${id}` : `receiver_id=${id}`}`, { signal }),
-                !isGroup ? ApiService.fetch(`${Config.API_URL}/users/get_users.php?user_id=${currentUser.id}`, { signal }) : Promise.resolve(null),
-            ]);
-
-            if (signal?.aborted) return;
-            if (currentIdRef.current !== id) return;
-
-            // Handle Profile updates
-            if (relRes && relRes.ok) {
-                const users = await relRes.json();
-                const other = users.find((u: any) => String(u.id) === String(id));
-                if (other) {
-                    setRelationshipStatus(other.relationship_status);
-                    setTargetUserProfile(other);
-                } else if (String(id) === String(currentUser.id)) {
-                    setTargetUserProfile({ ...currentUser, bio: 'Note to self' });
-                }
-            } else if (isGroup) {
-                setTargetUserProfile({ id: id, username: otherUsername || 'Group', avatar_url: avatar_url, is_group: true });
-            }
-
-            // Handle Message updates
-            if (msgsRes.ok) {
-                let data = await msgsRes.json();
-                if (data && data.length > 0) {
-                    // E2EE Decryption Sweep (for 1-on-1)
-                    if (!isGroup) {
-                        try {
-                            const otherId = String(id);
-                            let sharedSecret = sharedSecretCache.current.get(otherId);
-                            if (!sharedSecret) {
-                                const myVersion = await E2EEService.getCurrentKeyVersion(currentUser.id);
-                                const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id, myVersion);
-                                if (myPrivateKey) {
-                                    const keyRes = await ApiService.fetch(`${Config.API_URL}/chat/get_keys.php?receiver_id=${id}`);
-                                    if (keyRes.ok) {
-                                        const keys = await keyRes.json();
-                                        if (keys && keys.identity_key) {
-                                            sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.identity_key);
-                                            sharedSecretCache.current.set(otherId, sharedSecret);
-                                        }
-                                    }
-                                }
-                            }
-                            if (sharedSecret) {
-                                data = data.map((msg: any) => {
-                                    if (msg.message_type === 'text' && msg.message_text && msg.message_text.includes(':')) {
-                                        try {
-                                            msg.message_text = E2EEService.decryptMessage(msg.message_text, sharedSecret);
-                                            msg.encrypted_payload = msg.message_text;
-                                        } catch (e) { }
-                                    }
-                                    return msg;
-                                });
-                            }
-                        } catch (decryptErr) { console.error("Decryption sweep failed:", decryptErr); }
-                    }
-
-                    // Persist to Local DB
-                    for (const msg of data) {
-                        try {
-                            const msgTime = msg.created_at || msg.timestamp;
-                            if (cutoffTimestamp && msgTime < cutoffTimestamp) continue;
-
-                            await LocalDatabaseService.insertMessage({
-                                server_id: msg.id?.toString(),
-                                chat_id: chatId,
-                                sender_id: msg.sender_id?.toString(),
-                                receiver_id: msg.receiver_id?.toString(),
-                                type: msg.message_type || 'text',
-                                encrypted_payload: msg.encrypted_payload || msg.message_text,
-                                local_file_path: msg.media_url || undefined,
-                                status: msg.status || 'delivered',
-                                timestamp: msg.created_at || msg.timestamp,
-                                reactions: msg.reactions || []
-                            });
-                        } catch (e) { }
-                    }
-
-                    // ✅ Merge final updates into UI
-                    const updatedRows = await LocalDatabaseService.getLocalMessages(chatId, 50, undefined, cutoffTimestamp);
-                    const updatedMessages = updatedRows.map(mapDatabaseRowToMessage);
-                    safeSetMessages(prev => [...updatedMessages, ...prev]);
-
-                    if (AppState.currentState === 'active') {
-                        const shouldMarkRead = isGroup ? true : data.some((m: any) => String(m.sender_id) !== String(currentUser.id) && m.status !== 'seen');
-                        if (shouldMarkRead) updateMessageStatus('seen');
-                    }
-                }
-            }
-
-            // Sync Presence State
-            const presenceIds = isGroup ? groupMembers.map(m => m.user_id).join(',') : id;
-            if (presenceIds) {
-                const pRes = await ApiService.fetch(`${Config.API_URL}/chat/get_presence.php?ids=${presenceIds}`, { signal });
-                if (pRes.ok) {
-                    const data = await pRes.json();
-                    const newMap: any = {};
-                    data.forEach((p: any) => {
-                        newMap[String(p.id)] = { isOnline: !!p.is_online, lastActive: p.last_active, isTyping: false };
-                    });
-                    setPresenceMap(prev => ({ ...prev, ...newMap }));
-                }
-            }
-
-        } catch (error: any) {
-            if (error.name !== 'AbortError') console.error('[Sync] Consolidated fetch failed:', error);
-        } finally {
-            isFetchingRef.current = false;
-        }
-    }
-
-
-    const mapDatabaseRowToMessage = (r: any) => {
-        let msgText = r.encrypted_payload;
-        let mediaUrl = r.local_file_path;
-        let msgType = r.type;
-        let e2e_media = null;
-
-        if (msgText && msgText.startsWith('{') && msgText.includes('"media"')) {
-            try {
-                const parsed = JSON.parse(msgText);
-                if (parsed.media) {
-                    msgText = parsed.content;
-                    e2e_media = parsed.media;
-                    msgType = parsed.media.mimeType && parsed.media.mimeType.includes('video') ? 'video' : 'image';
-                }
-            } catch (e) { }
-        }
-
-        return {
-            id: r.server_id ? parseInt(r.server_id) : r.id,
-            server_id: r.server_id, // ✅ Keep server_id explicit for deduplication
-            temp_id: r.temp_id,     // ✅ Keep temp_id explicit for deduplication
-            is_local: false,
-            local_db_id: r.id,
-            sender_id: r.sender_id,
-            receiver_id: r.receiver_id,
-            message_text: msgText,
-            media_url: mediaUrl,
-            e2e_media: e2e_media,
-            message_type: msgType,
-            status: r.status,
-            is_deleted: r.is_deleted === 1,
-            deleted_for_everyone: r.deleted_for_everyone === 1,
-            is_one_time: r.is_one_time === 1,
-            created_at: r.timestamp,
-            sender_name: r.sender_name,
-            sender_is_official: r.sender_is_official,
-            reactions: r.reactions ? (typeof r.reactions === 'string' ? JSON.parse(r.reactions) : r.reactions).map((re: any) => ({
-                userId: String(re.userId || re.user_id),
-                emoji: re.emoji,
-                username: re.username
-            })) : []
-        };
-    };
-
-    async function fetchOlderMessages() {
-        if (!hasMore || isLoadingOlder || !currentUser) return;
-        setIsLoadingOlder(true);
-
-        const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-
-        // Use the timestamp of the last message (oldest in the inverted list)
-        const oldestMessage = messages[messages.length - 1];
-        if (!oldestMessage || !oldestMessage.created_at) {
-            setIsLoadingOlder(false);
-            return;
-        }
-
-        try {
-            const olderRows = await LocalDatabaseService.getLocalMessages(chatId, 30, oldestMessage.created_at, cutoffTimestamp);
-            if (olderRows.length > 0) {
-                const olderMessages = olderRows.map(mapDatabaseRowToMessage);
-                safeSetMessages(prev => [...prev, ...olderMessages]);
-                setHasMore(olderRows.length === 30);
-            } else {
-                setHasMore(false);
-            }
-        } catch (error) {
-            console.error('Error fetching older messages:', error);
-        } finally {
-            setIsLoadingOlder(false);
-        }
-    }
-
-    async function fetchGroupData(signal?: AbortSignal) {
-        if (!isGroup || !currentUser) return;
-        try {
-            const res = await ApiService.fetch(`${Config.API_URL}/chat/get_group_details.php?group_id=${id}&user_id=${currentUser.id}`, { signal });
-            if (res.ok) {
-                const data = await res.json();
-                setUserRole(data.my_role || 'member');
-                setGroupMembers(data.members || []);
-                setPermissions({
-                    allow_member_send_messages: data.allow_member_send_messages === 1 || data.allow_member_send_messages === true,
-                    allow_member_edit_info: data.allow_member_edit_info === 1 || data.allow_member_edit_info === true,
-                    allow_member_add_members: data.allow_member_add_members === 1 || data.allow_member_add_members === true,
-                });
-            }
-        } catch (e: any) {
-            if (e.name !== 'AbortError') console.error('fetchGroupData error:', e);
-        }
-    }
-
-    async function updateMessageStatus(status: 'delivered' | 'seen', messageIds: (string | number)[] = []) {
-        if (!id || !currentUser) return;
-        try {
-            const chatId = isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-
-            // Update locally first for immediate feedback
-            if (status === 'seen') {
-                if (messageIds.length > 0) {
-                    await LocalDatabaseService.markMessagesSeenLocally(messageIds);
-                } else {
-                    await LocalDatabaseService.markChatRead(chatId, currentUser.id);
-                }
-            }
-
-            await SyncService.reportStatus(
-                Number(currentUser.id),
-                Number(id),
-                chatId,
-                status,
-                isGroup,
-                messageIds
-            );
-        } catch (error) {
-            console.error(`[ChatDetail] Error reporting ${status}:`, error);
-        }
-    }
-
-
 
     useFocusEffect(
         React.useCallback(() => {
@@ -768,105 +539,8 @@ export default function ChatDetailScreen() {
             setActiveChatId(chatId);
             LocalDatabaseService.markChatRead(chatId, currentUser.id).catch(() => { });
 
-            // Listen for user status changes (online/offline)
-            socket.current.on('user_online', (data: { user_id: string }) => {
-                setPresenceMap(prev => ({
-                    ...prev,
-                    [data.user_id]: {
-                        ...prev[data.user_id],
-                        isOnline: true,
-                        isTyping: prev[data.user_id]?.isTyping || false
-                    }
-                }));
-            });
-
-            socket.current.on('user_offline', (data: { user_id: string, last_active?: string }) => {
-                setPresenceMap(prev => ({
-                    ...prev,
-                    [data.user_id]: {
-                        ...prev[data.user_id],
-                        isOnline: false,
-                        lastActive: data.last_active,
-                        isTyping: false
-                    }
-                }));
-            });
-
-            socket.current.on('typing:start', (data: { user: string }) => {
-                const userId = String(data.user);
-
-                // Auto-hide if no event for 3s
-                if (autoHideTypingTimers.current[userId]) {
-                    clearTimeout(autoHideTypingTimers.current[userId]);
-                }
-
-                autoHideTypingTimers.current[userId] = setTimeout(() => {
-                    setPresenceMap(prev => {
-                        const newState = {
-                            ...prev,
-                            [userId]: { ...prev[userId], isTyping: false }
-                        };
-
-                        if (isGroup) {
-                            const typingMembers = Object.keys(newState)
-                                .filter(uid => uid !== String(id) && newState[uid]?.isTyping && groupMembers.some(m => String(m.user_id) === uid));
-
-                            newState[String(id)] = {
-                                ...newState[String(id)],
-                                isTyping: typingMembers.length > 0,
-                                typingMembers: typingMembers.map(uid => groupMembers.find(m => String(m.user_id) === uid)?.username).filter(Boolean)
-                            } as any;
-                        }
-                        return newState;
-                    });
-                }, 3000);
-
-                setPresenceMap(prev => {
-                    const newState = {
-                        ...prev,
-                        [userId]: { ...prev[userId], isTyping: true }
-                    };
-
-                    // If group, update synthetic group status
-                    if (isGroup) {
-                        const typingMembers = Object.keys(newState)
-                            .filter(uid => uid !== String(id) && newState[uid]?.isTyping && groupMembers.some(m => String(m.user_id) === uid));
-
-                        newState[String(id)] = {
-                            ...newState[String(id)],
-                            isOnline: true,
-                            isTyping: typingMembers.length > 0,
-                            typingMembers: typingMembers.map(uid => groupMembers.find(m => String(m.user_id) === uid)?.username).filter(Boolean)
-                        } as any;
-                    }
-                    return newState;
-                });
-            });
-
-            socket.current.on('typing:stop', (data: { user: string }) => {
-                const userId = String(data.user);
-                if (autoHideTypingTimers.current[userId]) {
-                    clearTimeout(autoHideTypingTimers.current[userId]);
-                }
-                setPresenceMap(prev => {
-                    const newState = {
-                        ...prev,
-                        [userId]: { ...prev[userId], isTyping: false }
-                    };
-
-                    if (isGroup) {
-                        const typingMembers = Object.keys(newState)
-                            .filter(uid => uid !== String(id) && newState[uid]?.isTyping && groupMembers.some(m => String(m.user_id) === uid));
-
-                        newState[String(id)] = {
-                            ...newState[String(id)],
-                            isTyping: typingMembers.length > 0,
-                            typingMembers: typingMembers.map(uid => groupMembers.find(m => String(m.user_id) === uid)?.username).filter(Boolean)
-                        } as any;
-                    }
-                    return newState;
-                });
-            });
+            // Listen for user status changes and typing state
+            setupPresenceListeners(socket.current);
 
             socket.current.on('message:new', async (data: any) => {
                 console.log(`[Socket] 📩 Received message:new from ${data.sender_id}`, data);
@@ -1128,311 +802,9 @@ export default function ChatDetailScreen() {
     }, [id, currentUser, isDbReady])
 );
 
-    const handleSend = async (messageText: string = inputText, mediaPath: string | null = null, mediaType: 'text' | 'image' | 'video' | 'audio' | 'voice' | 'document' | 'gif' | 'sticker' = 'text', isRetry = false, isOneTime = false, scheduledAt: Date | null = null, extraMeta: any = {}) => {
-        if (!currentUser) return null;
-        if (!messageText.trim() && !mediaPath && !extraMeta?.e2e_media_payload) return null;
-
-        // --- DEBOUNCE GUARD ---
-        const now = Date.now();
-        if (lastSentRef.current &&
-            lastSentRef.current.text === messageText &&
-            lastSentRef.current.media === mediaPath &&
-            lastSentRef.current.type === mediaType &&
-            (now - lastSentRef.current.time) < 1000) {
-            console.log('handleSend: Debounced duplicate send');
-            return null;
-        }
-        lastSentRef.current = { text: messageText, media: mediaPath, type: mediaType, time: now };
-
-        console.log('handleSend called:', { messageText, mediaPath, mediaType, isOneTime, scheduledAt, isGroup });
-
-        // Rate Limit (Skip)
-
-        if (!mediaPath) setInputText('');
-        setIsSending(true);
-
-        const tempIdStr = `temp_${Date.now()}`;
-        const newMessage = {
-            id: tempIdStr,
-            temp_id: tempIdStr,
-            sender_id: currentUser.id,
-            receiver_id: isGroup ? null : id,
-            group_id: isGroup ? id : null,
-            message_text: messageText,
-            media_url: mediaPath,
-            message_type: mediaPath ? mediaType : 'text',
-            is_local: true,      // ✅ marks this as unconfirmed / optimistic
-            reply_to_message_id: replyingToMessage?.id || null,
-            is_one_time: isOneTime ? 1 : 0,
-            status: scheduledAt ? 'scheduled' : 'sending',
-            created_at: new Date().toISOString(),
-            ...extraMeta
-        };
-
-        if (!scheduledAt) {
-            const localMessage = {
-                ...newMessage,
-                reply_sender_id: replyingToMessage?.sender_id,
-                reply_username: replyingToMessage ? (String(replyingToMessage.sender_id) === String(currentUser?.id) ? 'You' : (replyingToMessage.sender_name || 'User')) : null,
-                reply_text: replyingToMessage?.message_text,
-                reply_type: replyingToMessage?.message_type,
-                reply_media_url: replyingToMessage?.media_url
-            };
-            if (!isRetry) {
-                // ✅ safeSetMessages deduplicates — rapid taps can never cause duplicate optimistic messages
-                safeSetMessages(prev => [localMessage, ...prev]);
-            }
-
-            // --- LOCAL DB INSERT ---
-            try {
-                if (!isRetry) {
-                    const dbId = await LocalDatabaseService.insertMessage({
-                        temp_id: newMessage.temp_id.toString(),
-                        chat_id: isGroup ? id : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`,
-                        sender_id: currentUser.id.toString(),
-                        receiver_id: isGroup ? undefined : id.toString(),
-                        type: newMessage.message_type,
-                        encrypted_payload: newMessage.message_text || undefined,
-                        local_file_path: mediaPath || undefined,
-                        status: 'sending',
-                        retry_count: 0,
-                        sender_name: currentUser.username
-                    });
-                    (newMessage as any).local_db_id = dbId;
-                } else {
-                    (newMessage as any).local_db_id = extraMeta.local_db_id;
-                }
-            } catch (err) {
-                console.error("Local DB Insert Error", err);
-            }
-        } else {
-            Alert.alert("Scheduled", `Message scheduled for ${formatChatTime(scheduledAt)}`);
-            setInputText('');
-        }
-
-        setReplyingToMessage(null);
-        if (isRetry) setFailedMessages(prev => prev.filter(m => m.message_text !== messageText || m.media_url !== mediaPath));
-
-        try {
-            let payloadToEncrypt = messageText;
-            let isMediaE2E = false;
-
-            if (extraMeta && extraMeta.e2e_media_payload) {
-                payloadToEncrypt = JSON.stringify({
-                    content: messageText,
-                    media: extraMeta.e2e_media_payload
-                });
-                isMediaE2E = true;
-                messageText = payloadToEncrypt; // set as stringified JSON. Will be ciphertext if E2EE succeeds.
-            }
-
-            // --- E2EE SCRAMBLE ---
-            let currentKeyVersion = 1;
-            try {
-                if (!isGroup && (messageText || isMediaE2E)) {
-                    // 1. Get our latest private key version
-                    const myVersion = await E2EEService.getCurrentKeyVersion(currentUser.id);
-                    const myPrivateKey = await E2EEService.loadPrivateKey(currentUser.id, myVersion);
-
-                    if (myPrivateKey) {
-                        // 2. Fetch receiver's latest public key and version
-                        const keyRes = await ApiService.fetch(`${Config.API_URL}/chat/get_latest_key.php?user_id=${id}`);
-                        if (keyRes.ok) {
-                            const keys = await keyRes.json();
-                            if (keys && keys.public_key) {
-                                currentKeyVersion = keys.key_version;
-                                const sharedSecret = E2EEService.deriveSharedSecret(myPrivateKey, keys.public_key);
-                                // Include version in ciphertext metadata prefix if desired,
-                                // but we'll mainly use the explicit key_version field in the payload.
-                                messageText = await E2EEService.encryptMessage(payloadToEncrypt || " ", sharedSecret);
-                                console.log(`[E2EE] Message encrypted using receiver key v${currentKeyVersion}`);
-                            }
-                        }
-                    }
-                }
-            } catch (encryptError) {
-                console.error("Encryption failed, falling back or aborting:", encryptError);
-            }
-            // --- END E2EE SCRAMBLE ---
-
-            const payload: any = {
-                sender_id: currentUser.id,
-                message: messageText,
-                reply_to_message_id: newMessage.reply_to_message_id,
-                is_one_time: isOneTime ? 1 : 0,
-                key_version: !isGroup ? currentKeyVersion : null,
-                scheduled_at: scheduledAt ? scheduledAt.toISOString() : null
-            };
-
-            // Map mediaPath to correct backend key ONLY if NOT encrypted as JSON
-            // Because if it's E2EE, the server ignores native media attachments.
-            if (mediaPath && !isMediaE2E) {
-                if (mediaType === 'image') payload.image_path = mediaPath;
-                else if (mediaType === 'video') payload.video_url = mediaPath;
-                else if (mediaType === 'audio' || mediaType === 'voice') payload.audio_url = mediaPath;
-                else if (mediaType === 'document') payload.file_url = mediaPath;
-                else if (mediaType === 'gif') payload.gif_url = mediaPath;
-                else if (mediaType === 'sticker') payload.sticker_url = mediaPath;
-            }
-
-            // Append extra metadata (duration, file_size, etc.)
-            Object.assign(payload, extraMeta);
-            delete payload.e2e_media_payload;
-
-            if (isGroup) {
-                payload.group_id = id;
-            } else {
-                payload.receiver_id = id;
-            }
-
-            const response = await ApiService.post(`${Config.API_URL}/chat/send_message.php`, payload);
-
-            if (response.ok) {
-                const data = await response.json();
-                if (!scheduledAt) {
-                    isAtBottomRef.current = true;
-                    // --- LOCAL DB UPDATE ---
-                    if ((newMessage as any).local_db_id) {
-                        try {
-                            await LocalDatabaseService.updateMessageStatusAndRetry((newMessage as any).local_db_id, 'sent', 0);
-                            if (!isGroup) {
-                                (newMessage as any).key_version = currentKeyVersion;
-                                // Update local DB with the key version used
-                                await LocalDatabaseService.getDB().execute(
-                                    `UPDATE messages SET key_version = ? WHERE id = ?`,
-                                    [currentKeyVersion, (newMessage as any).local_db_id]
-                                );
-                            }
-                            if (data.message_id) {
-                                await LocalDatabaseService.updateServerId((newMessage as any).local_db_id, String(data.message_id));
-                            }
-                        } catch (e) { console.error(e); }
-                    }
-
-                    // ✅ Replace optimistic temp message with server-confirmed ID + server timestamp
-                    if (data.message_id) {
-                        safeSetMessages(prev =>
-                            prev.map(m =>
-                                String(m.id) === String(tempIdStr) || String(m.temp_id) === String(tempIdStr)
-                                    ? {
-                                        ...m,
-                                        id: data.message_id,
-                                        temp_id: tempIdStr,
-                                        is_local: false,
-                                        status: 'sent',
-                                        retry_count: 0,
-                                        created_at: data.created_at || m.created_at,
-                                    }
-                                    : m
-                            )
-                        );
-                    }
-
-                    // --- REALTIME SOCKET FORWARDING ---
-                    if (socket.current) {
-                        const targetRoom = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-                        socket.current.emit("message:new", {
-                            room: targetRoom,
-                            sender_id: currentUser.id,
-                            message_id: data.message_id,
-                            temp_id: tempIdStr,
-                            encrypted_payload: messageText,
-                            timestamp: newMessage.created_at,
-                            message_type: newMessage.message_type,
-                            reply_to_message_id: newMessage.reply_to_message_id,
-                            is_one_time: newMessage.is_one_time,
-                            media_url: newMessage.media_url,
-                            key_version: !isGroup ? currentKeyVersion : null,
-                            sender_name: currentUser.username
-                        });
-                    }
-                }
-                return data.message_id;
-            } else {
-                if (!scheduledAt) {
-                    handleSendFailure(newMessage, tempIdStr);
-                }
-            }
-        } catch (error) {
-            console.error('Error sending message:', error);
-            if (!scheduledAt) {
-                handleSendFailure(newMessage, tempIdStr);
-            }
-        } finally {
-            setIsSending(false);
-        }
+    const handleTypingWrapper = (text: string) => {
+        handleTyping(text, socket.current, setInputText);
     };
-
-    const handleSendFailure = async (newMessage: any, tempId: string) => {
-        const isOnline = NetworkService.getIsConnected();
-        const status = isOnline ? 'failed' : 'pending';
-        const newRetryCount = (newMessage.retry_count || 0) + 1;
-
-        if ((newMessage as any).local_db_id) {
-            await LocalDatabaseService.updateMessageStatusAndRetry((newMessage as any).local_db_id, status, status === 'failed' ? newRetryCount : (newMessage.retry_count || 0));
-        }
-
-        safeSetMessages(prev => prev.map(m => (String(m.id) === String(tempId) || String(m.temp_id) === String(tempId)) ? { ...m, status: status, retry_count: newRetryCount } : m));
-
-        if (status === 'failed') {
-            setFailedMessages(prev => [...prev, { ...newMessage, status: 'failed', retry_count: newRetryCount }]);
-        }
-    };
-
-    const resendMessage = async (message: any) => {
-        console.log("Resending message:", message.id);
-
-        // Update state to 'sending'
-        safeSetMessages(prev => prev.map(m => m.id === message.id ? { ...m, status: 'sending' } : m));
-        if (message.local_db_id) {
-            await LocalDatabaseService.updateMessageStatus(message.local_db_id, 'sending');
-        }
-
-        // Re-call handleSend but avoid adding a new local message
-        // We'll pass the existing message data
-        // Actually, it's cleaner to reuse the core logic but without the local push
-        // Let's modify handleSend to accept an optional existing local_db_id or similar
-        // For now, I will just call handleSend with isRetry=true which already handles some logic
-        return handleSend(message.message_text, message.media_url, message.message_type, true, !!message.is_one_time, null, {
-            reply_to_message_id: message.reply_to_message_id,
-            retry_count: message.retry_count,
-            local_db_id: message.local_db_id,
-            temp_id: message.temp_id || message.id
-        });
-    };
-
-
-    const handleTyping = (text: string) => {
-        setInputText(text);
-        if (!socket.current || !currentUser) return;
-
-        const targetRoom = isGroup ? `group_${id}` : `chat_${Math.min(Number(currentUser.id), Number(id))}_${Math.max(Number(currentUser.id), Number(id))}`;
-        const now = Date.now();
-
-        if (text.length > 0) {
-            // Throttled typing:start (max once per 2s)
-            if (now - lastTypingEmit.current > 2000) {
-                socket.current.emit('typing:start', { room: targetRoom, user: currentUser.id });
-                lastTypingEmit.current = now;
-
-                // Optional: Update last_typing in DB via API (lightweight)
-                ApiService.post(`${Config.API_URL}/users/update_online_status.php`, { user_id: currentUser.id, is_typing: 1 }).catch(() => { });
-            }
-
-            // Reset idle timer for typing:stop
-            if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
-            typingStopTimer.current = setTimeout(() => {
-                socket.current?.emit('typing:stop', { room: targetRoom, user: currentUser.id });
-                lastTypingEmit.current = 0; // Reset throttle
-            }, 1500);
-        } else {
-            // Immediate stop if text cleared
-            if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
-            socket.current.emit('typing:stop', { room: targetRoom, user: currentUser.id });
-            lastTypingEmit.current = 0;
-        }
-    };
-
 
     // Media Panel State
     const handleAttachmentSelect = () => {
@@ -1444,329 +816,7 @@ export default function ChatDetailScreen() {
         ]);
     };
 
-    const handlePickImage = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.All,
-            allowsMultipleSelection: true,
-            selectionLimit: 10,
-            allowsEditing: false, // Editing not supported for multiple selection usually
-            quality: 0.8,
-        });
-
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            const newMediaItems = result.assets.map(asset => {
-                const type = asset.type === 'video' ? 'video' : 'image';
-                if (type === 'video' && asset.fileSize && asset.fileSize > 50 * 1024 * 1024) {
-                    Alert.alert('File too large', 'One or more videos exceed the 50MB limit and were skipped.');
-                    return null;
-                }
-                return {
-                    type: type as 'image' | 'video',
-                    uri: asset.uri,
-                    name: asset.fileName || (type === 'video' ? 'video.mp4' : 'image.jpg'),
-                    mimeType: asset.mimeType || (type === 'video' ? 'video/mp4' : 'image/jpeg'),
-                    size: asset.fileSize ?? undefined,
-                    duration: asset.duration ?? undefined
-                };
-            }).filter(item => item !== null) as any[];
-
-            if (newMediaItems.length > 0) {
-                setPreviewMedia(newMediaItems);
-                setIsPreviewVisible(true);
-            }
-        }
-    };
-
-    const handleLaunchCamera = async () => {
-        const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            quality: 0.8,
-        });
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            setEditorImageUri(result.assets[0].uri);
-            setIsEditorVisible(true);
-        }
-    };
-
-    const handleEditorSend = async (uri: string) => {
-        setIsEditorVisible(false);
-        const asset = { uri, type: 'image/jpeg', fileName: uri.split('/').pop() || 'edited.jpg' };
-        await uploadImage(asset);
-        setEditorImageUri(null);
-    };
-
-    const uploadImage = async (asset: any) => {
-        if (!currentUser) return { success: false };
-        setIsUploading(true);
-        try {
-            const uploadResult = await MediaUploadService.uploadMedia(asset.uri, 'image', currentUser.id, id, {
-                fileName: asset.fileName || 'upload.jpg',
-                mimeType: asset.type || 'image/jpeg'
-            });
-            return uploadResult;
-        } catch (e) {
-            console.error("Image upload failed", e);
-        } finally {
-            setIsUploading(false);
-        }
-        return { success: false };
-    };
-
-    const handlePickVideo = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-            allowsMultipleSelection: true,
-            selectionLimit: 10,
-            allowsEditing: false,
-            quality: 1
-        });
-
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            const newMediaItems = result.assets.map(asset => {
-                if (asset.fileSize && asset.fileSize > 50 * 1024 * 1024) return null;
-                return {
-                    type: 'video',
-                    uri: asset.uri,
-                    name: asset.fileName || 'video.mp4',
-                    mimeType: asset.mimeType || 'video/mp4',
-                    size: asset.fileSize ?? undefined,
-                    duration: asset.duration ?? undefined
-                };
-            }).filter(item => item !== null) as any[];
-
-            if (newMediaItems.length > 0) {
-                setPreviewMedia(newMediaItems);
-                setIsPreviewVisible(true);
-            }
-        }
-    };
-
-
-    const uploadVideo = async (asset: any) => {
-        if (!currentUser) return { success: false };
-        setIsUploading(true);
-        try {
-            const uploadResult = await MediaUploadService.uploadMedia(asset.uri, 'video', currentUser.id, id, {
-                fileName: asset.fileName || 'video.mp4',
-                duration: asset.duration ? Math.ceil(asset.duration / 1000) : undefined,
-                mimeType: asset.mimeType || 'video/mp4'
-            });
-            return uploadResult;
-        } catch (e) {
-            console.error("Video upload error", e);
-        } finally {
-            setIsUploading(false);
-        }
-        return { success: false };
-    };
-
-    const handlePickDocument = async () => {
-        const result = await DocumentPicker.getDocumentAsync({ type: ['*/*'], multiple: true });
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            const newMediaItems = result.assets.map(asset => {
-                if (asset.size && asset.size > 50 * 1024 * 1024) return null;
-                return {
-                    type: 'document',
-                    uri: asset.uri,
-                    name: asset.name,
-                    mimeType: asset.mimeType,
-                    size: asset.size
-                };
-            }).filter(item => item !== null) as any[];
-
-            if (newMediaItems.length > 0) {
-                setPreviewMedia(newMediaItems);
-                setIsPreviewVisible(true);
-            }
-        }
-    };
-
-    const uploadDocument = async (asset: any) => {
-        if (!currentUser) return { success: false };
-        setIsUploading(true);
-        try {
-            const uploadResult = await MediaUploadService.uploadMedia(asset.uri, 'document', currentUser.id, id, {
-                fileName: asset.name,
-                mimeType: asset.mimeType
-            });
-            return uploadResult;
-        } catch (e) {
-            console.error("Doc upload error", e);
-        } finally {
-            setIsUploading(false);
-        }
-        return { success: false };
-    };
-
-    const uploadEncryptedFile = async (asset: any) => {
-        setIsUploading(true);
-        try {
-            const encryptedData = await E2EEService.encryptFile(asset.uri);
-            const formData = new FormData();
-            formData.append('file', { uri: Platform.OS === 'android' ? encryptedData.encryptedUri : encryptedData.encryptedUri.replace('file://', ''), name: 'upload.enc', type: 'application/octet-stream' } as any);
-
-            const response = await fetch(`${Config.API_URL}/chat/upload_encrypted_media.php`, { method: 'POST', body: formData });
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                return {
-                    success: true,
-                    url: data.url,
-                    key: encryptedData.key,
-                    nonce: encryptedData.nonce,
-                    tag: encryptedData.tag,
-                    mimeType: asset.mimeType || asset.type
-                };
-            }
-        } catch (e) {
-            console.error("Encrypted upload error", e);
-        } finally {
-            setIsUploading(false);
-        }
-        return { success: false };
-    };
-
-    const handleMediaPreviewSend = async (caption: string, isOneTime: boolean) => {
-        if (!currentUser || !previewMedia || previewMedia.length === 0) return;
-        setIsPreviewVisible(false);
-
-        const mediaItems = previewMedia;
-        setPreviewMedia(null);
-
-        for (let i = 0; i < mediaItems.length; i++) {
-            const item = mediaItems[i];
-            const itemCaption = i === 0 ? caption : '';
-
-            let uploadResult: any = { success: false };
-            let messageId: number | string | null = null;
-            let finalUri = item.uri;
-            let thumbnailUrl: string | undefined = undefined;
-            let fileSize = item.size;
-
-            try {
-                // --- COMPRESSION & THUMBNAIL OPTIMIZATION ---
-                if (item.type === 'image') {
-                    finalUri = await MediaUploadService.compressImage(item.uri);
-                    const sizeCheck = await MediaUploadService.validateFileSize(finalUri);
-                    if (!sizeCheck.valid) {
-                        Alert.alert('File too large', 'Even after compression, the image exceeds 20MB.');
-                        continue;
-                    }
-                    fileSize = sizeCheck.size;
-                } else if (item.type === 'video') {
-                    const sizeCheck = await MediaUploadService.validateFileSize(item.uri);
-                    if (!sizeCheck.valid) {
-                        Alert.alert('File too large', 'The video exceeds the 20MB limit.');
-                        continue;
-                    }
-                    fileSize = sizeCheck.size;
-
-                    // Generate thumbnail
-                    const thumb = await MediaUploadService.getVideoThumbnail(item.uri);
-                    if (thumb) {
-                        const thumbUpload = await MediaUploadService.uploadMedia(thumb, 'image', currentUser.id, id, {
-                            fileName: `thumb_${Date.now()}.jpg`,
-                        });
-                        if (thumbUpload.success) {
-                            thumbnailUrl = thumbUpload.media_url;
-                        }
-                    }
-                }
-
-                if (item.type === 'image') {
-                    uploadResult = await MediaUploadService.uploadMedia(finalUri, 'image', currentUser.id, id, {
-                        fileName: item.name || 'image.jpg',
-                        mimeType: 'image/jpeg'
-                    });
-                    if (uploadResult?.success) {
-                        messageId = await handleSend(itemCaption, uploadResult.media_url, 'image', false, isOneTime, null, {
-                            file_size: fileSize,
-                        });
-                    }
-                } else if (item.type === 'video') {
-                    uploadResult = await MediaUploadService.uploadMedia(item.uri, 'video', currentUser.id, id, {
-                        fileName: item.name || 'video.mp4',
-                        duration: item.duration ? Math.ceil(item.duration / 1000) : undefined,
-                        mimeType: item.mimeType || 'video/mp4'
-                    });
-                    if (uploadResult?.success) {
-                        messageId = await handleSend(itemCaption, uploadResult.media_url, 'video', false, isOneTime, null, {
-                            file_size: fileSize,
-                            duration: item.duration ? Math.ceil(item.duration / 1000) : undefined,
-                            thumbnail_url: thumbnailUrl
-                        });
-                    }
-                } else if (item.type === 'document') {
-                    const sizeCheck = await MediaUploadService.validateFileSize(item.uri);
-                    if (!sizeCheck.valid) {
-                        Alert.alert('File too large', 'The document exceeds the 20MB limit.');
-                        continue;
-                    }
-                    fileSize = sizeCheck.size;
-
-                    uploadResult = await MediaUploadService.uploadMedia(item.uri, 'document', currentUser.id, id, {
-                        fileName: item.name || 'document',
-                        mimeType: item.mimeType || 'application/octet-stream'
-                    });
-                    if (uploadResult?.success) {
-                        messageId = await handleSend(itemCaption, uploadResult.media_url, 'document', false, isOneTime, null, {
-                            file_size: fileSize,
-                            file_name: item.name,
-                            mime_type: item.mimeType,
-                        });
-                    }
-                }
-            } catch (err) {
-                console.error(`[MediaPreviewSend] Optimized upload failed for ${item.type}:`, err);
-            }
-
-            if (messageId && finalUri) {
-                try {
-                    await MediaStorageService.copyToCache(finalUri, messageId, item.type as any);
-                } catch (e) { /* non-fatal */ }
-            }
-        }
-    };
-
-    const lastVoiceUploadRef = useRef<{ uri: string, time: number } | null>(null);
-
-    const uploadVoiceMessage = async (uri: string, duration: number) => {
-        if (!currentUser) return;
-
-        // --- DUPLICATION GUARD ---
-        const now = Date.now();
-        if (lastVoiceUploadRef.current &&
-            lastVoiceUploadRef.current.uri === uri &&
-            (now - lastVoiceUploadRef.current.time) < 2000) {
-            console.log('Skipping duplicate voice upload trigger');
-            return;
-        }
-        lastVoiceUploadRef.current = { uri, time: now };
-
-        setIsUploading(true);
-        try {
-            const result = await MediaUploadService.uploadMedia(uri, 'audio', currentUser.id, id, {
-                duration: duration,
-                fileName: uri.split('/').pop() || 'voice.m4a',
-                mimeType: 'audio/m4a'
-            });
-
-            if (result.success) {
-                const audUrl = result.audio_url || result.media_url;
-                const messageId = await handleSend('', audUrl, 'voice', false, false, null, { duration: duration });
-                if (messageId) {
-                    await MediaStorageService.copyToCache(uri, messageId, 'voice' as any);
-                }
-            } else {
-                console.error("Voice upload failed:", result.message || result);
-            }
-        } catch (error) {
-            console.error('Voice upload error', error);
-        } finally {
-            setIsUploading(false);
-        }
-    };
+    // Media Picker Logic Moved to useChatMediaPicker
 
     const handleGifSelect = async (url: string) => {
         if (!currentUser || !id) return;
@@ -2182,94 +1232,7 @@ export default function ChatDetailScreen() {
         await deleteMessageLogic(selectedMessageIds, deleteType);
     };
 
-    const handleSelectMessage = (messageId: number) => {
-        if (selectedMessageIds.includes(messageId)) {
-            setSelectedMessageIds(prev => prev.filter(id => id !== messageId));
-        } else {
-            setSelectedMessageIds(prev => [...prev, messageId]);
-        }
-    };
-
-    const handleLongPressMessage = (message: any) => {
-        if (!isSelectionMode) {
-            setActiveReactionMessageId(message.id);
-            setSelectedMessageIds([message.id]);
-        } else {
-            handleSelectMessage(message.id);
-        }
-    };
-
-    const handleCancelSelection = () => {
-        setSelectedMessageIds([]);
-    };
-
-    const handleDeleteSelected = () => {
-        if (String(id) === String(currentUser?.id)) {
-            Alert.alert('Note to Self', 'Messages in Note to Self cannot be deleted.');
-            return;
-        }
-        const canDeleteForEveryone = selectedMessageIds.every(id => {
-            const msg = messages.find(m => m.id === id);
-            return msg && String(msg.sender_id) === String(currentUser?.id);
-        });
-
-        setCanDeleteForEachOther(canDeleteForEveryone);
-        setDeleteModalVisible(true);
-    };
-
-    const handleCopySelected = async () => {
-        const selectedMsgs = messages.filter(m => selectedMessageIds.includes(m.id) && !m.is_one_time);
-
-        if (selectedMsgs.length === 0 && selectedMessageIds.length > 0) {
-            Alert.alert('Cannot Copy', 'One-Time View messages cannot be copied.');
-            return;
-        }
-
-        const textToCopy = selectedMsgs
-            .map(m => `[${formatChatTime(m.created_at)}] ${m.sender_id === currentUser?.id ? 'You' : otherUsername}: ${m.message_text || (m.media_url ? '[Media]' : '')}`)
-            .join('\n');
-
-        await Clipboard.setStringAsync(textToCopy);
-        setSelectedMessageIds([]);
-    };
-
-    const handleForwardSelected = () => {
-        // Filter out One-Time View messages from forwarding
-        const selectedMsgs = messages.filter(m => selectedMessageIds.includes(m.id) && !m.is_one_time);
-
-        if (selectedMsgs.length === 0) {
-            if (selectedMessageIds.some(id => messages.find(m => m.id === id)?.is_one_time)) {
-                Alert.alert('Cannot Forward', 'One-Time View messages cannot be forwarded.');
-            }
-            return;
-        }
-
-        const messageIds = selectedMsgs.map(m => m.id).join(',');
-        const firstMessageText = selectedMsgs[0].message_text || (selectedMsgs[0].media_url ? '[Media]' : '');
-        const previewText = selectedMsgs.length > 1 ? `${firstMessageText} and ${selectedMsgs.length - 1} others` : firstMessageText;
-
-        router.push({
-            pathname: '/chat/features/forward-selection',
-            params: {
-                messageIds: messageIds,
-                initialText: previewText
-            }
-        });
-
-        setSelectedMessageIds([]);
-    };
-
-    const handleReplySelected = () => {
-        if (selectedMessageIds.length === 1) {
-            const msg = messages.find(m => m.id === selectedMessageIds[0]);
-            if (msg) {
-                setReplyingToMessage(msg);
-                setSelectedMessageIds([]);
-                // Focus input
-                setTimeout(() => inputRef.current?.focus(), 100);
-            }
-        }
-    };
+    // Selection and Bulk Action Logic Moved to useChatSelection
 
     const handleMediaSelect = useCallback((type: string, content: string) => {
         if (type === 'emoji' || type === 'textmoji') {
@@ -2688,7 +1651,7 @@ export default function ChatDetailScreen() {
                         onScrollBeginDrag={() => {
                             if (activeReactionMessageId) setActiveReactionMessageId(null);
                         }}
-                        onEndReached={fetchOlderMessages}
+                        onEndReached={() => fetchOlderMessages(messages)}
                         onEndReachedThreshold={0.1}
                         keyboardShouldPersistTaps="handled"
                         ListEmptyComponent={
@@ -2733,7 +1696,7 @@ export default function ChatDetailScreen() {
                                 <ChatInputBar
                                     inputText={inputText}
                                     editingMessage={editingMessage}
-                                    handleTyping={handleTyping}
+                                    handleTyping={handleTypingWrapper}
                                     handleAttachmentSelect={handleAttachmentSelect}
                                     handlePickImage={handlePickImage}
                                     handleSaveEdit={handleSaveEdit}

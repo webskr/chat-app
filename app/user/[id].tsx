@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { UserProfileViewer } from '../../components/UserProfileViewer';
+import { UserProfileViewer } from '../../components/ChatModule/features/ProfileModule/UserProfileViewer';
 import { Config } from '../../constants/Config';
 import { useUser } from '../../context/UserContext';
 import { Colors } from '../../constants/Colors';

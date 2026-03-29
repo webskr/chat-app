@@ -18,12 +18,12 @@ import {
 } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Linking from 'expo-linking';
-import { Colors } from '../../constants/Colors';
-import { Config } from '../../constants/Config';
-import { ThemedText } from '../ThemedText';
-import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
-import { FullScreenImageModal } from '../FullScreenImageModal';
-import { MediaStorageService } from '../../storage/MediaStorageService';
+import { Colors } from '../../../../constants/Colors';
+import { Config } from '../../../../constants/Config';
+import { ThemedText } from '../../../ThemedText';
+import { LocalDatabaseService } from '../../../../utils/LocalDatabaseService';
+import { FullScreenImageModal } from '../../../FullScreenImageModal';
+import { MediaStorageService } from '../../../../storage/MediaStorageService';
 
 interface MediaDocsSectionProps {
     user: any;

@@ -12,9 +12,9 @@ import {
     Switch,
     Linking
 } from 'react-native';
-import { Colors } from '../constants/Colors';
-import { ThemedText } from './ThemedText';
-import { Avatar } from './Avatar';
+import { Colors } from '../../../../constants/Colors';
+import { ThemedText } from '../../../../components/ThemedText';
+import { Avatar } from '../../../../components/Avatar';
 import {
     X,
     MessageCircle,
@@ -36,17 +36,17 @@ import {
     Info,
     Shield
 } from 'lucide-react-native';
-import { useChatLock } from './chat/features/hooks/useChatLock';
-import { LockSetupModal, UnlockPromptModal } from './chat/features/ChatLockUI';
-import { getAvatarById } from '../constants/Avatars';
+import { useChatLock } from '../hooks/useChatLock';
+import { LockSetupModal, UnlockPromptModal } from '../ChatLockUI';
+import { getAvatarById } from '../../../../constants/Avatars';
 import { BlurView } from 'expo-blur';
-import { Config } from '../constants/Config';
+import { Config } from '../../../../constants/Config';
 import { router } from 'expo-router';
-import { formatChatTime } from '../utils/time';
-import { AVAILABLE_TAGS } from '../constants/Tags';
-import { PLATFORMS } from '../constants/Platforms';
+import { formatChatTime } from '../../../../utils/time';
+import { AVAILABLE_TAGS } from '../../../../constants/Tags';
+import { PLATFORMS } from '../../../../constants/Platforms';
 import * as LucideIcons from 'lucide-react-native';
-import { MediaDocsSection } from './profile/MediaDocsSection';
+import { MediaDocsSection } from './MediaDocsSection';
 
 
 const { width, height } = Dimensions.get('window');
