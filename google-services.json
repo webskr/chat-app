@@ -1,36 +1,26 @@
 {
   "project_info": {
-    "project_number": "617829207220",
-    "project_id": "vegarm-459ba",
-    "storage_bucket": "vegarm-459ba.firebasestorage.app"
+    "project_number": "540675485477",
+    "project_id": "vegram-fbf53",
+    "storage_bucket": "vegram-fbf53.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:617829207220:android:9274314d264bc06a5a9be1",
+        "mobilesdk_app_id": "1:540675485477:android:749d600c323c8912fc74cc",
         "android_client_info": {
           "package_name": "com.skr.vegram"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "617829207220-lm7j89apn1ojd6kr0vv1ouogcj74ija4.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDlFgVPUOj7GtHrDgQT6e_ZW2-yIkXC6-c"
+          "current_key": "AIzaSyBHnSCEzVfGxszNU5P94w1wE45KAF--BIM"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "617829207220-lm7j89apn1ojd6kr0vv1ouogcj74ija4.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }

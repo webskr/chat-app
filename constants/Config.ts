@@ -29,12 +29,9 @@ export const Config = {
         if (this.BACKEND_URL) {
             try {
                 const url = new URL(this.BACKEND_URL);
-                // If it's a typical local IP or localhost, use port 8082
-                // (Cloudflare tunnels usually proxy to 8082 anyway if configured for single-tunnel)
                 if (url.hostname === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(url.hostname)) {
                     return `${url.protocol}//${url.hostname}:3000`;
                 }
-                // For ngrok/cloudflare (non-IP hostnames), we might use the base URL (port 80 proxy)
                 return `${url.protocol}//${url.hostname}`;
             } catch (e) {
                 return `http://${this.IP_ADDRESS}:8082`;
@@ -45,5 +42,23 @@ export const Config = {
             return 'http://localhost:3000';
         }
         return `http://${this.IP_ADDRESS}:8082`;
-    }
+    },
+
+    // -------------------------------------------------------------------------
+    // FIREBASE CONFIGURATION (Passwordless Auth)
+    // -------------------------------------------------------------------------
+    // Get these from Firebase Console -> Project Settings -> General -> Your Apps
+    FIREBASE: {
+        apiKey: "AIzaSyBHnSCEzVfGxszNU5P94w1wE45KAF--BIM",
+        authDomain: "vegram-fbf53.firebaseapp.com",
+        projectId: "vegram-fbf53",
+        storageBucket: "vegram-fbf53.firebasestorage.app",
+        messagingSenderId: "540675485477",
+        appId: "1:540675485477:android:749d600c323c8912fc74cc"
+    },
+    
+    // The deep link URL that Firebase will redirect back to.
+    // Example: https://chatapp.page.link/login or your verified app domain
+    AUTH_REDIRECT_URL: "https://vegram-fbf53.firebaseapp.com/finish-login"
 };
+

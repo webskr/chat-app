@@ -14,75 +14,127 @@ import { LocalDatabaseService } from '../../utils/LocalDatabaseService';
 import { ApiService } from '../../utils/ApiService';
 import { initMediaFolder } from '../../utils/initMediaFolder';
 
+import { auth } from '../../utils/firebase';
+import { sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
+import * as Linking from 'expo-linking';
+
 export default function LoginScreen() {
     const { setUser } = useUser();
     const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [lastError, setLastError] = useState('');
     const [isSuccess, setIsSuccess] = useState(false);
+    const [mailSentTo, setMailSentTo] = useState('');
 
-    const handleLogin = async () => {
-        setLastError(''); // Clear previous errors
-        if (!email || !password) {
-            setLastError('Please fill in all fields');
-            Alert.alert('Error', 'Please fill in all fields');
+    // Handle Deep Link Redirect
+    React.useEffect(() => {
+        const handleDeepLink = async (event: { url: string }) => {
+            const { url } = event;
+            if (isSignInWithEmailLink(auth, url)) {
+                let emailToUse = email || (await AsyncStorage.getItem('emailForSignIn'));
+                if (!emailToUse) {
+                    // If email is missing (e.g. opened in different browser/device), ask user
+                    Alert.prompt(
+                        "Confirm Email",
+                        "Please enter your email to complete sign-in",
+                        async (enteredEmail) => {
+                            if (enteredEmail) completeSignIn(url, enteredEmail);
+                        }
+                    );
+                } else {
+                    completeSignIn(url, emailToUse);
+                }
+            }
+        };
+
+        const subscription = Linking.addEventListener('url', handleDeepLink);
+        
+        // Initial check if app was opened with a link
+        Linking.getInitialURL().then((url) => {
+            if (url) handleDeepLink({ url });
+        });
+
+        return () => subscription.remove();
+    }, [email]);
+
+    const completeSignIn = async (url: string, emailToUse: string) => {
+        setIsLoading(true);
+        try {
+            const result = await signInWithEmailLink(auth, emailToUse, url);
+            const idToken = await result.user.getIdToken();
+            await AsyncStorage.removeItem('emailForSignIn');
+            
+            // Send Firebase ID Token to our PHP backend
+            await handleBackendLogin(idToken);
+        } catch (error) {
+            console.error("Sign-in error:", error);
+            Alert.alert("Error", "Failed to complete sign-in. Link may be expired.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleRequestOtp = async () => {
+        if (!email) {
+            Alert.alert('Error', 'Please enter your email');
             return;
         }
 
         setIsLoading(true);
+        setLastError('');
         try {
-            console.log(`Attempting login to: ${Config.API_URL}/auth/login.php`);
-            const response = await ApiService.post(`${Config.API_URL}/auth/login.php`, { email, password }, { skipAuth: true });
+            const actionCodeSettings = {
+                url: Config.AUTH_REDIRECT_URL,
+                handleCodeInApp: true,
+                iOS: { bundleId: 'com.yourcompany.chatapp' },
+                android: {
+                    packageName: 'com.yourcompany.chatapp',
+                    installApp: true,
+                    minimumVersion: '12'
+                },
+            };
 
-            let data;
-            let rawText = '';
-            try {
-                rawText = await response.text();
-                data = JSON.parse(rawText);
-            } catch (parseError) {
-                console.error("Non-JSON response received:", parseError);
-                console.error("RAW HTML RESPONSE FROM SERVER:", rawText);
-                throw new Error("Server returned an invalid response. Please check your network connection or Config IP.");
-            }
+            await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+            await AsyncStorage.setItem('emailForSignIn', email);
+            setMailSentTo(email);
+            setIsSuccess(true);
+            Alert.alert('Success', 'A magic login link has been sent to your email.');
+        } catch (error: any) {
+            console.error('Firebase Auth error:', error);
+            setLastError(error.message || 'Failed to send magic link');
+            Alert.alert('Error', error.message || 'Failed to send magic link');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleBackendLogin = async (idToken: string) => {
+        try {
+            console.log(`Verifying Firebase Token with backend: ${Config.API_URL}/auth/login.php`);
+            const response = await ApiService.post(`${Config.API_URL}/auth/login.php`, { firebase_token: idToken }, { skipAuth: true });
+            const data = await response.json();
 
             if (response.ok) {
                 await setUser(data.user, {
                     access_token: data.access_token,
                     refresh_token: data.refresh_token
                 });
-                setIsLoading(false);
                 setIsSuccess(true);
-                setLastError('');
 
-                // --- E2EE KEY INITIALIZATION & ROTATION ---
+                // --- E2EE KEY INITIALIZATION ---
                 try {
-                    // Check if device already has keys for this user
                     const currentVersion = await E2EEService.getCurrentKeyVersion(data.user.id);
                     const existingKey = await E2EEService.loadPrivateKey(data.user.id, currentVersion);
-
                     if (!existingKey) {
-                        console.log("Generating new E2EE keys for device...");
                         const identityKeyPair = await E2EEService.generateKeyPair();
                         const signedPreKeyPair = await E2EEService.generateKeyPair();
-
-                        // Generate a batch of One-Time Pre-Keys
                         const oneTimePreKeys = [];
                         for (let i = 0; i < 50; i++) {
                             const otk = await E2EEService.generateKeyPair();
-                            oneTimePreKeys.push({
-                                key_id: i,
-                                public_key: otk.publicKey,
-                                private_key: otk.privateKey
-                            });
+                            oneTimePreKeys.push({ key_id: i, public_key: otk.publicKey, private_key: otk.privateKey });
                         }
-
-                        // Save locally v1
                         await E2EEService.savePrivateKey(data.user.id, identityKeyPair.privateKey, 1);
                         await E2EEService.setCurrentKeyVersion(data.user.id, 1);
-                        await E2EEService.setLastRotationTime(data.user.id, Date.now());
-
-                        // Upload public keys to server
                         await fetch(`${Config.API_URL}/chat/upload_keys.php`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -94,47 +146,25 @@ export default function LoginScreen() {
                                 one_time_pre_keys: oneTimePreKeys.map(k => ({ key_id: k.key_id, public_key: k.public_key }))
                             })
                         });
-                        console.log("E2EE Keys v1 initialized successfully.");
-                    } else {
-                        // Keys exist, check if rotation is needed
-                        const needsRotation = await E2EEService.checkRotationNeeded(data.user.id);
-                        if (needsRotation) {
-                            await E2EEService.rotateKeys(data.user.id, Config);
-                        }
                     }
-                } catch (cryptoErr) {
-                    console.error("Failed to initialize or rotate E2EE keys:", cryptoErr);
-                }
-                // --- END E2EE SETUP ---
+                } catch (cryptoErr) { console.error("E2EE init failed:", cryptoErr); }
 
-                // --- LOCAL DB INIT ---
                 try {
-                    console.log("Initializing secure local database...");
-                    await LocalDatabaseService.initDB(data.token || data.user.id.toString());
-                    // 🗂️ Trigger upfront permissions & media folder setup
+                    await LocalDatabaseService.initDB(data.user.id.toString());
                     initMediaFolder().catch(() => { });
-                } catch (dbErr) {
-                    console.error("Failed to initialize local DB:", dbErr);
-                }
+                } catch (dbErr) { console.error("Local DB init failed:", dbErr); }
 
-                // Redirect after a short delay so they can see the success message
-                setTimeout(() => {
-                    router.replace('/(tabs)');
-                }, 1500);
+                setTimeout(() => { router.replace('/(tabs)'); }, 1500);
             } else {
-                setIsLoading(false);
-                const msg = data.message || 'Invalid credentials';
-                setLastError(msg);
-                Alert.alert('Login Failed', msg);
+                Alert.alert('Backend Match Failed', data.message || 'Verification failed');
             }
         } catch (error) {
-            setIsLoading(false);
-            console.error('Login error:', error);
-            const errorMsg = `Could not connect to server: ${error instanceof Error ? error.message : 'Unknown error'}`;
-            setLastError(errorMsg);
-            Alert.alert('Error', errorMsg);
+            console.error('Backend sync error:', error);
+            Alert.alert('Error', 'Verified with Firebase, but could not sync with Chat Backend.');
         }
     };
+
+
 
     return (
         <View style={[styles.container, { backgroundColor: Colors.background }]}>
@@ -154,7 +184,7 @@ export default function LoginScreen() {
                                 <Ionicons name="chatbubbles" size={60} color={Colors.white} />
                             </View>
                             <Text style={styles.title}>Welcome Back</Text>
-                            <Text style={styles.subtitle}>Login to your account</Text>
+                            <Text style={styles.subtitle}>Login with a Magic Link</Text>
                         </View>
                     </LinearGradient>
 
@@ -169,45 +199,48 @@ export default function LoginScreen() {
                                 onChangeText={setEmail}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
+                                editable={!mailSentTo}
                             />
                         </View>
-
-                        <View style={styles.inputContainer}>
-                            <Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Password"
-                                placeholderTextColor={Colors.textSecondary}
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry
-                            />
-                        </View>
-
-                        <TouchableOpacity style={styles.forgotPassword}>
-                            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-                        </TouchableOpacity>
 
                         {/* Success Message Display */}
-                        {isSuccess ? (
+                        {isSuccess && mailSentTo ? (
                             <View style={styles.successContainer}>
-                                <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                                <Text style={styles.successText}>Logged in successfully! Redirecting...</Text>
+                                <Ionicons name="mail-unread-outline" size={24} color="#10B981" />
+                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                    <Text style={styles.successText}>
+                                        Check your email! A magic link has been sent to:
+                                    </Text>
+                                    <Text style={[styles.successText, { fontWeight: 'bold' }]}>{mailSentTo}</Text>
+                                    <Text style={[styles.successText, { marginTop: 4, fontStyle: 'italic' }]}>
+                                        Click the link in your email to login automatically.
+                                    </Text>
+                                </View>
                             </View>
                         ) : null}
 
-                        <TouchableOpacity
-                            style={[styles.button, isLoading && styles.buttonDisabled]}
-                            onPress={handleLogin}
-                            disabled={isLoading}
-                        >
-                            <View style={[styles.buttonGradient, { backgroundColor: Colors.primary }]}>
-                                <Text style={styles.buttonText}>
-                                    {isLoading ? 'Logging in...' : 'Login'}
-                                </Text>
+                        {/* Error Message Display */}
+                        {lastError ? (
+                            <View style={styles.errorContainer}>
+                                <Ionicons name="alert-circle" size={20} color="#EF4444" />
+                                <Text style={styles.errorText}>{lastError}</Text>
                             </View>
+                        ) : null}
 
-                        </TouchableOpacity>
+                        {!mailSentTo && (
+                            <TouchableOpacity
+                                style={[styles.button, isLoading && styles.buttonDisabled]}
+                                onPress={handleRequestOtp}
+                                disabled={isLoading}
+                            >
+                                <View style={[styles.buttonGradient, { backgroundColor: Colors.primary }]}>
+                                    <Text style={styles.buttonText}>
+                                        {isLoading ? 'Sending Link...' : 'Get Login Link'}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        )}
+
 
                         <View style={styles.footer}>
                             <Text style={styles.footerText}>Don't have an account? </Text>
@@ -223,6 +256,7 @@ export default function LoginScreen() {
         </View>
     );
 }
+
 
 const styles = StyleSheet.create({
     container: {

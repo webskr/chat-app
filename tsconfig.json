@@ -10,6 +10,7 @@
         "*"
       ]
     },
+    "moduleResolution": "bundler",
     "jsx": "react-native",
     "types": [
       "react-native",
